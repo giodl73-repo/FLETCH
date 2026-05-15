@@ -2,6 +2,8 @@
 
 **Fetch, ledger, export, trust, cache, hash.**
 
+**Series:** [Tools & Infrastructure](https://github.com/giodl73-repo/giodl73-repo/blob/main/series/tools-infrastructure.md).
+
 FLETCH is a shared Rust fetch/cache layer for projects that need reproducible
 data acquisition without each product reinventing download, cache, bundle,
 manifest, verification, and offline behavior.
@@ -10,8 +12,8 @@ manifest, verification, and offline behavior.
 
 - **One cache contract**: logical dataset IDs, source URLs, versions, hashes,
   byte counts, and verification status live in a shared manifest shape.
-- **Product-neutral core**: BISECT, icelines, route, and CROP can all consume the
-  same fetch/cache primitives without depending on each other.
+- **Product-neutral core**: BISECT, ICELINES, ROUTE, and CROP can eventually
+  consume the same fetch/cache primitives without depending on each other.
 - **Reproducible data pulls**: plans and cache keys make "what did this run
   fetch?" auditable.
 - **Future offline/bundle path**: the workspace is prepared for bundle export,
@@ -19,9 +21,9 @@ manifest, verification, and offline behavior.
 
 Initial consumers:
 
-- BISECT/apportionment: census, election, geography, and evidence datasets.
-- icelines: NHL seasons, profiles, favorites, and bundled/offline data.
-- route: geospatial/routing datasets, tiles, profiles, and on-demand pulls.
+- BISECT: census, election, geography, and evidence datasets.
+- ICELINES: NHL seasons, profiles, favorites, and bundled/offline data.
+- ROUTE: geospatial/routing datasets, tiles, profiles, and on-demand pulls.
 - CROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
