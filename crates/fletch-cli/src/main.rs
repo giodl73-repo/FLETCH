@@ -2,8 +2,9 @@ use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     cache_key, cache_list, cache_manifest, export_quiver, fetch_plan, fetch_plan_with_kind,
-    fetch_to_cache, graph_from_manifest, import_quiver, inspect_cache_manifest, plan_cache_prune,
-    CacheManifest, FetchOptions, FreshnessPolicy, SourceKind,
+    fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
+    inspect_cache_manifest, plan_cache_prune, CacheManifest, FetchOptions, FletchRegistry,
+    FreshnessPolicy, SourceKind,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -99,6 +100,11 @@ enum Commands {
         #[command(subcommand)]
         command: GraphCommands,
     },
+    /// Read fletch.registry.v1 definitions.
+    Registry {
+        #[command(subcommand)]
+        command: RegistryCommands,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -185,6 +191,19 @@ enum GraphCommands {
         /// Path to a fletch.cache-manifest.v1 JSON file.
         #[arg(long)]
         manifest: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum RegistryCommands {
+    /// Export graph JSON from a fletch.registry.v1 file.
+    Graph {
+        /// Path to a fletch.registry.v1 JSON file.
+        #[arg(long)]
+        file: PathBuf,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -323,6 +342,12 @@ fn main() -> Result<()> {
                 write_json(&graph_from_manifest(&manifest), output)?;
             }
         },
+        Commands::Registry { command } => match command {
+            RegistryCommands::Graph { file, output } => {
+                let registry = read_registry(&file)?;
+                write_json(&graph_from_registry(&registry), output)?;
+            }
+        },
     }
     Ok(())
 }
@@ -338,6 +363,11 @@ fn freshness_policy(freshness: CliFreshness, max_age_days: Option<u32>) -> Resul
 }
 
 fn read_manifest(path: &PathBuf) -> Result<CacheManifest> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

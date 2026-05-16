@@ -12,6 +12,7 @@ pub const FLETCH_PLAN_SCHEMA: &str = "fletch.plan.v1";
 pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
+pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -288,6 +289,61 @@ pub struct FletchGraph {
     pub generated_by: String,
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DataFormat {
+    pub media_type: Option<String>,
+    pub encoding: Option<String>,
+    pub compression: Option<String>,
+    pub container: Option<String>,
+    pub schema: Option<String>,
+    pub record_shape: Option<String>,
+    pub preferred_local: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryEdge {
+    pub to: String,
+    pub kind: GraphEdgeKind,
+    pub label: Option<String>,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FletchDefinition {
+    pub id: String,
+    pub node_kind: GraphNodeKind,
+    #[serde(default)]
+    pub shafts: Vec<SourceSpec>,
+    #[serde(default)]
+    pub edges: Vec<RegistryEdge>,
+    pub format: Option<DataFormat>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FletchRegistry {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub registry_id: String,
+    pub fletches: Vec<FletchDefinition>,
+}
+
+pub fn fletch_registry(
+    registry_id: impl Into<String>,
+    fletches: Vec<FletchDefinition>,
+) -> FletchRegistry {
+    FletchRegistry {
+        schema_version: FLETCH_REGISTRY_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        registry_id: registry_id.into(),
+        fletches,
+    }
 }
 
 pub fn fetch_plan(
@@ -572,6 +628,83 @@ pub fn graph_from_manifest_with_extra(
         push_graph_node(&mut nodes, &mut seen_nodes, node);
     }
     edges.extend(extra_edges);
+
+    FletchGraph {
+        schema_version: FLETCH_GRAPH_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        nodes,
+        edges,
+    }
+}
+
+pub fn graph_from_registry(registry: &FletchRegistry) -> FletchGraph {
+    let mut nodes = Vec::new();
+    let mut edges = Vec::new();
+    let mut seen_nodes = BTreeSet::new();
+
+    for definition in &registry.fletches {
+        let mut metadata = definition.metadata.clone();
+        metadata.insert("registry_id".to_string(), registry.registry_id.clone());
+        if !definition.tags.is_empty() {
+            metadata.insert("tags".to_string(), definition.tags.join(","));
+        }
+        if let Some(format) = &definition.format {
+            insert_format_metadata(&mut metadata, format);
+        }
+        push_graph_node(
+            &mut nodes,
+            &mut seen_nodes,
+            GraphNode {
+                id: graph_node_id(&definition.node_kind, &definition.id),
+                kind: definition.node_kind.clone(),
+                label: definition.id.clone(),
+                metadata,
+            },
+        );
+
+        for shaft in &definition.shafts {
+            let shaft_id = graph_registry_shaft_id(&definition.id, shaft);
+            let mut shaft_metadata = BTreeMap::new();
+            shaft_metadata.insert("source_url".to_string(), shaft.url.clone());
+            shaft_metadata.insert(
+                "source_kind".to_string(),
+                source_kind_key(&shaft.kind).to_string(),
+            );
+            push_graph_node(
+                &mut nodes,
+                &mut seen_nodes,
+                GraphNode {
+                    id: shaft_id.clone(),
+                    kind: GraphNodeKind::Shaft,
+                    label: shaft.url.clone(),
+                    metadata: shaft_metadata,
+                },
+            );
+            edges.push(GraphEdge {
+                from: graph_node_id(&definition.node_kind, &definition.id),
+                to: shaft_id,
+                kind: GraphEdgeKind::SatisfiedBy,
+                label: None,
+                metadata: BTreeMap::new(),
+            });
+        }
+
+        for edge in &definition.edges {
+            let target_kind = registry
+                .fletches
+                .iter()
+                .find(|target| target.id == edge.to)
+                .map(|target| &target.node_kind)
+                .unwrap_or(&GraphNodeKind::Fletch);
+            edges.push(GraphEdge {
+                from: graph_node_id(&definition.node_kind, &definition.id),
+                to: graph_node_id(target_kind, &edge.to),
+                kind: edge.kind.clone(),
+                label: edge.label.clone(),
+                metadata: edge.metadata.clone(),
+            });
+        }
+    }
 
     FletchGraph {
         schema_version: FLETCH_GRAPH_SCHEMA.to_string(),
@@ -1127,6 +1260,50 @@ fn graph_ledger_id(cache_key: &str) -> String {
     format!("ledger-entry:{cache_key}")
 }
 
+fn graph_node_id(kind: &GraphNodeKind, id: &str) -> String {
+    match kind {
+        GraphNodeKind::Fletch => format!("fletch:{id}"),
+        GraphNodeKind::Shaft => format!("shaft:{id}"),
+        GraphNodeKind::Quiver => format!("quiver:{id}"),
+        GraphNodeKind::Flight => format!("flight:{id}"),
+        GraphNodeKind::LedgerEntry => format!("ledger-entry:{id}"),
+        GraphNodeKind::Document => format!("document:{id}"),
+        GraphNodeKind::Partition => format!("partition:{id}"),
+        GraphNodeKind::Rollup => format!("rollup:{id}"),
+        GraphNodeKind::Alias => format!("alias:{id}"),
+    }
+}
+
+fn graph_registry_shaft_id(fletch_id: &str, shaft: &SourceSpec) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(fletch_id.as_bytes());
+    hasher.update([0]);
+    hasher.update(source_kind_key(&shaft.kind).as_bytes());
+    hasher.update([0]);
+    hasher.update(shaft.url.as_bytes());
+    format!("shaft:sha256:{:x}", hasher.finalize())
+}
+
+fn insert_format_metadata(metadata: &mut BTreeMap<String, String>, format: &DataFormat) {
+    insert_optional_metadata(metadata, "format.media_type", &format.media_type);
+    insert_optional_metadata(metadata, "format.encoding", &format.encoding);
+    insert_optional_metadata(metadata, "format.compression", &format.compression);
+    insert_optional_metadata(metadata, "format.container", &format.container);
+    insert_optional_metadata(metadata, "format.schema", &format.schema);
+    insert_optional_metadata(metadata, "format.record_shape", &format.record_shape);
+    insert_optional_metadata(metadata, "format.preferred_local", &format.preferred_local);
+}
+
+fn insert_optional_metadata(
+    metadata: &mut BTreeMap<String, String>,
+    key: &str,
+    value: &Option<String>,
+) {
+    if let Some(value) = value {
+        metadata.insert(key.to_string(), value.clone());
+    }
+}
+
 fn temp_path_for(destination: &Path) -> PathBuf {
     static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
     let mut file_name = destination
@@ -1403,6 +1580,71 @@ mod tests {
             .any(|edge| edge.kind == GraphEdgeKind::Documents));
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn graph_from_registry_exports_declared_fletches_shafts_and_edges() {
+        let registry = fletch_registry(
+            "test-registry",
+            vec![
+                FletchDefinition {
+                    id: "test:index".to_string(),
+                    node_kind: GraphNodeKind::Fletch,
+                    shafts: vec![SourceSpec {
+                        kind: SourceKind::File,
+                        url: "index.json".to_string(),
+                        headers: BTreeMap::new(),
+                    }],
+                    edges: vec![RegistryEdge {
+                        to: "test:partition:2026".to_string(),
+                        kind: GraphEdgeKind::ExpandsTo,
+                        label: Some("discovers".to_string()),
+                        metadata: BTreeMap::new(),
+                    }],
+                    format: Some(DataFormat {
+                        media_type: Some("application/json".to_string()),
+                        encoding: Some("utf-8".to_string()),
+                        compression: None,
+                        container: None,
+                        schema: Some("test.index.v1".to_string()),
+                        record_shape: Some("json-object".to_string()),
+                        preferred_local: None,
+                    }),
+                    tags: vec!["mock".to_string()],
+                    metadata: BTreeMap::new(),
+                },
+                FletchDefinition {
+                    id: "test:partition:2026".to_string(),
+                    node_kind: GraphNodeKind::Partition,
+                    shafts: Vec::new(),
+                    edges: Vec::new(),
+                    format: None,
+                    tags: Vec::new(),
+                    metadata: BTreeMap::new(),
+                },
+            ],
+        );
+
+        let graph = graph_from_registry(&registry);
+
+        assert_eq!(registry.schema_version, FLETCH_REGISTRY_SCHEMA);
+        assert_eq!(graph.schema_version, FLETCH_GRAPH_SCHEMA);
+        assert!(graph.nodes.iter().any(|node| node.id == "fletch:test:index"
+            && node.metadata.get("format.schema") == Some(&"test.index.v1".to_string())));
+        assert!(graph
+            .nodes
+            .iter()
+            .any(|node| node.id == "partition:test:partition:2026"));
+        assert!(graph
+            .edges
+            .iter()
+            .any(|edge| edge.kind == GraphEdgeKind::ExpandsTo
+                && edge.from == "fletch:test:index"
+                && edge.to == "partition:test:partition:2026"));
+        assert!(graph
+            .edges
+            .iter()
+            .any(|edge| edge.kind == GraphEdgeKind::SatisfiedBy));
     }
 
     fn unique_temp_dir(label: &str) -> PathBuf {

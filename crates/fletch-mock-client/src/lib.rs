@@ -1,9 +1,10 @@
 use anyhow::Result;
 use fletch_core::{
-    cache_manifest, export_quiver, fetch_plan_with_kind, fetch_to_cache,
-    graph_from_manifest_with_extra, import_quiver, inspect_cache_manifest, plan_cache_prune,
-    CacheFreshnessStatus, CacheManifest, CacheObjectStatus, FetchOptions, FletchGraph,
-    FreshnessPolicy, GraphEdge, GraphEdgeKind, GraphNode, GraphNodeKind, PrunePlan, SourceKind,
+    cache_manifest, export_quiver, fetch_plan_with_kind, fetch_to_cache, fletch_registry,
+    graph_from_manifest_with_extra, graph_from_registry, import_quiver, inspect_cache_manifest,
+    plan_cache_prune, CacheFreshnessStatus, CacheManifest, CacheObjectStatus, DataFormat,
+    FetchOptions, FletchDefinition, FletchGraph, FletchRegistry, FreshnessPolicy, GraphEdgeKind,
+    GraphNodeKind, PrunePlan, RegistryEdge, SourceKind, SourceSpec,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -12,6 +13,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MockClientReport {
     pub client: String,
+    pub registry_path: String,
     pub manifest_path: String,
     pub fetched_fletches: Vec<String>,
     pub verified_count: usize,
@@ -58,6 +60,7 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     let workspace_root = workspace_root.as_ref();
     let source_root = workspace_root.join("source");
     let cache_root = workspace_root.join("cache");
+    let registry_path = workspace_root.join("mock-registry.json");
     let manifest_path = workspace_root.join("mock-manifest.json");
 
     std::fs::create_dir_all(&source_root)?;
@@ -78,39 +81,19 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
         br#"{"partition":"date","date":"2026-05-15","rollups":["justice-league:threats:year:2026"],"measures":{"threat_count":2,"omega_events":1,"cities_impacted":2},"threats":[{"villain":"lex-luthor","city":"metropolis"},{"villain":"grodd","city":"central-city"}]}"#,
     )?;
 
-    let registry = [
-        (
-            "justice-league:villains:index",
-            source_root.join("villain-index.json"),
-            "villain-index",
-        ),
-        (
-            "justice-league:villain-file:darkseid",
-            source_root.join("darkseid-casefile.json"),
-            "casefile",
-        ),
-        (
-            "justice-league:threats:date:2025-05-15",
-            source_root.join("threats-2025-05-15.json"),
-            "threat-partition",
-        ),
-        (
-            "justice-league:threats:date:2026-05-15",
-            source_root.join("threats-2026-05-15.json"),
-            "threat-partition",
-        ),
-    ];
+    let registry = villain_files_registry(&source_root);
+    std::fs::write(&registry_path, serde_json::to_string_pretty(&registry)?)?;
 
     let mut fetched_fletches = Vec::new();
     let mut entries = Vec::new();
-    for (dataset_id, source_path, _kind) in registry {
-        let plan = fetch_plan_with_kind(
-            dataset_id,
-            source_path.display().to_string(),
-            SourceKind::File,
-        )?;
+    for definition in &registry.fletches {
+        let Some(shaft) = definition.shafts.first() else {
+            continue;
+        };
+        let plan =
+            fetch_plan_with_kind(definition.id.clone(), shaft.url.clone(), shaft.kind.clone())?;
         let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root))?;
-        fetched_fletches.push(dataset_id.to_string());
+        fetched_fletches.push(definition.id.clone());
         entries.push(outcome.entry);
     }
 
@@ -140,12 +123,13 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     )?;
     let staged_statuses =
         inspect_cache_manifest(&imported.staged_manifest, &FreshnessPolicy::Immutable)?;
-    let graph = villain_files_graph(&manifest);
+    let graph = villain_files_graph(&manifest, &registry);
     let graph_path = workspace_root.join("mock-graph.json");
     std::fs::write(&graph_path, serde_json::to_string_pretty(&graph)?)?;
 
     Ok(report(
         manifest_path,
+        registry_path,
         fetched_fletches,
         &statuses,
         &prune,
@@ -161,6 +145,7 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
 
 fn report(
     manifest_path: PathBuf,
+    registry_path: PathBuf,
     fetched_fletches: Vec<String>,
     statuses: &[fletch_core::CacheStatus],
     prune: &PrunePlan,
@@ -174,6 +159,7 @@ fn report(
 ) -> MockClientReport {
     MockClientReport {
         client: "justice-league-villain-files-mock".to_string(),
+        registry_path: registry_path.display().to_string(),
         manifest_path: manifest_path.display().to_string(),
         fetched_fletches,
         verified_count: statuses
@@ -195,59 +181,117 @@ fn report(
     }
 }
 
-fn villain_files_graph(manifest: &CacheManifest) -> FletchGraph {
-    let rollup_2025 = graph_rollup_node("justice-league:threats:year:2025");
-    let rollup_2026 = graph_rollup_node("justice-league:threats:year:2026");
-    graph_from_manifest_with_extra(
-        manifest,
-        vec![rollup_2025, rollup_2026],
+fn villain_files_graph(manifest: &CacheManifest, registry: &FletchRegistry) -> FletchGraph {
+    let registry_graph = graph_from_registry(registry);
+    graph_from_manifest_with_extra(manifest, registry_graph.nodes, registry_graph.edges)
+}
+
+fn villain_files_registry(source_root: &Path) -> FletchRegistry {
+    fletch_registry(
+        "justice-league:villain-files",
         vec![
-            graph_edge(
+            fletch_definition(
                 "justice-league:villains:index",
+                GraphNodeKind::Fletch,
+                Some(source_root.join("villain-index.json")),
+                vec![
+                    edge(
+                        "justice-league:villain-file:darkseid",
+                        GraphEdgeKind::ExpandsTo,
+                    ),
+                    edge(
+                        "justice-league:threats:date:2025-05-15",
+                        GraphEdgeKind::ExpandsTo,
+                    ),
+                    edge(
+                        "justice-league:threats:date:2026-05-15",
+                        GraphEdgeKind::ExpandsTo,
+                    ),
+                ],
+                Some("justice-league.villain-index.v1"),
+            ),
+            fletch_definition(
                 "justice-league:villain-file:darkseid",
-                GraphEdgeKind::ExpandsTo,
+                GraphNodeKind::Fletch,
+                Some(source_root.join("darkseid-casefile.json")),
+                Vec::new(),
+                Some("justice-league.casefile.v1"),
             ),
-            graph_edge(
-                "justice-league:villains:index",
+            fletch_definition(
                 "justice-league:threats:date:2025-05-15",
-                GraphEdgeKind::ExpandsTo,
+                GraphNodeKind::Partition,
+                Some(source_root.join("threats-2025-05-15.json")),
+                vec![edge(
+                    "justice-league:threats:year:2025",
+                    GraphEdgeKind::RollsUpTo,
+                )],
+                Some("justice-league.threat-partition.v1"),
             ),
-            graph_edge(
-                "justice-league:villains:index",
+            fletch_definition(
                 "justice-league:threats:date:2026-05-15",
-                GraphEdgeKind::ExpandsTo,
+                GraphNodeKind::Partition,
+                Some(source_root.join("threats-2026-05-15.json")),
+                vec![edge(
+                    "justice-league:threats:year:2026",
+                    GraphEdgeKind::RollsUpTo,
+                )],
+                Some("justice-league.threat-partition.v1"),
             ),
-            graph_edge(
-                "justice-league:threats:date:2025-05-15",
+            fletch_definition(
                 "justice-league:threats:year:2025",
-                GraphEdgeKind::RollsUpTo,
+                GraphNodeKind::Rollup,
+                None,
+                Vec::new(),
+                None,
             ),
-            graph_edge(
-                "justice-league:threats:date:2026-05-15",
+            fletch_definition(
                 "justice-league:threats:year:2026",
-                GraphEdgeKind::RollsUpTo,
+                GraphNodeKind::Rollup,
+                None,
+                Vec::new(),
+                None,
             ),
         ],
     )
 }
 
-fn graph_rollup_node(id: &str) -> GraphNode {
-    GraphNode {
-        id: format!("rollup:{id}"),
-        kind: GraphNodeKind::Rollup,
-        label: id.to_string(),
+fn fletch_definition(
+    id: &str,
+    node_kind: GraphNodeKind,
+    source_path: Option<PathBuf>,
+    edges: Vec<RegistryEdge>,
+    schema: Option<&str>,
+) -> FletchDefinition {
+    FletchDefinition {
+        id: id.to_string(),
+        node_kind,
+        shafts: source_path
+            .map(|path| {
+                vec![SourceSpec {
+                    kind: SourceKind::File,
+                    url: path.display().to_string(),
+                    headers: BTreeMap::new(),
+                }]
+            })
+            .unwrap_or_default(),
+        edges,
+        format: schema.map(|schema| DataFormat {
+            media_type: Some("application/json".to_string()),
+            encoding: Some("utf-8".to_string()),
+            compression: None,
+            container: None,
+            schema: Some(schema.to_string()),
+            record_shape: Some("json-object".to_string()),
+            preferred_local: None,
+        }),
+        tags: vec!["mock".to_string()],
         metadata: BTreeMap::new(),
     }
 }
 
-fn graph_edge(from: &str, to: &str, kind: GraphEdgeKind) -> GraphEdge {
-    GraphEdge {
-        from: format!("fletch:{from}"),
-        to: if matches!(kind, GraphEdgeKind::RollsUpTo) {
-            format!("rollup:{to}")
-        } else {
-            format!("fletch:{to}")
-        },
+fn edge(to: &str, kind: GraphEdgeKind) -> RegistryEdge {
+    RegistryEdge {
+        to: to.to_string(),
         kind,
         label: None,
         metadata: BTreeMap::new(),
@@ -354,11 +398,12 @@ mod tests {
         assert_eq!(report.fresh_count, 4);
         assert_eq!(report.prune_count, 1);
         assert_eq!(report.staged_import_count, 4);
+        assert!(Path::new(&report.registry_path).exists());
         assert!(Path::new(&report.quiver_path).exists());
         assert!(Path::new(&report.staged_quiver_root).exists());
         assert!(Path::new(&report.graph_path).exists());
-        assert_eq!(report.graph_node_count, 14);
-        assert_eq!(report.graph_edge_count, 13);
+        assert_eq!(report.graph_node_count, 20);
+        assert_eq!(report.graph_edge_count, 17);
         assert_eq!(
             report
                 .threat_query

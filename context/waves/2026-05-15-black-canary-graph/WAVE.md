@@ -18,7 +18,7 @@ into `fletch-core`.
 | Pulse | Title | Status | Outcome |
 |------:|-------|--------|---------|
 | 01 | Manifest graph export | done | Added `fletch.graph.v1` nodes/edges from manifests, CLI export, and mock-client adapter edges. |
-| 02 | Registry definitions | pending | Add first fletch registry definition shape with dependency and format metadata. |
+| 02 | Registry definitions | done | Added `fletch.registry.v1` definitions, registry graph export, CLI support, and mock-client registry file. |
 | 03 | Dry-run flights | pending | Resolve registered fletches into graph-shaped flight plans without fetching. |
 | 04 | Tips | pending | Add lightweight structured previews for cached artifacts. |
 | 05 | CROP/PROOF publish scout | pending | Emit graph/status views ready for CROP indexing and PROOF rendering. |

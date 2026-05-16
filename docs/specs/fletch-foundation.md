@@ -90,6 +90,23 @@ domain edges, such as `expands-to` from an index to discovered fletches or
 `rolls-up-to` from dated partitions to yearly rollups, without moving domain
 logic into `fletch-core`.
 
+`fletch.registry.v1` is the first registry definition contract. It declares
+fletches before execution with:
+
+- `id`: stable logical fletch id.
+- `node_kind`: graph node kind such as `fletch`, `partition`, `rollup`, or
+  `alias`.
+- `shafts`: acceptable source options using the same source kind/url/header
+  model as plans.
+- `edges`: declared graph relationships such as `requires`, `expands-to`,
+  `derived-from`, or `rolls-up-to`.
+- `format`: optional media type, encoding, compression, container, schema,
+  record shape, and preferred local representation.
+- `tags` and `metadata`: product-owned labels that remain opaque to FLETCH.
+
+Registry graph export turns those declarations into `fletch.graph.v1` without
+fetching or activating data.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:
