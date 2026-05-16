@@ -21,7 +21,7 @@ making generated artifacts the source of truth.
 | 01 | CROP index report | done | Added `fletch.crop-index.v1` rows over cache status, graph nodes, graph edges, and tips. |
 | 02 | PROOF document manifest | done | Added `fletch.proof-docs.v1` document anchors over CROP index rows. |
 | 03 | Local URL map | done | Added `fletch.local-url-map.v1` stable local URLs over PROOF document anchors. |
-| 04 | Publisher bundle report | pending | Summarize status, graph, tips, quiver, and adapter views for downstream publishers. |
+| 04 | Publisher bundle report | done | Added `fletch.publisher-bundle.v1` summary over CROP, PROOF, URL, quiver, and adapter views. |
 
 ## Validation expectations
 

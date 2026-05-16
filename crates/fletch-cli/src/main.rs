@@ -8,11 +8,12 @@ use fletch_core::{
     inspect_cache_manifest, label_state_from_aliases, local_url_map, offline_cache_report,
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
-    proof_document_manifest, publish_report_from_manifest, quiver_merge_ready_report,
-    summarize_cache_manifest, summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry,
-    validate_registry, verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry,
-    CacheManifest, CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
-    LabelState, PartitionState, ProofDocumentManifest, QuiverManifest, RollupPreview, SourceKind,
+    proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
+    quiver_merge_ready_report, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
+    upsert_cache_manifest_entry, validate_registry, verify_cache_manifest, verify_quiver_bundle,
+    AdapterHandoffReport, AliasState, CacheEntry, CacheManifest, CropIndexReport, FetchOptions,
+    FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap, PartitionState,
+    ProofDocumentManifest, QuiverManifest, QuiverSummary, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -555,6 +556,27 @@ enum PublishCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Summarize publisher inputs for downstream CROP/PROOF backends.
+    Bundle {
+        /// Path to a fletch.crop-index.v1 JSON file.
+        #[arg(long)]
+        crop_index: PathBuf,
+        /// Path to a fletch.proof-docs.v1 JSON file.
+        #[arg(long)]
+        proof_docs: PathBuf,
+        /// Path to a fletch.local-url-map.v1 JSON file.
+        #[arg(long)]
+        local_url_map: PathBuf,
+        /// Optional fletch.quiver-summary.v1 JSON file.
+        #[arg(long)]
+        quiver_summary: Option<PathBuf>,
+        /// Optional fletch.adapter-handoff.v1 JSON file.
+        #[arg(long)]
+        adapter_handoff: Option<PathBuf>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -922,6 +944,36 @@ fn main() -> Result<()> {
                 let proof_docs = read_proof_docs(&proof_docs)?;
                 write_json(&local_url_map(&proof_docs, base_path), output)?;
             }
+            PublishCommands::Bundle {
+                crop_index,
+                proof_docs,
+                local_url_map,
+                quiver_summary,
+                adapter_handoff,
+                output,
+            } => {
+                let crop_index = read_crop_index(&crop_index)?;
+                let proof_docs = read_proof_docs(&proof_docs)?;
+                let local_url_map = read_local_url_map(&local_url_map)?;
+                let quiver_summary = quiver_summary
+                    .as_ref()
+                    .map(read_quiver_summary)
+                    .transpose()?;
+                let adapter_handoff = adapter_handoff
+                    .as_ref()
+                    .map(read_adapter_handoff)
+                    .transpose()?;
+                write_json(
+                    &publisher_bundle_report(
+                        &crop_index,
+                        &proof_docs,
+                        &local_url_map,
+                        quiver_summary.as_ref(),
+                        adapter_handoff.as_ref(),
+                    ),
+                    output,
+                )?;
+            }
         },
         Commands::Merge { command } => match command {
             MergeCommands::Preview {
@@ -1081,6 +1133,21 @@ fn read_crop_index(path: &PathBuf) -> Result<CropIndexReport> {
 }
 
 fn read_proof_docs(path: &PathBuf) -> Result<ProofDocumentManifest> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_local_url_map(path: &PathBuf) -> Result<LocalUrlMap> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_quiver_summary(path: &PathBuf) -> Result<QuiverSummary> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_adapter_handoff(path: &PathBuf) -> Result<AdapterHandoffReport> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

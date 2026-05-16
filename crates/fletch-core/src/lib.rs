@@ -26,6 +26,7 @@ pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 pub const FLETCH_CROP_INDEX_SCHEMA: &str = "fletch.crop-index.v1";
 pub const FLETCH_PROOF_DOCS_SCHEMA: &str = "fletch.proof-docs.v1";
 pub const FLETCH_LOCAL_URL_MAP_SCHEMA: &str = "fletch.local-url-map.v1";
+pub const FLETCH_PUBLISHER_BUNDLE_SCHEMA: &str = "fletch.publisher-bundle.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
@@ -861,6 +862,17 @@ pub struct LocalUrlMap {
     pub urls: Vec<LocalUrlEntry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublisherBundleReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub crop_row_count: usize,
+    pub proof_document_count: usize,
+    pub local_url_count: usize,
+    pub quiver_entry_count: Option<usize>,
+    pub adapter_source_count: Option<usize>,
+}
+
 pub fn fletch_registry(
     registry_id: impl Into<String>,
     fletches: Vec<FletchDefinition>,
@@ -1286,6 +1298,24 @@ pub fn local_url_map(docs: &ProofDocumentManifest, base_path: impl Into<String>)
         base_path,
         url_count: urls.len(),
         urls,
+    }
+}
+
+pub fn publisher_bundle_report(
+    crop_index: &CropIndexReport,
+    proof_docs: &ProofDocumentManifest,
+    local_urls: &LocalUrlMap,
+    quiver_summary: Option<&QuiverSummary>,
+    adapter_handoff: Option<&AdapterHandoffReport>,
+) -> PublisherBundleReport {
+    PublisherBundleReport {
+        schema_version: FLETCH_PUBLISHER_BUNDLE_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        crop_row_count: crop_index.row_count,
+        proof_document_count: proof_docs.document_count,
+        local_url_count: local_urls.url_count,
+        quiver_entry_count: quiver_summary.map(|summary| summary.entry_count),
+        adapter_source_count: adapter_handoff.map(|handoff| handoff.adapter_source_count),
     }
 }
 
@@ -5012,6 +5042,53 @@ mod tests {
         assert!(urls.urls[0]
             .local_url
             .starts_with("docs/fletch/cache-status_test_fletch"));
+    }
+
+    #[test]
+    fn publisher_bundle_report_summarizes_optional_inputs() {
+        let crop = CropIndexReport {
+            schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            row_count: 2,
+            status_row_count: 1,
+            graph_node_row_count: 1,
+            graph_edge_row_count: 0,
+            tip_row_count: 0,
+            rows: Vec::new(),
+        };
+        let docs = ProofDocumentManifest {
+            schema_version: FLETCH_PROOF_DOCS_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            source_schema: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+            document_count: 2,
+            documents: Vec::new(),
+        };
+        let urls = LocalUrlMap {
+            schema_version: FLETCH_LOCAL_URL_MAP_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            base_path: "docs".to_string(),
+            url_count: 2,
+            urls: Vec::new(),
+        };
+        let quiver = QuiverSummary {
+            schema_version: FLETCH_QUIVER_SUMMARY_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            quiver_id: "test:quiver".to_string(),
+            entry_count: 3,
+            byte_count: 10,
+            verified_count: 3,
+            unverified_count: 0,
+        };
+
+        let bundle = publisher_bundle_report(&crop, &docs, &urls, Some(&quiver), None);
+
+        assert_eq!(bundle.schema_version, FLETCH_PUBLISHER_BUNDLE_SCHEMA);
+        assert_eq!(bundle.crop_row_count, 2);
+        assert_eq!(bundle.proof_document_count, 2);
+        assert_eq!(bundle.local_url_count, 2);
+        assert_eq!(bundle.quiver_entry_count, Some(3));
+        assert_eq!(bundle.adapter_source_count, None);
     }
 
     fn unique_temp_dir(label: &str) -> PathBuf {

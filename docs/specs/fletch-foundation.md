@@ -144,6 +144,11 @@ views from this manifest while linking back to authoritative machine contracts.
 paths or URL prefixes. It is a navigation layer for generated views; source
 schemas still point back to the authoritative FLETCH contracts.
 
+`fletch.publisher-bundle.v1` summarizes publisher inputs for CROP/PROOF backends:
+CROP row counts, PROOF document counts, local URL counts, and optional quiver or
+adapter handoff counts. It is a compact index of publishable views, not a
+replacement for the underlying contracts.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:
