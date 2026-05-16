@@ -14,6 +14,7 @@ pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
+pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -59,6 +60,8 @@ pub enum FletchError {
     },
     #[error("[FETCH] bandwidth limit must be greater than zero bytes per second")]
     InvalidBandwidthLimit,
+    #[error("[TIP] max bytes must be greater than zero")]
+    InvalidTipByteLimit,
     #[error("[OFFLINE] cache entry {dataset_id} is missing and live fetches are disabled")]
     OfflineCacheMiss { dataset_id: String },
     #[error("[CACHE] relative cache path is unsafe: {relative_path}")]
@@ -380,6 +383,38 @@ pub struct FletchFlight {
     pub graph: FletchGraph,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TipKind {
+    JsonFields,
+    JsonArray,
+    JsonValue,
+    TextSample,
+    OpaqueBytes,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FletchTip {
+    pub fletch_id: String,
+    pub cache_key: String,
+    pub kind: TipKind,
+    pub summary: String,
+    #[serde(default)]
+    pub fields: Vec<String>,
+    pub sample_ref: Option<String>,
+    pub generated_from: String,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FletchTips {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub max_bytes: usize,
+    pub tips: Vec<FletchTip>,
+}
+
 pub fn fletch_registry(
     registry_id: impl Into<String>,
     fletches: Vec<FletchDefinition>,
@@ -505,6 +540,43 @@ pub fn dry_run_flight(registry: &FletchRegistry, requested: &[String]) -> Fletch
         steps,
         graph,
     }
+}
+
+pub fn tips_from_manifest(
+    manifest: &CacheManifest,
+    max_bytes: usize,
+) -> Result<FletchTips, FletchError> {
+    if max_bytes == 0 {
+        return Err(FletchError::InvalidTipByteLimit);
+    }
+    let mut tips = Vec::new();
+    for entry in &manifest.entries {
+        let relative_path = normalize_relative_cache_path(&entry.relative_path)?;
+        let path = cache_path(Path::new(&manifest.cache_root), &relative_path);
+        let mut file = File::open(&path).map_err(|source| FletchError::ReadSource {
+            path: path.display().to_string(),
+            source,
+        })?;
+        let mut bytes = Vec::new();
+        std::io::Read::by_ref(&mut file)
+            .take(max_bytes as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|source| FletchError::ReadSource {
+                path: path.display().to_string(),
+                source,
+            })?;
+        let truncated = bytes.len() > max_bytes;
+        bytes.truncate(max_bytes);
+        tips.push(tip_from_bytes(entry, &relative_path, &bytes, truncated));
+    }
+
+    Ok(FletchTips {
+        schema_version: FLETCH_TIP_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        max_bytes,
+        tips,
+    })
 }
 
 pub fn fetch_plan(
@@ -1447,6 +1519,79 @@ fn verify_quiver_source(
     Ok(())
 }
 
+fn tip_from_bytes(
+    entry: &CacheEntry,
+    relative_path: &str,
+    bytes: &[u8],
+    truncated: bool,
+) -> FletchTip {
+    let (kind, summary, fields) = match serde_json::from_slice::<serde_json::Value>(bytes) {
+        Ok(serde_json::Value::Object(map)) => {
+            let fields = map.keys().cloned().collect::<Vec<_>>();
+            (
+                TipKind::JsonFields,
+                format!("JSON object with {} top-level fields", fields.len()),
+                fields,
+            )
+        }
+        Ok(serde_json::Value::Array(values)) => {
+            let fields = values
+                .iter()
+                .find_map(|value| match value {
+                    serde_json::Value::Object(map) => Some(map.keys().cloned().collect::<Vec<_>>()),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            (
+                TipKind::JsonArray,
+                format!("JSON array with {} sampled entries", values.len()),
+                fields,
+            )
+        }
+        Ok(value) => (
+            TipKind::JsonValue,
+            format!("JSON {}", json_value_kind(&value)),
+            Vec::new(),
+        ),
+        Err(_) if bytes.contains(&0) => (
+            TipKind::OpaqueBytes,
+            format!("opaque byte sample with {} bytes", bytes.len()),
+            Vec::new(),
+        ),
+        Err(_) => {
+            let text = String::from_utf8_lossy(bytes);
+            let line_count = text.lines().count();
+            (
+                TipKind::TextSample,
+                format!("text sample with {line_count} sampled lines"),
+                Vec::new(),
+            )
+        }
+    };
+
+    FletchTip {
+        fletch_id: entry.dataset_id.clone(),
+        cache_key: entry.cache_key.clone(),
+        kind,
+        summary,
+        fields,
+        sample_ref: Some(format!("cache:{relative_path}#bytes=0-{}", bytes.len())),
+        generated_from: graph_ledger_id(&entry.cache_key),
+        truncated,
+    }
+}
+
+fn json_value_kind(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "boolean",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
 fn read_quiver_manifest(path: &Path) -> Result<QuiverManifest, FletchError> {
     let json = std::fs::read_to_string(path).map_err(|source| FletchError::ReadSource {
         path: path.display().to_string(),
@@ -2060,6 +2205,33 @@ mod tests {
             .iter()
             .any(|edge| edge.kind == GraphEdgeKind::Contains
                 && edge.label == Some("would-fetch".to_string())));
+    }
+
+    #[test]
+    fn tips_from_manifest_reports_json_fields_without_domain_logic() {
+        let root = unique_temp_dir("tips");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"alpha":1,"beta":true}"#).unwrap();
+        let plan =
+            fetch_plan_with_kind("test:tips", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+
+        let tips = tips_from_manifest(&manifest, 4096).unwrap();
+
+        assert_eq!(tips.schema_version, FLETCH_TIP_SCHEMA);
+        assert_eq!(tips.tips.len(), 1);
+        assert_eq!(tips.tips[0].kind, TipKind::JsonFields);
+        assert_eq!(tips.tips[0].fields, vec!["alpha", "beta"]);
+        assert!(tips.tips[0]
+            .generated_from
+            .starts_with("ledger-entry:sha256:"));
+        assert!(!tips.tips[0].truncated);
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     fn unique_temp_dir(label: &str) -> PathBuf {

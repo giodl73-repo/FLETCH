@@ -3,8 +3,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
     fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
-    inspect_cache_manifest, plan_cache_prune, CacheManifest, FetchOptions, FletchRegistry,
-    FreshnessPolicy, SourceKind,
+    inspect_cache_manifest, plan_cache_prune, tips_from_manifest, CacheManifest, FetchOptions,
+    FletchRegistry, FreshnessPolicy, SourceKind,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -104,6 +104,11 @@ enum Commands {
     Registry {
         #[command(subcommand)]
         command: RegistryCommands,
+    },
+    /// Emit lightweight fletch.tip.v1 previews.
+    Tip {
+        #[command(subcommand)]
+        command: TipCommands,
     },
 }
 
@@ -216,6 +221,22 @@ enum RegistryCommands {
         /// Fletch id to resolve. Repeat to request multiple roots; omit for all.
         #[arg(long = "fletch-id")]
         fletch_ids: Vec<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum TipCommands {
+    /// Generate lightweight tips from cached objects referenced by a manifest.
+    FromManifest {
+        /// Path to a fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Maximum bytes to sample from each cached object.
+        #[arg(long, default_value_t = 4096)]
+        max_bytes: usize,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -366,6 +387,16 @@ fn main() -> Result<()> {
             } => {
                 let registry = read_registry(&file)?;
                 write_json(&dry_run_flight(&registry, &fletch_ids), output)?;
+            }
+        },
+        Commands::Tip { command } => match command {
+            TipCommands::FromManifest {
+                manifest,
+                max_bytes,
+                output,
+            } => {
+                let manifest = read_manifest(&manifest)?;
+                write_json(&tips_from_manifest(&manifest, max_bytes)?, output)?;
             }
         },
     }

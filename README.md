@@ -76,6 +76,7 @@ cargo run -p fletch-cli -- quiver import --quiver-dir .fletch/quivers/demo --cac
 cargo run -p fletch-cli -- graph export --manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- registry graph --file fletch.registry.json
 cargo run -p fletch-cli -- registry flight --file fletch.registry.json --fletch-id justice-league:villains:index
+cargo run -p fletch-cli -- tip from-manifest --manifest .fletch/cache/manifest.json --max-bytes 4096
 ```
 
 `fletch plan` emits `fletch.plan.v1`, a source plan that downstream products can
@@ -120,6 +121,11 @@ definitions. It walks declared graph edges, reports which fletches would fetch,
 which require adapters, and which are metadata-only rollups/aliases, then embeds
 a graph view without touching the network or cache.
 
+`fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
+The initial generic tipper samples bounded bytes and reports JSON fields, JSON
+arrays/values, text samples, or opaque byte samples without interpreting product
+semantics.
+
 ## Workspace
 
 | Crate | Purpose |
@@ -141,8 +147,8 @@ impacted so a downstream tool can track threat measures across years. The mock
 client fetches the fletches into a cache, verifies status, queries cached threat
 partitions by year, city, and villain, exports/imports a stage-first quiver for
 offline bootstrap, writes registry and dry-run flight files, emits graph views
-from both registry and cached state, and emits a prune plan for an orphaned
-trick-arrow object.
+from both registry and cached state, writes generic tips, and emits a prune plan
+for an orphaned trick-arrow object.
 
 ## Design rule
 

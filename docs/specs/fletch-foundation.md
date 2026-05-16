@@ -148,6 +148,11 @@ structured preview/index metadata, not a replacement for the cached artifact:
 Tips give CROP, PROOF, CLIs, and adapters a cheap way to decide what data is
 inside a shaft before doing full domain-specific parsing.
 
+`fletch.tip.v1` is the initial tip contract. Manifest-backed tips sample bounded
+bytes from verified cache objects and emit generic preview kinds such as
+`json-fields`, `json-array`, `json-value`, `text-sample`, or `opaque-bytes`.
+Adapters can add richer tips later, but generic FLETCH tips stay product-neutral.
+
 ## Partition, rollup, and alias model
 
 FLETCH should distinguish durable data identity from mutable front-door names:
@@ -373,6 +378,13 @@ fletch IDs, ordered steps, each step's action (`would-fetch`, `adapter-required`
 `metadata-only`, or `missing-fletch`), the chosen shaft when known, deterministic
 cache key preview, declared dependencies, and an embedded graph view rooted at a
 flight node. It is planning data only; it does not fetch, merge, or activate.
+
+### `fletch.tip.v1`
+
+Lightweight preview contract for cached artifacts. A tip records the fletch id,
+cache key, preview kind, human summary, optional fields, sample reference,
+ledger-entry source, and truncation state. Tips are bounded previews for
+inspection and publishing; they are not authoritative data or product semantics.
 
 ### `fletch.merge.v1`
 
