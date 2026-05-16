@@ -65,8 +65,9 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
    `--force`, and redistricting/legal validation.
 3. ICELINES: `fetch fletch-sources --gate` inventories source surfaces, stable
    roster/MoneyPuck source bytes, paged NHL stats report bytes,
-   schedule-expanded Gamecenter bytes, and player-set-expanded landing bytes
-   are acquired through FLETCH, and `fetch fletch-partitions --gate` maps
+   schedule-expanded Gamecenter bytes, player-set-expanded landing bytes, and
+   season-window-expanded ESPN transaction bytes are acquired through FLETCH, and
+   `fetch fletch-partitions --gate` maps
    leaders/player/compare, goalies, roster bios, MoneyPuck, career, and
    windowed game-line queries to partition and rollup IDs.
    `fetch fletch-quivers --gate` groups those partitions into query bootstrap
@@ -84,4 +85,4 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 |---|---|---|
 | ROUTE | Generic source orchestration and source handoff/gate reporting. | Route scoring, geospatial semantics, user-facing outputs. |
 | BISECT | Generic HTTP source-byte acquisition under `data/.fletch` plus handoff/gate reporting. | Release adjacency, archive extraction, derived CSVs, done markers, local manifest overrides, legal/redistricting claims. |
-| ICELINES | Handoff/gate reporting, roster, MoneyPuck, paged NHL stats, schedule-expanded Gamecenter, and player-set-expanded landing source-byte acquisition, query partition/rollup handoff reporting, and query quiver handoff reporting. | ESPN transaction windows, schedule/player-set expansion semantics, snapshots, parsing, sealing, active pointers, event streams, and hockey semantics. |
+| ICELINES | Handoff/gate reporting, roster, MoneyPuck, paged NHL stats, schedule-expanded Gamecenter, player-set-expanded landing, and season-window-expanded ESPN transaction source-byte acquisition, query partition/rollup handoff reporting, and query quiver handoff reporting. | Schedule/player-set/window expansion semantics, snapshots, parsing, sealing, active pointers, event streams, classifiers, and hockey semantics. |
