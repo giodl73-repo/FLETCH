@@ -75,8 +75,9 @@ Downstream migration status:
   `icelines fetch fletch-quivers --gate` groups those partitions into query
   bootstrap and enrichment quiver handoff candidates, and `icelines fetch
   fletch-cache-index --gate` maps ICELINES' FLETCH cache manifest to compact
-  cache-index evidence. ICELINES keeps NHL parsing, snapshots, sealing, active
-  pointers, and hockey-domain validation.
+  cache-index evidence. ICELINES uses FLETCH's shared manifest read/write and
+  batch upsert helpers for that ledger, while keeping NHL parsing, snapshots,
+  sealing, active pointers, and hockey-domain validation.
 - CROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
@@ -174,9 +175,9 @@ entry shape, and derived reports. A typical consumer flow is:
 5. Feed the manifest to read-only reports such as cache index, status, verify,
    graph, publisher, partition, or quiver handoff reports.
 
-This pattern supports ICELINES-style cache-index evidence, BISECT/ROUTE data
-ledgers, and CROP/PROOF publisher inputs without making FLETCH responsible for
-domain activation.
+This pattern is now used by ICELINES for cache-index evidence and supports
+BISECT/ROUTE data ledgers plus CROP/PROOF publisher inputs without making
+FLETCH responsible for domain activation.
 
 Publisher commands are read-only derived views. `fletch publish crop-index`,
 `fletch publish proof-docs`, and `fletch publish local-url-map` accept
