@@ -21,7 +21,7 @@ logic in FLETCH.
 |------:|-------|--------|---------|
 | 01 | Partition state contract | done | Added `fletch.partition-state.v1` manifest-derived partition rows without product semantics. |
 | 02 | Rollup edge preview | done | Added `fletch.rollup-preview.v1` parent/child edges over partition state. |
-| 03 | Invalidation and folding metadata | pending | Report stale, folded, and superseded partition metadata without mutating caches. |
+| 03 | Invalidation and folding metadata | done | Added `fletch.partition-invalidation.v1` stale/folded/superseded partition reports. |
 | 04 | Active partition set | pending | Produce query-facing active partition reports from aliases, labels, and rollups. |
 
 ## Validation expectations

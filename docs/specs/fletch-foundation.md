@@ -309,6 +309,11 @@ to partition rows. It reports selected partitions, cache keys, hashes, byte
 counts, and missing child partition IDs before any rollup materialization or
 activation.
 
+`fletch.partition-invalidation.v1` reports stale, folded, and superseded
+partition metadata over a partition state. It exposes counts, per-partition
+flags, reasons, and missing partition IDs without deleting cache objects,
+materializing rollups, or changing active aliases.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.

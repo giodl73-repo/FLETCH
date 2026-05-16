@@ -25,6 +25,7 @@ pub const FLETCH_LABEL_SCHEMA: &str = "fletch.label-state.v1";
 pub const FLETCH_ROLLBACK_PREVIEW_SCHEMA: &str = "fletch.rollback-preview.v1";
 pub const FLETCH_PARTITION_SCHEMA: &str = "fletch.partition-state.v1";
 pub const FLETCH_ROLLUP_PREVIEW_SCHEMA: &str = "fletch.rollup-preview.v1";
+pub const FLETCH_PARTITION_INVALIDATION_SCHEMA: &str = "fletch.partition-invalidation.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -412,6 +413,32 @@ pub struct RollupPreview {
     pub missing_count: usize,
     pub missing_partition_ids: Vec<String>,
     pub edges: Vec<RollupEdge>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartitionInvalidationEntry {
+    pub partition_id: String,
+    pub dataset_id: String,
+    pub cache_key: String,
+    pub sha256: String,
+    pub stale: bool,
+    pub folded: bool,
+    pub superseded: bool,
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartitionInvalidationReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub partition_count: usize,
+    pub stale_count: usize,
+    pub folded_count: usize,
+    pub superseded_count: usize,
+    pub missing_count: usize,
+    pub missing_partition_ids: Vec<String>,
+    pub entries: Vec<PartitionInvalidationEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1261,6 +1288,85 @@ pub fn preview_rollup_edges(
         missing_count: missing_partition_ids.len(),
         missing_partition_ids,
         edges,
+    }
+}
+
+pub fn partition_invalidation_report(
+    partition_state: &PartitionState,
+    stale_partition_ids: &[String],
+    folded_partition_ids: &[String],
+    superseded_partition_ids: &[String],
+) -> PartitionInvalidationReport {
+    let stale_ids = stale_partition_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let folded_ids = folded_partition_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let superseded_ids = superseded_partition_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let known_ids = partition_state
+        .partitions
+        .iter()
+        .map(|partition| partition.partition_id.clone())
+        .collect::<BTreeSet<_>>();
+    let requested_ids = stale_ids
+        .iter()
+        .chain(folded_ids.iter())
+        .chain(superseded_ids.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let missing_partition_ids = requested_ids
+        .difference(&known_ids)
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut stale_count = 0;
+    let mut folded_count = 0;
+    let mut superseded_count = 0;
+    let entries = partition_state
+        .partitions
+        .iter()
+        .map(|partition| {
+            let stale = stale_ids.contains(&partition.partition_id);
+            let folded = folded_ids.contains(&partition.partition_id);
+            let superseded = superseded_ids.contains(&partition.partition_id);
+            stale_count += usize::from(stale);
+            folded_count += usize::from(folded);
+            superseded_count += usize::from(superseded);
+            let mut reasons = Vec::new();
+            if stale {
+                reasons.push("stale".to_string());
+            }
+            if folded {
+                reasons.push("folded".to_string());
+            }
+            if superseded {
+                reasons.push("superseded".to_string());
+            }
+            PartitionInvalidationEntry {
+                partition_id: partition.partition_id.clone(),
+                dataset_id: partition.dataset_id.clone(),
+                cache_key: partition.cache_key.clone(),
+                sha256: partition.sha256.clone(),
+                stale,
+                folded,
+                superseded,
+                reasons,
+            }
+        })
+        .collect::<Vec<_>>();
+    PartitionInvalidationReport {
+        schema_version: FLETCH_PARTITION_INVALIDATION_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: partition_state.cache_root.clone(),
+        partition_count: entries.len(),
+        stale_count,
+        folded_count,
+        superseded_count,
+        missing_count: missing_partition_ids.len(),
+        missing_partition_ids,
+        entries,
     }
 }
 
@@ -3407,6 +3513,45 @@ mod tests {
         assert_eq!(preview.missing_partition_ids[0], "test:partition:missing");
         assert_eq!(preview.edges[0].partition_id, "test:partition:001");
         assert_eq!(preview.edges[0].dataset_id, "test:partition:001");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn partition_invalidation_report_marks_state_without_mutation() {
+        let root = unique_temp_dir("partition-invalidation");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"partition").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:partition:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+        let partitions = partition_state_from_manifest(&manifest, None);
+
+        let report = partition_invalidation_report(
+            &partitions,
+            &["test:partition:001".to_string()],
+            &["test:partition:001".to_string()],
+            &["test:partition:missing".to_string()],
+        );
+
+        assert_eq!(report.schema_version, FLETCH_PARTITION_INVALIDATION_SCHEMA);
+        assert_eq!(report.partition_count, 1);
+        assert_eq!(report.stale_count, 1);
+        assert_eq!(report.folded_count, 1);
+        assert_eq!(report.superseded_count, 0);
+        assert_eq!(report.missing_count, 1);
+        assert_eq!(report.entries[0].partition_id, "test:partition:001");
+        assert!(report.entries[0].stale);
+        assert!(report.entries[0].folded);
+        assert!(!report.entries[0].superseded);
+        assert_eq!(report.entries[0].reasons, vec!["stale", "folded"]);
 
         let _ = std::fs::remove_dir_all(root);
     }

@@ -4,11 +4,12 @@ use fletch_core::{
     alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
     export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
     graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
-    offline_cache_report, partition_state_from_manifest, plan_cache_prune, preview_manifest_merge,
-    preview_rollback, preview_rollup_edges, publish_report_from_manifest, summarize_cache_manifest,
-    tips_from_manifest, upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry,
-    CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState,
-    PartitionState, SourceKind,
+    offline_cache_report, partition_invalidation_report, partition_state_from_manifest,
+    plan_cache_prune, preview_manifest_merge, preview_rollback, preview_rollup_edges,
+    publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
+    upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry, CacheManifest,
+    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
+    SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -208,6 +209,24 @@ enum PartitionCommands {
         /// Child partition id to include. Repeat for a subset; omit to include all.
         #[arg(long = "child-partition-id")]
         child_partition_ids: Vec<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Report stale, folded, and superseded partition metadata.
+    InvalidationReport {
+        /// Path to a fletch.partition-state.v1 JSON file.
+        #[arg(long)]
+        partition_state: PathBuf,
+        /// Partition id to mark stale. Repeat for multiple partitions.
+        #[arg(long = "stale-partition-id")]
+        stale_partition_ids: Vec<String>,
+        /// Partition id to mark folded. Repeat for multiple partitions.
+        #[arg(long = "folded-partition-id")]
+        folded_partition_ids: Vec<String>,
+        /// Partition id to mark superseded. Repeat for multiple partitions.
+        #[arg(long = "superseded-partition-id")]
+        superseded_partition_ids: Vec<String>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -753,6 +772,24 @@ fn main() -> Result<()> {
                 let partition_state = read_partition_state(&partition_state)?;
                 write_json(
                     &preview_rollup_edges(&partition_state, rollup_id, &child_partition_ids),
+                    output,
+                )?;
+            }
+            PartitionCommands::InvalidationReport {
+                partition_state,
+                stale_partition_ids,
+                folded_partition_ids,
+                superseded_partition_ids,
+                output,
+            } => {
+                let partition_state = read_partition_state(&partition_state)?;
+                write_json(
+                    &partition_invalidation_report(
+                        &partition_state,
+                        &stale_partition_ids,
+                        &folded_partition_ids,
+                        &superseded_partition_ids,
+                    ),
                     output,
                 )?;
             }
