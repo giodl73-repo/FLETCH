@@ -1932,6 +1932,55 @@ pub fn slice_cache_index_report(
     }
 }
 
+pub fn select_cache_index_report(
+    index: &CacheIndexReport,
+    expr: &str,
+) -> Result<CacheIndexReport, slice_core::SliceError> {
+    let selector = slice_core::compile(expr, &cache_index_selector_catalog())?;
+    let entries = index
+        .entries
+        .iter()
+        .filter(|entry| selector.matches(&cache_index_selector_row(entry)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let verified_count = entries.iter().filter(|entry| entry.verified).count();
+    Ok(CacheIndexReport {
+        schema_version: index.schema_version.clone(),
+        generated_by: index.generated_by.clone(),
+        cache_root: index.cache_root.clone(),
+        entry_count: entries.len(),
+        verified_count,
+        unverified_count: entries.len().saturating_sub(verified_count),
+        byte_count: entries.iter().map(|entry| entry.bytes).sum(),
+        entries,
+    })
+}
+
+fn cache_index_selector_catalog() -> slice_core::FieldCatalog {
+    let mut catalog = slice_core::FieldCatalog::new();
+    catalog
+        .insert("dataset_id", slice_core::ValueType::String)
+        .insert("version", slice_core::ValueType::String)
+        .insert("cache_key", slice_core::ValueType::String)
+        .insert("sha256", slice_core::ValueType::String)
+        .insert("relative_path", slice_core::ValueType::String)
+        .insert("bytes", slice_core::ValueType::Number)
+        .insert("verified", slice_core::ValueType::Bool);
+    catalog
+}
+
+fn cache_index_selector_row(entry: &CacheIndexEntry) -> serde_json::Value {
+    serde_json::json!({
+        "dataset_id": entry.dataset_id,
+        "version": entry.version,
+        "cache_key": entry.cache_key,
+        "sha256": entry.sha256,
+        "relative_path": entry.relative_path,
+        "bytes": entry.bytes,
+        "verified": entry.verified,
+    })
+}
+
 pub fn cache_index_diff(
     base: &CacheIndexReport,
     candidate: &CacheIndexReport,
@@ -2580,6 +2629,62 @@ pub fn slice_active_partition_set(
         inactive_count: partitions.len().saturating_sub(active_count),
         partitions,
     }
+}
+
+pub fn select_active_partition_set(
+    active_set: &ActivePartitionSet,
+    expr: &str,
+) -> Result<ActivePartitionSet, slice_core::SliceError> {
+    let selector = slice_core::compile(expr, &active_partition_selector_catalog())?;
+    let partitions = active_set
+        .partitions
+        .iter()
+        .filter(|partition| selector.matches(&active_partition_selector_row(partition)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let active_count = partitions
+        .iter()
+        .filter(|partition| partition.active)
+        .count();
+    Ok(ActivePartitionSet {
+        schema_version: active_set.schema_version.clone(),
+        generated_by: active_set.generated_by.clone(),
+        cache_root: active_set.cache_root.clone(),
+        active_count,
+        inactive_count: partitions.len().saturating_sub(active_count),
+        partitions,
+    })
+}
+
+fn active_partition_selector_catalog() -> slice_core::FieldCatalog {
+    let mut catalog = slice_core::FieldCatalog::new();
+    catalog
+        .insert("partition_id", slice_core::ValueType::String)
+        .insert("dataset_id", slice_core::ValueType::String)
+        .insert("cache_key", slice_core::ValueType::String)
+        .insert("sha256", slice_core::ValueType::String)
+        .insert("relative_path", slice_core::ValueType::String)
+        .insert("verified", slice_core::ValueType::Bool)
+        .insert("active", slice_core::ValueType::Bool)
+        .insert("alias_ids", slice_core::ValueType::Array)
+        .insert("label_ids", slice_core::ValueType::Array)
+        .insert("rollup_ids", slice_core::ValueType::Array);
+    catalog
+}
+
+fn active_partition_selector_row(partition: &ActivePartitionEntry) -> serde_json::Value {
+    serde_json::json!({
+        "partition_id": partition.partition_id,
+        "dataset_id": partition.dataset_id,
+        "cache_key": partition.cache_key,
+        "sha256": partition.sha256,
+        "relative_path": partition.relative_path,
+        "verified": partition.verified,
+        "active": partition.active,
+        "alias_ids": partition.alias_ids,
+        "label_ids": partition.label_ids,
+        "rollup_ids": partition.rollup_ids,
+    })
 }
 
 fn merge_preview_entry(
@@ -3640,11 +3745,9 @@ fn fetch_source_once(
             })?;
             write_stream_to_temp(&mut file, temp_path, options.max_bytes_per_second)
         }
-        SourceKind::Adapter => {
-            return Err(FletchError::UnsupportedSourceKind {
-                kind: plan.source.kind.clone(),
-            });
-        }
+        SourceKind::Adapter => Err(FletchError::UnsupportedSourceKind {
+            kind: plan.source.kind.clone(),
+        }),
     }
 }
 
@@ -3793,7 +3896,7 @@ fn cache_hit_is_fresh(
                 })?;
             let age = SystemTime::now()
                 .duration_since(modified)
-                .unwrap_or_else(|_| Duration::ZERO);
+                .unwrap_or(Duration::ZERO);
             Ok(age <= Duration::from_secs(*days as u64 * 24 * 60 * 60))
         }
     }
@@ -4980,26 +5083,21 @@ mod tests {
                 },
             ],
         };
-        let mut catalog = slice_core::FieldCatalog::new();
-        catalog
-            .insert("dataset_id", slice_core::ValueType::String)
-            .insert("verified", slice_core::ValueType::Bool)
-            .insert("bytes", slice_core::ValueType::Number);
-        let selector = slice_core::compile(
+        let selected = select_cache_index_report(
+            &index,
             "dataset_id contains 'icelines' and verified eq true and bytes ge 100",
-            &catalog,
         )
         .unwrap();
-
-        let selected = index
+        let selected_ids = selected
             .entries
             .iter()
-            .filter(|entry| selector.matches(&cache_index_entry_row(entry)))
             .map(|entry| entry.dataset_id.clone())
             .collect::<Vec<_>>();
 
-        assert_eq!(selected, ["icelines:leaders"]);
-        assert_eq!(selector.requirements().field_count, 3);
+        assert_eq!(selected_ids, ["icelines:leaders"]);
+        assert_eq!(selected.entry_count, 1);
+        assert_eq!(selected.verified_count, 1);
+        assert_eq!(selected.byte_count, 200);
     }
 
     #[test]
@@ -6250,27 +6348,18 @@ mod tests {
                 },
             ],
         };
-        let mut catalog = slice_core::FieldCatalog::new();
-        catalog
-            .insert("active", slice_core::ValueType::Bool)
-            .insert("dataset_id", slice_core::ValueType::String)
-            .insert("verified", slice_core::ValueType::Bool);
-        let selector = slice_core::compile(
+        let selected = select_active_partition_set(
+            &active_set,
             "active eq true and dataset_id contains 'icelines' and verified eq true",
-            &catalog,
         )
         .unwrap();
-
-        let selected = active_set
-            .partitions
-            .iter()
-            .filter(|partition| selector.matches(&active_partition_row(partition)))
-            .collect::<Vec<_>>();
         let partition_ids = selected
+            .partitions
             .iter()
             .map(|partition| partition.partition_id.as_str())
             .collect::<Vec<_>>();
         let quiver_candidate_dataset_ids = selected
+            .partitions
             .iter()
             .map(|partition| partition.dataset_id.as_str())
             .collect::<BTreeSet<_>>();
@@ -6280,30 +6369,8 @@ mod tests {
             quiver_candidate_dataset_ids.into_iter().collect::<Vec<_>>(),
             ["icelines:leaders"]
         );
-    }
-
-    fn cache_index_entry_row(entry: &CacheIndexEntry) -> serde_json::Value {
-        serde_json::json!({
-            "dataset_id": entry.dataset_id,
-            "version": entry.version,
-            "cache_key": entry.cache_key,
-            "verified": entry.verified,
-            "bytes": entry.bytes,
-            "relative_path": entry.relative_path,
-        })
-    }
-
-    fn active_partition_row(partition: &ActivePartitionEntry) -> serde_json::Value {
-        serde_json::json!({
-            "partition_id": partition.partition_id,
-            "dataset_id": partition.dataset_id,
-            "cache_key": partition.cache_key,
-            "verified": partition.verified,
-            "active": partition.active,
-            "alias_ids": partition.alias_ids,
-            "label_ids": partition.label_ids,
-            "rollup_ids": partition.rollup_ids,
-        })
+        assert_eq!(selected.active_count, 1);
+        assert_eq!(selected.inactive_count, 0);
     }
 
     #[test]

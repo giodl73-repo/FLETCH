@@ -21,4 +21,4 @@ sha2 = "0.10"
 thiserror = "2"
 toml = "0.8"
 reqwest = { version = "0.12", features = ["blocking"] }
-slice-core = { git = "https://github.com/giodl73-repo/SLICE", package = "slice-core", rev = "042cd9a37df2e8de92cb143c98f656af4a59136c" }
+slice-core = { git = "https://github.com/giodl73-repo/SLICE", package = "slice-core", rev = "50b63a2eefc66916e9a015a915c845c28d80773c" }
