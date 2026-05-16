@@ -138,6 +138,10 @@ Fetching is acquisition, not activation: it verifies and records a candidate
 object, but it does not merge that object into a product's active data view. In
 the target model, `pull` is reserved for future fetch-plus-merge semantics
 rather than a plain fetch alias.
+
+FLETCH can use SLICE selectors over cache-index and active-partition rows before
+its own gates, rollups, and quiver folding. See
+[`docs/specs/slice-selectors.md`](docs/specs/slice-selectors.md).
 Use `--max-bytes-per-second` to respect bandwidth-sensitive environments.
 Use `--timeout-ms` and `--retry-attempts` to bound generic HTTP waits and retry
 transient generic fetch/read/write failures. Ledger entries include

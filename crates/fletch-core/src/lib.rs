@@ -4935,6 +4935,74 @@ mod tests {
     }
 
     #[test]
+    fn slice_selects_cache_index_rows_before_fletch_policy_gates() {
+        let index = CacheIndexReport {
+            schema_version: FLETCH_CACHE_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            entry_count: 3,
+            verified_count: 2,
+            unverified_count: 1,
+            byte_count: 350,
+            entries: vec![
+                CacheIndexEntry {
+                    dataset_id: "icelines:leaders".to_string(),
+                    version: Some("2026".to_string()),
+                    cache_key: "cache:icelines:leaders:2026".to_string(),
+                    sha256:
+                        "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                            .to_string(),
+                    relative_path: "objects/leaders".to_string(),
+                    bytes: 200,
+                    verified: true,
+                },
+                CacheIndexEntry {
+                    dataset_id: "icelines:archive".to_string(),
+                    version: Some("2024".to_string()),
+                    cache_key: "cache:icelines:archive:2024".to_string(),
+                    sha256:
+                        "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                            .to_string(),
+                    relative_path: "objects/archive".to_string(),
+                    bytes: 100,
+                    verified: false,
+                },
+                CacheIndexEntry {
+                    dataset_id: "maxim:query-languages".to_string(),
+                    version: None,
+                    cache_key: "cache:maxim:query-languages".to_string(),
+                    sha256:
+                        "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+                            .to_string(),
+                    relative_path: "objects/maxim".to_string(),
+                    bytes: 50,
+                    verified: true,
+                },
+            ],
+        };
+        let mut catalog = slice_core::FieldCatalog::new();
+        catalog
+            .insert("dataset_id", slice_core::ValueType::String)
+            .insert("verified", slice_core::ValueType::Bool)
+            .insert("bytes", slice_core::ValueType::Number);
+        let selector = slice_core::compile(
+            "dataset_id contains 'icelines' and verified eq true and bytes ge 100",
+            &catalog,
+        )
+        .unwrap();
+
+        let selected = index
+            .entries
+            .iter()
+            .filter(|entry| selector.matches(&cache_index_entry_row(entry)))
+            .map(|entry| entry.dataset_id.clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(selected, ["icelines:leaders"]);
+        assert_eq!(selector.requirements().field_count, 3);
+    }
+
+    #[test]
     fn cache_index_diff_reports_added_removed_and_changed_rows() {
         let base = CacheIndexReport {
             schema_version: FLETCH_CACHE_INDEX_SCHEMA.to_string(),
@@ -6127,6 +6195,115 @@ mod tests {
         assert_eq!(active.partitions[0].rollup_ids, vec!["test:rollup"]);
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn slice_selects_active_partitions_before_quiver_folding() {
+        let active_set = ActivePartitionSet {
+            schema_version: FLETCH_ACTIVE_PARTITION_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            active_count: 2,
+            inactive_count: 1,
+            partitions: vec![
+                ActivePartitionEntry {
+                    partition_id: "partition:icelines:leaders".to_string(),
+                    dataset_id: "icelines:leaders".to_string(),
+                    cache_key: "cache:icelines:leaders:2026".to_string(),
+                    sha256:
+                        "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                            .to_string(),
+                    relative_path: "objects/leaders".to_string(),
+                    verified: true,
+                    active: true,
+                    alias_ids: vec!["current".to_string()],
+                    label_ids: vec!["leaders".to_string()],
+                    rollup_ids: vec!["icelines:leaders:current".to_string()],
+                },
+                ActivePartitionEntry {
+                    partition_id: "partition:icelines:archive".to_string(),
+                    dataset_id: "icelines:archive".to_string(),
+                    cache_key: "cache:icelines:archive:2024".to_string(),
+                    sha256:
+                        "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                            .to_string(),
+                    relative_path: "objects/archive".to_string(),
+                    verified: true,
+                    active: false,
+                    alias_ids: Vec::new(),
+                    label_ids: vec!["archive".to_string()],
+                    rollup_ids: Vec::new(),
+                },
+                ActivePartitionEntry {
+                    partition_id: "partition:maxim:query-languages".to_string(),
+                    dataset_id: "maxim:query-languages".to_string(),
+                    cache_key: "cache:maxim:query-languages".to_string(),
+                    sha256:
+                        "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+                            .to_string(),
+                    relative_path: "objects/maxim".to_string(),
+                    verified: true,
+                    active: true,
+                    alias_ids: vec!["latest".to_string()],
+                    label_ids: Vec::new(),
+                    rollup_ids: Vec::new(),
+                },
+            ],
+        };
+        let mut catalog = slice_core::FieldCatalog::new();
+        catalog
+            .insert("active", slice_core::ValueType::Bool)
+            .insert("dataset_id", slice_core::ValueType::String)
+            .insert("verified", slice_core::ValueType::Bool);
+        let selector = slice_core::compile(
+            "active eq true and dataset_id contains 'icelines' and verified eq true",
+            &catalog,
+        )
+        .unwrap();
+
+        let selected = active_set
+            .partitions
+            .iter()
+            .filter(|partition| selector.matches(&active_partition_row(partition)))
+            .collect::<Vec<_>>();
+        let partition_ids = selected
+            .iter()
+            .map(|partition| partition.partition_id.as_str())
+            .collect::<Vec<_>>();
+        let quiver_candidate_dataset_ids = selected
+            .iter()
+            .map(|partition| partition.dataset_id.as_str())
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(partition_ids, ["partition:icelines:leaders"]);
+        assert_eq!(
+            quiver_candidate_dataset_ids.into_iter().collect::<Vec<_>>(),
+            ["icelines:leaders"]
+        );
+    }
+
+    fn cache_index_entry_row(entry: &CacheIndexEntry) -> serde_json::Value {
+        serde_json::json!({
+            "dataset_id": entry.dataset_id,
+            "version": entry.version,
+            "cache_key": entry.cache_key,
+            "verified": entry.verified,
+            "bytes": entry.bytes,
+            "relative_path": entry.relative_path,
+        })
+    }
+
+    fn active_partition_row(partition: &ActivePartitionEntry) -> serde_json::Value {
+        serde_json::json!({
+            "partition_id": partition.partition_id,
+            "dataset_id": partition.dataset_id,
+            "cache_key": partition.cache_key,
+            "verified": partition.verified,
+            "active": partition.active,
+            "alias_ids": partition.alias_ids,
+            "label_ids": partition.label_ids,
+            "rollup_ids": partition.rollup_ids,
+        })
     }
 
     #[test]
