@@ -4,8 +4,9 @@ use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
     fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
     inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest,
-    summarize_cache_manifest, tips_from_manifest, upsert_cache_manifest_entry, CacheEntry,
-    CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, SourceKind,
+    summarize_cache_manifest, tips_from_manifest, upsert_cache_manifest_entry,
+    verify_cache_manifest, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
+    FreshnessPolicy, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -471,10 +472,7 @@ fn main() -> Result<()> {
             }
             CacheCommands::Verify { manifest, output } => {
                 let manifest = read_manifest(&manifest)?;
-                write_json(
-                    &inspect_cache_manifest(&manifest, &FreshnessPolicy::Immutable)?,
-                    output,
-                )?;
+                write_json(&verify_cache_manifest(&manifest)?, output)?;
             }
             CacheCommands::Status {
                 manifest,

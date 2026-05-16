@@ -16,6 +16,7 @@ pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
+pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -232,6 +233,15 @@ pub struct CacheSummary {
     pub missing_freshness_count: usize,
     pub expected_bytes: u64,
     pub actual_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheVerifyReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub summary: CacheSummary,
+    pub statuses: Vec<CacheStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -764,8 +774,12 @@ pub fn summarize_cache_manifest(
     freshness: &FreshnessPolicy,
 ) -> Result<CacheSummary, FletchError> {
     let statuses = inspect_cache_manifest(manifest, freshness)?;
-    Ok(CacheSummary {
-        cache_root: manifest.cache_root.clone(),
+    Ok(summarize_statuses(&manifest.cache_root, &statuses))
+}
+
+fn summarize_statuses(cache_root: &str, statuses: &[CacheStatus]) -> CacheSummary {
+    CacheSummary {
+        cache_root: cache_root.to_string(),
         entry_count: statuses.len(),
         verified_count: statuses
             .iter()
@@ -796,6 +810,19 @@ pub fn summarize_cache_manifest(
             .iter()
             .filter_map(|status| status.actual_bytes)
             .sum(),
+    }
+}
+
+pub fn verify_cache_manifest(manifest: &CacheManifest) -> Result<CacheVerifyReport, FletchError> {
+    let freshness = FreshnessPolicy::Immutable;
+    let statuses = inspect_cache_manifest(manifest, &freshness)?;
+    let summary = summarize_statuses(&manifest.cache_root, &statuses);
+    Ok(CacheVerifyReport {
+        schema_version: FLETCH_VERIFY_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        summary,
+        statuses,
     })
 }
 
@@ -2622,6 +2649,30 @@ mod tests {
         assert_eq!(summary.missing_freshness_count, 1);
         assert_eq!(summary.expected_bytes, 10);
         assert_eq!(summary.actual_bytes, 5);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn verify_cache_manifest_returns_named_report() {
+        let root = unique_temp_dir("verify-report");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"hello").unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+
+        let report = verify_cache_manifest(&manifest).unwrap();
+
+        assert_eq!(report.schema_version, FLETCH_VERIFY_SCHEMA);
+        assert_eq!(report.cache_root, manifest.cache_root);
+        assert_eq!(report.summary.entry_count, 1);
+        assert_eq!(report.summary.verified_count, 1);
+        assert_eq!(report.statuses.len(), 1);
 
         let _ = std::fs::remove_dir_all(root);
     }

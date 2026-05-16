@@ -401,8 +401,9 @@ Markdown to become the source of truth.
 Initial cache operations are manifest-led:
 
 - `cache list`: display ledger entries without touching cached objects.
-- `cache verify`: hash cached objects and compare them with ledger hash and byte
-  count.
+- `cache verify`: emit `fletch.cache-verify.v1`, a named report that hashes
+  cached objects, compares them with ledger hash and byte count, and includes
+  summary counts plus per-entry status rows.
 - `cache status`: report verified, missing, hash-mismatch, fresh, or stale state
   using a caller-provided freshness policy.
 - `cache summary`: aggregate status rows into cache health counts and expected
