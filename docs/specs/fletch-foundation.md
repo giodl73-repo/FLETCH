@@ -132,6 +132,10 @@ downstream tooling: validation status, source counts, adapter source counts,
 graph size, and flight step counts. It is a compact handoff report; detailed
 registry, graph, and flight contracts remain the source of truth.
 
+`fletch.crop-index.v1` emits CROP-indexable rows over cache status, graph nodes,
+graph edges, and tips. Each row records its source schema so generated indexes
+can link back to the machine contract that remains authoritative.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:

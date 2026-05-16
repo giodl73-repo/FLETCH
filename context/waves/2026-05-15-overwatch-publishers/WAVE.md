@@ -18,7 +18,7 @@ making generated artifacts the source of truth.
 
 | Pulse | Title | Status | Outcome |
 |------:|-------|--------|---------|
-| 01 | CROP index report | pending | Emit indexable rows over cache status, graph nodes, graph edges, and tips. |
+| 01 | CROP index report | done | Added `fletch.crop-index.v1` rows over cache status, graph nodes, graph edges, and tips. |
 | 02 | PROOF document manifest | pending | Emit document-ready anchors over FLETCH contracts without generating prose as truth. |
 | 03 | Local URL map | pending | Map schemas and rows to stable local URLs/anchors for generated views. |
 | 04 | Publisher bundle report | pending | Summarize status, graph, tips, quiver, and adapter views for downstream publishers. |

@@ -23,6 +23,7 @@ pub const FLETCH_ADAPTER_HANDOFF_SCHEMA: &str = "fletch.adapter-handoff.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
+pub const FLETCH_CROP_INDEX_SCHEMA: &str = "fletch.crop-index.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
@@ -802,6 +803,28 @@ pub struct FletchPublishReport {
     pub tips: FletchTips,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CropIndexRow {
+    pub row_type: String,
+    pub id: String,
+    pub label: String,
+    pub status: Option<String>,
+    pub source_schema: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CropIndexReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub row_count: usize,
+    pub status_row_count: usize,
+    pub graph_node_row_count: usize,
+    pub graph_edge_row_count: usize,
+    pub tip_row_count: usize,
+    pub rows: Vec<CropIndexRow>,
+}
+
 pub fn fletch_registry(
     registry_id: impl Into<String>,
     fletches: Vec<FletchDefinition>,
@@ -1117,6 +1140,72 @@ pub fn publish_report_from_manifest(
         statuses: inspect_cache_manifest(manifest, freshness)?,
         tips: tips_from_manifest(manifest, max_tip_bytes)?,
     })
+}
+
+pub fn crop_index_from_manifest(
+    manifest: &CacheManifest,
+    freshness: &FreshnessPolicy,
+    max_tip_bytes: usize,
+) -> Result<CropIndexReport, FletchError> {
+    let statuses = inspect_cache_manifest(manifest, freshness)?;
+    let graph = graph_from_manifest(manifest);
+    let tips = tips_from_manifest(manifest, max_tip_bytes)?;
+    let mut rows = Vec::new();
+    for status in &statuses {
+        rows.push(CropIndexRow {
+            row_type: "cache-status".to_string(),
+            id: status.dataset_id.clone(),
+            label: status.relative_path.clone(),
+            status: Some(cache_object_status_label(&status.object_status).to_string()),
+            source_schema: FLETCH_VERIFY_SCHEMA.to_string(),
+        });
+    }
+    for node in &graph.nodes {
+        rows.push(CropIndexRow {
+            row_type: "graph-node".to_string(),
+            id: node.id.clone(),
+            label: node.label.clone(),
+            status: None,
+            source_schema: FLETCH_GRAPH_SCHEMA.to_string(),
+        });
+    }
+    for edge in &graph.edges {
+        rows.push(CropIndexRow {
+            row_type: "graph-edge".to_string(),
+            id: format!("{}->{}", edge.from, edge.to),
+            label: edge.label.clone().unwrap_or_default(),
+            status: None,
+            source_schema: FLETCH_GRAPH_SCHEMA.to_string(),
+        });
+    }
+    for tip in &tips.tips {
+        rows.push(CropIndexRow {
+            row_type: "tip".to_string(),
+            id: tip.fletch_id.clone(),
+            label: tip.summary.clone(),
+            status: Some(format!("{:?}", tip.kind)),
+            source_schema: FLETCH_TIP_SCHEMA.to_string(),
+        });
+    }
+    Ok(CropIndexReport {
+        schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        row_count: rows.len(),
+        status_row_count: statuses.len(),
+        graph_node_row_count: graph.nodes.len(),
+        graph_edge_row_count: graph.edges.len(),
+        tip_row_count: tips.tips.len(),
+        rows,
+    })
+}
+
+fn cache_object_status_label(status: &CacheObjectStatus) -> &'static str {
+    match status {
+        CacheObjectStatus::Verified => "verified",
+        CacheObjectStatus::Missing => "missing",
+        CacheObjectStatus::HashMismatch => "hash-mismatch",
+    }
 }
 
 pub fn fetch_plan(
@@ -4746,6 +4835,38 @@ mod tests {
         );
         assert_eq!(report.tips.schema_version, FLETCH_TIP_SCHEMA);
         assert_eq!(report.tips.tips.len(), 1);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn crop_index_from_manifest_emits_status_graph_and_tip_rows() {
+        let root = unique_temp_dir("crop-index");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"alpha":1}"#).unwrap();
+        let plan =
+            fetch_plan_with_kind("test:crop", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+
+        let index = crop_index_from_manifest(&manifest, &FreshnessPolicy::Immutable, 4096).unwrap();
+
+        assert_eq!(index.schema_version, FLETCH_CROP_INDEX_SCHEMA);
+        assert_eq!(index.status_row_count, 1);
+        assert!(index.graph_node_row_count > 0);
+        assert!(index.graph_edge_row_count > 0);
+        assert_eq!(index.tip_row_count, 1);
+        assert_eq!(index.row_count, index.rows.len());
+        assert!(
+            index
+                .rows
+                .iter()
+                .any(|row| row.row_type == "cache-status"
+                    && row.status.as_deref() == Some("verified"))
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }

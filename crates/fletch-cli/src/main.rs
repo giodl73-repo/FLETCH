@@ -2,16 +2,17 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     active_partition_set, adapter_handoff_report, adapter_sources_from_registry,
-    alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
-    export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
-    graph_from_quiver, graph_from_registry, import_quiver, inspect_cache_manifest,
-    label_state_from_aliases, offline_cache_report, partition_invalidation_report,
-    partition_state_from_manifest, plan_cache_prune, preview_archive_expansion,
-    preview_manifest_merge, preview_rollback, preview_rollup_edges, publish_report_from_manifest,
-    quiver_merge_ready_report, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
-    upsert_cache_manifest_entry, validate_registry, verify_cache_manifest, verify_quiver_bundle,
-    AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
-    FreshnessPolicy, LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
+    alias_state_from_manifest, cache_key, cache_list, cache_manifest, crop_index_from_manifest,
+    dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
+    graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
+    inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
+    partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
+    preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
+    publish_report_from_manifest, quiver_merge_ready_report, summarize_cache_manifest,
+    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry, validate_registry,
+    verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry, CacheManifest,
+    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
+    QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -515,6 +516,24 @@ enum PublishCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Generate a CROP-indexable report from a cache manifest.
+    CropIndex {
+        /// Path to a fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Freshness policy to evaluate.
+        #[arg(long, value_enum, default_value_t = CliFreshness::Immutable)]
+        freshness: CliFreshness,
+        /// Max age in days when --freshness max-age-days is used.
+        #[arg(long)]
+        max_age_days: Option<u32>,
+        /// Maximum bytes to sample from each cached object for tips.
+        #[arg(long, default_value_t = 4096)]
+        max_tip_bytes: usize,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -853,6 +872,20 @@ fn main() -> Result<()> {
                 let freshness = freshness_policy(freshness, max_age_days)?;
                 write_json(
                     &publish_report_from_manifest(&manifest, &freshness, max_tip_bytes)?,
+                    output,
+                )?;
+            }
+            PublishCommands::CropIndex {
+                manifest,
+                freshness,
+                max_age_days,
+                max_tip_bytes,
+                output,
+            } => {
+                let manifest = read_manifest(&manifest)?;
+                let freshness = freshness_policy(freshness, max_age_days)?;
+                write_json(
+                    &crop_index_from_manifest(&manifest, &freshness, max_tip_bytes)?,
                     output,
                 )?;
             }
