@@ -52,7 +52,7 @@ in the next wave plan.
 
 ## Active wave
 
-- `2026-05-15-speedy-cache-execution`
+- `2026-05-15-arsenal-cache-operations`
 
 ## Protocol
 

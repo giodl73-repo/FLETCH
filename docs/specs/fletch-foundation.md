@@ -405,6 +405,8 @@ Initial cache operations are manifest-led:
   count.
 - `cache status`: report verified, missing, hash-mismatch, fresh, or stale state
   using a caller-provided freshness policy.
+- `cache summary`: aggregate status rows into cache health counts and expected
+  versus actual byte totals for CI, CROP, and PROOF status views.
 - `cache prune`: plan deletion candidates under the cache object tree that are
   not referenced by the manifest. The initial contract is plan-only; destructive
   deletion requires a later explicit execution command.

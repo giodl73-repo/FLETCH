@@ -221,6 +221,20 @@ pub struct CacheStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheSummary {
+    pub cache_root: String,
+    pub entry_count: usize,
+    pub verified_count: usize,
+    pub missing_count: usize,
+    pub hash_mismatch_count: usize,
+    pub fresh_count: usize,
+    pub stale_count: usize,
+    pub missing_freshness_count: usize,
+    pub expected_bytes: u64,
+    pub actual_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PruneCandidate {
     pub relative_path: String,
     pub absolute_path: String,
@@ -743,6 +757,46 @@ pub fn inspect_cache_manifest(
         .iter()
         .map(|entry| inspect_cache_entry(&manifest.cache_root, entry, freshness))
         .collect()
+}
+
+pub fn summarize_cache_manifest(
+    manifest: &CacheManifest,
+    freshness: &FreshnessPolicy,
+) -> Result<CacheSummary, FletchError> {
+    let statuses = inspect_cache_manifest(manifest, freshness)?;
+    Ok(CacheSummary {
+        cache_root: manifest.cache_root.clone(),
+        entry_count: statuses.len(),
+        verified_count: statuses
+            .iter()
+            .filter(|status| status.object_status == CacheObjectStatus::Verified)
+            .count(),
+        missing_count: statuses
+            .iter()
+            .filter(|status| status.object_status == CacheObjectStatus::Missing)
+            .count(),
+        hash_mismatch_count: statuses
+            .iter()
+            .filter(|status| status.object_status == CacheObjectStatus::HashMismatch)
+            .count(),
+        fresh_count: statuses
+            .iter()
+            .filter(|status| status.freshness_status == CacheFreshnessStatus::Fresh)
+            .count(),
+        stale_count: statuses
+            .iter()
+            .filter(|status| status.freshness_status == CacheFreshnessStatus::Stale)
+            .count(),
+        missing_freshness_count: statuses
+            .iter()
+            .filter(|status| status.freshness_status == CacheFreshnessStatus::Missing)
+            .count(),
+        expected_bytes: statuses.iter().map(|status| status.expected_bytes).sum(),
+        actual_bytes: statuses
+            .iter()
+            .filter_map(|status| status.actual_bytes)
+            .sum(),
+    })
 }
 
 pub fn plan_cache_prune(manifest: &CacheManifest) -> Result<PrunePlan, FletchError> {
@@ -2535,6 +2589,39 @@ mod tests {
         assert_eq!(statuses[0].actual_bytes, Some(5));
         assert_eq!(statuses[1].object_status, CacheObjectStatus::Missing);
         assert_eq!(statuses[1].freshness_status, CacheFreshnessStatus::Missing);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn summarize_cache_manifest_counts_statuses_and_bytes() {
+        let root = unique_temp_dir("summary-cache");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"hello").unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let mut missing = outcome.entry.clone();
+        missing.dataset_id = "test:missing".to_string();
+        missing.relative_path = "objects/sha256/missing".to_string();
+        let manifest = cache_manifest(
+            cache_root.display().to_string(),
+            vec![outcome.entry, missing],
+        )
+        .unwrap();
+
+        let summary = summarize_cache_manifest(&manifest, &FreshnessPolicy::Immutable).unwrap();
+
+        assert_eq!(summary.entry_count, 2);
+        assert_eq!(summary.verified_count, 1);
+        assert_eq!(summary.missing_count, 1);
+        assert_eq!(summary.hash_mismatch_count, 0);
+        assert_eq!(summary.fresh_count, 1);
+        assert_eq!(summary.missing_freshness_count, 1);
+        assert_eq!(summary.expected_bytes, 10);
+        assert_eq!(summary.actual_bytes, 5);
 
         let _ = std::fs::remove_dir_all(root);
     }
