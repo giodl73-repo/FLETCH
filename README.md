@@ -73,8 +73,10 @@ Downstream migration status:
   leaders/player/compare, goalies, roster bios, MoneyPuck, career, and windowed
   game-line query surfaces to partition/rollup IDs.
   `icelines fetch fletch-quivers --gate` groups those partitions into query
-  bootstrap and enrichment quiver handoff candidates. ICELINES keeps NHL
-  parsing, snapshots, sealing, active pointers, and hockey-domain validation.
+  bootstrap and enrichment quiver handoff candidates, and `icelines fetch
+  fletch-cache-index --gate` maps ICELINES' FLETCH cache manifest to compact
+  cache-index evidence. ICELINES keeps NHL parsing, snapshots, sealing, active
+  pointers, and hockey-domain validation.
 - CROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
