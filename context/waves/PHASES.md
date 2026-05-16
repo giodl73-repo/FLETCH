@@ -52,7 +52,7 @@ in the next wave plan.
 
 ## Active wave
 
-- `2026-05-15-connor-hawke-adapters`
+- `2026-05-15-overwatch-publishers`
 
 ## Protocol
 
