@@ -112,6 +112,11 @@ fletches before execution with:
 Registry graph export turns those declarations into `fletch.graph.v1` without
 fetching or activating data.
 
+`fletch.adapter-sources.v1` reports the source rows declared by a registry. It
+records fletch ID, source kind, URL, header count, and whether the source is
+adapter-owned. The report is evidence of adapter output; FLETCH still treats
+adapter URLs as opaque handles and does not interpret product semantics.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:

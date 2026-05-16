@@ -16,6 +16,7 @@ pub const FLETCH_QUIVER_VERIFY_SCHEMA: &str = "fletch.quiver-verify.v1";
 pub const FLETCH_QUIVER_MERGE_READY_SCHEMA: &str = "fletch.quiver-merge-ready.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
+pub const FLETCH_ADAPTER_SOURCES_SCHEMA: &str = "fletch.adapter-sources.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
@@ -640,6 +641,26 @@ pub struct FletchRegistry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdapterSourceRecord {
+    pub fletch_id: String,
+    pub source_kind: SourceKind,
+    pub url: String,
+    pub header_count: usize,
+    pub adapter_owned: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdapterSourceReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub registry_id: String,
+    pub fletch_count: usize,
+    pub source_count: usize,
+    pub adapter_source_count: usize,
+    pub sources: Vec<AdapterSourceRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlightStepAction {
     WouldFetch,
@@ -733,6 +754,31 @@ pub fn fletch_registry(
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         registry_id: registry_id.into(),
         fletches,
+    }
+}
+
+pub fn adapter_sources_from_registry(registry: &FletchRegistry) -> AdapterSourceReport {
+    let sources = registry
+        .fletches
+        .iter()
+        .flat_map(|fletch| {
+            fletch.shafts.iter().map(|shaft| AdapterSourceRecord {
+                fletch_id: fletch.id.clone(),
+                source_kind: shaft.kind.clone(),
+                url: shaft.url.clone(),
+                header_count: shaft.headers.len(),
+                adapter_owned: shaft.kind == SourceKind::Adapter,
+            })
+        })
+        .collect::<Vec<_>>();
+    AdapterSourceReport {
+        schema_version: FLETCH_ADAPTER_SOURCES_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        registry_id: registry.registry_id.clone(),
+        fletch_count: registry.fletches.len(),
+        source_count: sources.len(),
+        adapter_source_count: sources.iter().filter(|source| source.adapter_owned).count(),
+        sources,
     }
 }
 
@@ -4002,6 +4048,46 @@ mod tests {
                 && edge.label.as_deref() == Some("contains-member")));
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn adapter_sources_from_registry_reports_adapter_owned_shafts() {
+        let registry = fletch_registry(
+            "test:registry",
+            vec![FletchDefinition {
+                id: "test:fletch".to_string(),
+                node_kind: GraphNodeKind::Fletch,
+                shafts: vec![
+                    SourceSpec {
+                        kind: SourceKind::Adapter,
+                        url: "adapter://test/source".to_string(),
+                        headers: BTreeMap::new(),
+                    },
+                    SourceSpec {
+                        kind: SourceKind::Http,
+                        url: "https://example.invalid/data.json".to_string(),
+                        headers: BTreeMap::from([(
+                            "accept".to_string(),
+                            "application/json".to_string(),
+                        )]),
+                    },
+                ],
+                edges: Vec::new(),
+                format: None,
+                tags: Vec::new(),
+                metadata: BTreeMap::new(),
+            }],
+        );
+
+        let report = adapter_sources_from_registry(&registry);
+
+        assert_eq!(report.schema_version, FLETCH_ADAPTER_SOURCES_SCHEMA);
+        assert_eq!(report.registry_id, "test:registry");
+        assert_eq!(report.fletch_count, 1);
+        assert_eq!(report.source_count, 2);
+        assert_eq!(report.adapter_source_count, 1);
+        assert!(report.sources[0].adapter_owned);
+        assert_eq!(report.sources[1].header_count, 1);
     }
 
     #[test]

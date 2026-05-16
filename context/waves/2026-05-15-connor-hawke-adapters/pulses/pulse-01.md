@@ -5,12 +5,13 @@
 Emit product-neutral source rows from a registry so adapters can prove what they
 constructed without moving product rules into `fletch-core`.
 
-## Planned outcome
+## Outcome
 
 - Add a named `fletch.adapter-sources.v1` contract.
 - Report fletch IDs, source kind, URL, header count, and adapter-owned status.
 - Add a read-only CLI command over `fletch.registry.v1`.
 - Document that adapter semantics remain outside core.
+- Keep adapter URLs opaque; no NHL, Census, route, or archive interpretation.
 
 ## Validation
 

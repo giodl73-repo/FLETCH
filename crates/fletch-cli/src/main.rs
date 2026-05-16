@@ -1,9 +1,9 @@
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
-    active_partition_set, alias_state_from_manifest, cache_key, cache_list, cache_manifest,
-    dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
-    graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
+    active_partition_set, adapter_sources_from_registry, alias_state_from_manifest, cache_key,
+    cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind,
+    fetch_to_cache, graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
     inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_manifest_merge, preview_rollback, preview_rollup_edges, publish_report_from_manifest,
@@ -434,6 +434,15 @@ enum RegistryCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Report product-neutral source rows from a registry.
+    AdapterSources {
+        /// Path to a fletch.registry.v1 JSON file.
+        #[arg(long)]
+        file: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -759,6 +768,10 @@ fn main() -> Result<()> {
             } => {
                 let registry = read_registry(&file)?;
                 write_json(&dry_run_flight(&registry, &fletch_ids), output)?;
+            }
+            RegistryCommands::AdapterSources { file, output } => {
+                let registry = read_registry(&file)?;
+                write_json(&adapter_sources_from_registry(&registry), output)?;
             }
         },
         Commands::Tip { command } => match command {
