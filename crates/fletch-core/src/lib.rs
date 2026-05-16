@@ -17,6 +17,7 @@ pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
+pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -241,6 +242,18 @@ pub struct CacheVerifyReport {
     pub generated_by: String,
     pub cache_root: String,
     pub summary: CacheSummary,
+    pub statuses: Vec<CacheStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheOfflineReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub ready_count: usize,
+    pub missing_count: usize,
+    pub stale_count: usize,
+    pub blocked_count: usize,
     pub statuses: Vec<CacheStatus>,
 }
 
@@ -822,6 +835,41 @@ pub fn verify_cache_manifest(manifest: &CacheManifest) -> Result<CacheVerifyRepo
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         cache_root: manifest.cache_root.clone(),
         summary,
+        statuses,
+    })
+}
+
+pub fn offline_cache_report(
+    manifest: &CacheManifest,
+    freshness: &FreshnessPolicy,
+) -> Result<CacheOfflineReport, FletchError> {
+    let statuses = inspect_cache_manifest(manifest, freshness)?;
+    let ready_count = statuses
+        .iter()
+        .filter(|status| {
+            status.object_status == CacheObjectStatus::Verified
+                && status.freshness_status == CacheFreshnessStatus::Fresh
+        })
+        .count();
+    let missing_count = statuses
+        .iter()
+        .filter(|status| status.object_status == CacheObjectStatus::Missing)
+        .count();
+    let stale_count = statuses
+        .iter()
+        .filter(|status| {
+            status.object_status != CacheObjectStatus::Missing
+                && status.freshness_status != CacheFreshnessStatus::Fresh
+        })
+        .count();
+    Ok(CacheOfflineReport {
+        schema_version: FLETCH_OFFLINE_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        ready_count,
+        missing_count,
+        stale_count,
+        blocked_count: statuses.len().saturating_sub(ready_count),
         statuses,
     })
 }
@@ -2673,6 +2721,36 @@ mod tests {
         assert_eq!(report.summary.entry_count, 1);
         assert_eq!(report.summary.verified_count, 1);
         assert_eq!(report.statuses.len(), 1);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn offline_cache_report_counts_ready_missing_and_blocked() {
+        let root = unique_temp_dir("offline-report");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"hello").unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let mut missing = outcome.entry.clone();
+        missing.dataset_id = "test:missing".to_string();
+        missing.relative_path = "objects/sha256/missing".to_string();
+        let manifest = cache_manifest(
+            cache_root.display().to_string(),
+            vec![outcome.entry, missing],
+        )
+        .unwrap();
+
+        let report = offline_cache_report(&manifest, &FreshnessPolicy::Immutable).unwrap();
+
+        assert_eq!(report.schema_version, FLETCH_OFFLINE_SCHEMA);
+        assert_eq!(report.ready_count, 1);
+        assert_eq!(report.missing_count, 1);
+        assert_eq!(report.stale_count, 0);
+        assert_eq!(report.blocked_count, 1);
 
         let _ = std::fs::remove_dir_all(root);
     }

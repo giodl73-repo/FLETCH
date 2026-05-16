@@ -408,6 +408,9 @@ Initial cache operations are manifest-led:
   using a caller-provided freshness policy.
 - `cache summary`: aggregate status rows into cache health counts and expected
   versus actual byte totals for CI, CROP, and PROOF status views.
+- `cache offline-report`: emit `fletch.cache-offline.v1`, a no-live readiness
+  report that counts fresh verified entries, missing entries, stale entries, and
+  blocked entries using a caller-provided freshness policy.
 - `cache prune`: plan deletion candidates under the cache object tree that are
   not referenced by the manifest. The initial contract is plan-only; destructive
   deletion requires a later explicit execution command.

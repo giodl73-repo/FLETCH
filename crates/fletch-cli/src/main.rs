@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
     fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
-    inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest,
+    inspect_cache_manifest, offline_cache_report, plan_cache_prune, publish_report_from_manifest,
     summarize_cache_manifest, tips_from_manifest, upsert_cache_manifest_entry,
     verify_cache_manifest, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
     FreshnessPolicy, SourceKind,
@@ -208,6 +208,21 @@ enum CacheCommands {
     },
     /// Summarize aggregate cache health for a manifest.
     Summary {
+        /// Path to a fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Freshness policy to evaluate.
+        #[arg(long, value_enum, default_value_t = CliFreshness::Immutable)]
+        freshness: CliFreshness,
+        /// Max age in days when --freshness max-age-days is used.
+        #[arg(long)]
+        max_age_days: Option<u32>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Report offline readiness without touching live sources.
+    OfflineReport {
         /// Path to a fletch.cache-manifest.v1 JSON file.
         #[arg(long)]
         manifest: PathBuf,
@@ -493,6 +508,16 @@ fn main() -> Result<()> {
                 let manifest = read_manifest(&manifest)?;
                 let freshness = freshness_policy(freshness, max_age_days)?;
                 write_json(&summarize_cache_manifest(&manifest, &freshness)?, output)?;
+            }
+            CacheCommands::OfflineReport {
+                manifest,
+                freshness,
+                max_age_days,
+                output,
+            } => {
+                let manifest = read_manifest(&manifest)?;
+                let freshness = freshness_policy(freshness, max_age_days)?;
+                write_json(&offline_cache_report(&manifest, &freshness)?, output)?;
             }
             CacheCommands::Prune { manifest, output } => {
                 let manifest = read_manifest(&manifest)?;
