@@ -52,7 +52,7 @@ in the next wave plan.
 
 ## Active wave
 
-- `2026-05-15-red-arrow-merge-aliases`
+- `2026-05-15-oracle-partitions-rollups`
 
 ## Protocol
 
