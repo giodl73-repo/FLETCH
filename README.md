@@ -72,6 +72,7 @@ Initial consumers:
 cargo run -p fletch-cli -- plan --dataset-id nhl:season:1993 --url https://example.test/1993.json
 cargo run -p fletch-cli -- key --dataset-id route:tiles:demo --url https://example.test/tiles.zip
 cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --max-bytes-per-second 250000 --timeout-ms 30000 --retry-attempts 2
+cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --trusted-manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- fetch --dataset-id nhl:schedule:today --url https://example.test/schedule.json --freshness always-check
 cargo run -p fletch-cli -- cache status --manifest .fletch/cache/manifest.json --freshness max-age-days --max-age-days 1
 cargo run -p fletch-cli -- cache prune --manifest .fletch/cache/manifest.json
@@ -98,6 +99,8 @@ Use `--timeout-ms` and `--retry-attempts` to bound generic HTTP waits and retry
 transient generic fetch/read/write failures. Ledger entries include
 `fetch_attempts`, `retry_count`, and `last_retryable_error` so status publishers
 can explain retry recovery.
+Use `--trusted-manifest` to let a cache hit inherit verified ledger trust from a
+prior manifest after FLETCH re-hashes the cached bytes and byte count.
 For local file shafts, use `--source-kind file` with either a native path or a
 `file://` URL such as `file:///C:/data/input.json`; empty file shafts are
 rejected.

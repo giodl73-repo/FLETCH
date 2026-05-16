@@ -1022,6 +1022,7 @@ pub fn graph_from_registry(registry: &FletchRegistry) -> FletchGraph {
 pub struct FetchOptions {
     pub cache_root: PathBuf,
     pub expected_sha256: Option<String>,
+    pub trusted_entries: Vec<CacheEntry>,
     pub fetched_at_ms: Option<u64>,
     pub max_bytes_per_second: Option<u64>,
     pub timeout_ms: Option<u64>,
@@ -1035,6 +1036,7 @@ impl FetchOptions {
         Self {
             cache_root: cache_root.into(),
             expected_sha256: None,
+            trusted_entries: Vec::new(),
             fetched_at_ms: None,
             max_bytes_per_second: None,
             timeout_ms: None,
@@ -1046,6 +1048,11 @@ impl FetchOptions {
 
     pub fn with_expected_sha256(mut self, expected_sha256: impl Into<String>) -> Self {
         self.expected_sha256 = Some(expected_sha256.into());
+        self
+    }
+
+    pub fn with_trusted_manifest(mut self, manifest: &CacheManifest) -> Self {
+        self.trusted_entries = manifest.entries.clone();
         self
     }
 
@@ -1379,6 +1386,23 @@ fn cache_hit_outcome(
         source,
     })?;
     let (sha256, bytes) = hash_stream(&mut file, &destination)?;
+    let trusted_entry = options.trusted_entries.iter().find(|entry| {
+        entry.cache_key == cache_key
+            && entry.dataset_id == plan.dataset_id
+            && entry.source_url == plan.source.url
+    });
+    let trusted_verified = if let Some(entry) = trusted_entry {
+        if entry.sha256 != sha256 || entry.bytes != bytes {
+            return Err(FletchError::ChecksumMismatch {
+                dataset_id: plan.dataset_id.clone(),
+                expected: entry.sha256.clone(),
+                actual: sha256,
+            });
+        }
+        entry.verified
+    } else {
+        false
+    };
     if let Some(expected) = &options.expected_sha256 {
         if &sha256 != expected {
             return Err(FletchError::ChecksumMismatch {
@@ -1388,6 +1412,17 @@ fn cache_hit_outcome(
             });
         }
     }
+    let fetched_at_ms = trusted_entry
+        .map(|entry| entry.fetched_at_ms)
+        .or(options.fetched_at_ms)
+        .unwrap_or(file_modified_ms(&destination)?);
+    let fetch_attempts = trusted_entry
+        .map(|entry| entry.fetch_attempts)
+        .unwrap_or_default();
+    let retry_count = trusted_entry
+        .map(|entry| entry.retry_count)
+        .unwrap_or_default();
+    let last_retryable_error = trusted_entry.and_then(|entry| entry.last_retryable_error.clone());
 
     Ok(FetchOutcome {
         entry: CacheEntry {
@@ -1398,13 +1433,11 @@ fn cache_hit_outcome(
             relative_path,
             sha256,
             bytes,
-            fetched_at_ms: options
-                .fetched_at_ms
-                .unwrap_or(file_modified_ms(&destination)?),
-            verified: options.expected_sha256.is_some(),
-            fetch_attempts: 0,
-            retry_count: 0,
-            last_retryable_error: None,
+            fetched_at_ms,
+            verified: trusted_verified || options.expected_sha256.is_some(),
+            fetch_attempts,
+            retry_count,
+            last_retryable_error,
         },
         path: destination,
         attempt_status: FetchAttemptStatus {
@@ -2028,6 +2061,61 @@ mod tests {
         assert_eq!(hit_without_expected.entry.fetch_attempts, 0);
         assert_eq!(hit_without_expected.attempt_status.attempts, 0);
         assert!(hit_with_expected.entry.verified);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cache_hit_can_be_trusted_by_prior_manifest() {
+        let root = unique_temp_dir("cache-hit-ledger");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"ok":true}"#).unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let first = fetch_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root).with_fetched_at_ms(123),
+        )
+        .unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![first.entry.clone()]).unwrap();
+
+        let hit = fetch_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root).with_trusted_manifest(&manifest),
+        )
+        .unwrap();
+
+        assert!(hit.entry.verified);
+        assert_eq!(hit.entry.fetched_at_ms, 123);
+        assert_eq!(hit.entry.fetch_attempts, 1);
+        assert_eq!(hit.attempt_status.attempts, 0);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn trusted_manifest_rejects_tampered_cache_hit() {
+        let root = unique_temp_dir("cache-hit-ledger-tamper");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"ok":true}"#).unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let first = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![first.entry.clone()]).unwrap();
+        std::fs::write(&first.path, br#"{"ok":false}"#).unwrap();
+
+        let result = fetch_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root).with_trusted_manifest(&manifest),
+        );
+
+        assert!(matches!(result, Err(FletchError::ChecksumMismatch { .. })));
 
         let _ = std::fs::remove_dir_all(root);
     }

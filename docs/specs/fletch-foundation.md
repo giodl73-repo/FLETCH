@@ -316,6 +316,13 @@ shafts remain explicit failures. Successful fetch outcomes and ledger entries
 record attempt count, retry count, and the last retryable error observed before
 success.
 
+Cache hits without an expected hash are not automatically trusted. A caller can
+provide a prior `fletch.cache-manifest.v1` as a trusted ledger; FLETCH matches the
+logical cache key, dataset ID, and source URL, re-hashes the cached bytes, and
+only preserves verified status and retry metadata when the current object still
+matches the ledger hash and byte count. A mismatch is a checksum failure, not a
+silent re-fetch or success-shaped fallback.
+
 Local file shafts accept native paths and common `file://` URL forms. Empty file
 shafts are invalid, and URL normalization remains generic path handling rather
 than a product-specific source catalog.
@@ -362,6 +369,10 @@ Records cached artifacts:
 - verification status,
 - fetch attempts, retry count, and last retryable error when retry recovery was
   needed.
+
+Trusted cache-hit execution can reuse a matching ledger entry's fetched
+timestamp and retry metadata, but only after verifying the current object against
+that ledger entry.
 
 Ledger entries should remain safe to publish through CROP/PROOF. They should
 include enough provenance for local status pages without requiring generated

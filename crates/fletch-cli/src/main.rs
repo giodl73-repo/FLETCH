@@ -66,6 +66,9 @@ enum Commands {
         /// Expected sha256, formatted as sha256:<64 lowercase hex chars>.
         #[arg(long)]
         expect_sha256: Option<String>,
+        /// Prior manifest whose matching ledger entry can verify cache hits.
+        #[arg(long)]
+        trusted_manifest: Option<PathBuf>,
         /// Maximum transfer/write rate in bytes per second.
         #[arg(long)]
         max_bytes_per_second: Option<u64>,
@@ -328,6 +331,7 @@ fn main() -> Result<()> {
             source_kind,
             cache_root,
             expect_sha256,
+            trusted_manifest,
             max_bytes_per_second,
             timeout_ms,
             retry_attempts,
@@ -344,6 +348,10 @@ fn main() -> Result<()> {
                 .with_offline(offline);
             if let Some(expected) = expect_sha256 {
                 options = options.with_expected_sha256(expected);
+            }
+            if let Some(trusted_manifest) = trusted_manifest {
+                let trusted_manifest = read_manifest(&trusted_manifest)?;
+                options = options.with_trusted_manifest(&trusted_manifest);
             }
             if let Some(max_bytes_per_second) = max_bytes_per_second {
                 options = options.with_max_bytes_per_second(max_bytes_per_second);
