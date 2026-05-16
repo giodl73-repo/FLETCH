@@ -6,10 +6,10 @@ use fletch_core::{
     graph_from_manifest, graph_from_registry, import_quiver, inspect_cache_manifest,
     label_state_from_aliases, offline_cache_report, partition_invalidation_report,
     partition_state_from_manifest, plan_cache_prune, preview_manifest_merge, preview_rollback,
-    preview_rollup_edges, publish_report_from_manifest, summarize_cache_manifest,
+    preview_rollup_edges, publish_report_from_manifest, summarize_cache_manifest, summarize_quiver,
     tips_from_manifest, upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry,
     CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState,
-    PartitionState, RollupPreview, SourceKind,
+    PartitionState, QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -356,6 +356,15 @@ enum QuiverCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Summarize a fletch.quiver.v1 manifest without importing it.
+    Summary {
+        /// Path to a fletch.quiver.v1 JSON file.
+        #[arg(long)]
+        quiver: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -681,6 +690,10 @@ fn main() -> Result<()> {
                 let imported = import_quiver(quiver_dir, cache_root)?;
                 write_json(&imported.staged_manifest, output)?;
             }
+            QuiverCommands::Summary { quiver, output } => {
+                let quiver = read_quiver_manifest(&quiver)?;
+                write_json(&summarize_quiver(&quiver), output)?;
+            }
         },
         Commands::Graph { command } => match command {
             GraphCommands::Export { manifest, output } => {
@@ -876,6 +889,11 @@ fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
 }
 
 fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_quiver_manifest(path: &PathBuf) -> Result<QuiverManifest> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

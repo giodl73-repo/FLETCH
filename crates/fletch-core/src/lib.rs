@@ -11,6 +11,7 @@ use thiserror::Error;
 pub const FLETCH_PLAN_SCHEMA: &str = "fletch.plan.v1";
 pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
+pub const FLETCH_QUIVER_SUMMARY_SCHEMA: &str = "fletch.quiver-summary.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
@@ -472,6 +473,17 @@ pub struct QuiverManifest {
     pub generated_by: String,
     pub quiver_id: String,
     pub entries: Vec<CacheEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuiverSummary {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub quiver_id: String,
+    pub entry_count: usize,
+    pub byte_count: u64,
+    pub verified_count: usize,
+    pub unverified_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1589,6 +1601,19 @@ pub fn import_quiver(
         staged_manifest,
         stage_root,
     })
+}
+
+pub fn summarize_quiver(quiver: &QuiverManifest) -> QuiverSummary {
+    let verified_count = quiver.entries.iter().filter(|entry| entry.verified).count();
+    QuiverSummary {
+        schema_version: FLETCH_QUIVER_SUMMARY_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        quiver_id: quiver.quiver_id.clone(),
+        entry_count: quiver.entries.len(),
+        byte_count: quiver.entries.iter().map(|entry| entry.bytes).sum(),
+        verified_count,
+        unverified_count: quiver.entries.len().saturating_sub(verified_count),
+    }
 }
 
 pub fn graph_from_manifest(manifest: &CacheManifest) -> FletchGraph {
@@ -3692,6 +3717,41 @@ mod tests {
         assert_eq!(active.partitions[0].alias_ids, vec!["current"]);
         assert_eq!(active.partitions[0].label_ids, vec!["release-1"]);
         assert_eq!(active.partitions[0].rollup_ids, vec!["test:rollup"]);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn quiver_summary_counts_entries_bytes_and_verification() {
+        let root = unique_temp_dir("quiver-summary");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"quiver").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:quiver:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let mut unverified = outcome.entry.clone();
+        unverified.dataset_id = "test:quiver:unverified".to_string();
+        unverified.verified = false;
+        let quiver = QuiverManifest {
+            schema_version: FLETCH_QUIVER_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            quiver_id: "test:quiver".to_string(),
+            entries: vec![outcome.entry, unverified],
+        };
+
+        let summary = summarize_quiver(&quiver);
+
+        assert_eq!(summary.schema_version, FLETCH_QUIVER_SUMMARY_SCHEMA);
+        assert_eq!(summary.quiver_id, "test:quiver");
+        assert_eq!(summary.entry_count, 2);
+        assert_eq!(summary.byte_count, 12);
+        assert_eq!(summary.verified_count, 1);
+        assert_eq!(summary.unverified_count, 1);
 
         let _ = std::fs::remove_dir_all(root);
     }

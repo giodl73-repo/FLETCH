@@ -230,6 +230,10 @@ default; a separate merge/activate transaction makes imported data active.
 Import verifies quiver bytes against `quiver.json` before copying and promotes
 from a temporary stage so failed imports do not look activated or complete.
 
+`fletch.quiver-summary.v1` reports bundle identity, entry count, total bytes,
+verified member count, and unverified member count from a `fletch.quiver.v1`
+manifest without importing, copying, or activating bundle contents.
+
 ## Merge, labels, and rollback
 
 FLETCH merge is Git-inspired but not text merging. It promotes verified
