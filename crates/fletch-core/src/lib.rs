@@ -61,6 +61,8 @@ pub enum FletchError {
     },
     #[error("[FETCH] bandwidth limit must be greater than zero bytes per second")]
     InvalidBandwidthLimit,
+    #[error("[FETCH] request timeout must be greater than zero milliseconds")]
+    InvalidTimeout,
     #[error("[TIP] max bytes must be greater than zero")]
     InvalidTipByteLimit,
     #[error("[OFFLINE] cache entry {dataset_id} is missing and live fetches are disabled")]
@@ -1003,6 +1005,8 @@ pub struct FetchOptions {
     pub expected_sha256: Option<String>,
     pub fetched_at_ms: Option<u64>,
     pub max_bytes_per_second: Option<u64>,
+    pub timeout_ms: Option<u64>,
+    pub retry_attempts: u32,
     pub force: bool,
     pub offline: bool,
 }
@@ -1014,6 +1018,8 @@ impl FetchOptions {
             expected_sha256: None,
             fetched_at_ms: None,
             max_bytes_per_second: None,
+            timeout_ms: None,
+            retry_attempts: 0,
             force: false,
             offline: false,
         }
@@ -1031,6 +1037,16 @@ impl FetchOptions {
 
     pub fn with_max_bytes_per_second(mut self, max_bytes_per_second: u64) -> Self {
         self.max_bytes_per_second = Some(max_bytes_per_second);
+        self
+    }
+
+    pub fn with_timeout_ms(mut self, timeout_ms: u64) -> Self {
+        self.timeout_ms = Some(timeout_ms);
+        self
+    }
+
+    pub fn with_retry_attempts(mut self, retry_attempts: u32) -> Self {
+        self.retry_attempts = retry_attempts;
         self
     }
 
@@ -1058,6 +1074,9 @@ pub fn fetch_to_cache(
     if options.max_bytes_per_second == Some(0) {
         return Err(FletchError::InvalidBandwidthLimit);
     }
+    if options.timeout_ms == Some(0) {
+        return Err(FletchError::InvalidTimeout);
+    }
 
     let key = cache_key(plan);
     let relative_path = relative_cache_path(&key);
@@ -1081,53 +1100,7 @@ pub fn fetch_to_cache(
         })?;
     }
 
-    let (sha256, bytes) = match plan.source.kind {
-        SourceKind::Http => {
-            let client = reqwest::blocking::Client::new();
-            let mut request = client.get(&plan.source.url);
-            for (name, value) in &plan.source.headers {
-                let header_name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
-                    .map_err(|source| FletchError::InvalidHeaderName {
-                        name: name.clone(),
-                        source,
-                    })?;
-                let header_value =
-                    reqwest::header::HeaderValue::from_str(value).map_err(|source| {
-                        FletchError::InvalidHeaderValue {
-                            name: name.clone(),
-                            source,
-                        }
-                    })?;
-                request = request.header(header_name, header_value);
-            }
-
-            let response = request.send().map_err(|source| FletchError::HttpFetch {
-                url: plan.source.url.clone(),
-                source,
-            })?;
-            let mut response =
-                response
-                    .error_for_status()
-                    .map_err(|source| FletchError::HttpFetch {
-                        url: plan.source.url.clone(),
-                        source,
-                    })?;
-            write_stream_to_temp(&mut response, &temp_path, options.max_bytes_per_second)?
-        }
-        SourceKind::File => {
-            let path = file_source_path(&plan.source.url);
-            let mut file = File::open(&path).map_err(|source| FletchError::ReadSource {
-                path: path.display().to_string(),
-                source,
-            })?;
-            write_stream_to_temp(&mut file, &temp_path, options.max_bytes_per_second)?
-        }
-        SourceKind::Adapter => {
-            return Err(FletchError::UnsupportedSourceKind {
-                kind: plan.source.kind.clone(),
-            });
-        }
-    };
+    let (sha256, bytes) = fetch_source_with_retries(plan, &options, &temp_path)?;
 
     if let Some(expected) = &options.expected_sha256 {
         if &sha256 != expected {
@@ -1162,6 +1135,98 @@ pub fn fetch_to_cache(
         entry,
         path: destination,
     })
+}
+
+fn fetch_source_with_retries(
+    plan: &FetchPlan,
+    options: &FetchOptions,
+    temp_path: &Path,
+) -> Result<(String, u64), FletchError> {
+    let mut attempts_remaining = options.retry_attempts + 1;
+    loop {
+        let result = fetch_source_once(plan, options, temp_path);
+        match result {
+            Ok(result) => return Ok(result),
+            Err(error) if attempts_remaining > 1 && is_retryable_fetch_error(&error) => {
+                attempts_remaining -= 1;
+                let _ = std::fs::remove_file(temp_path);
+            }
+            Err(error) => {
+                let _ = std::fs::remove_file(temp_path);
+                return Err(error);
+            }
+        }
+    }
+}
+
+fn fetch_source_once(
+    plan: &FetchPlan,
+    options: &FetchOptions,
+    temp_path: &Path,
+) -> Result<(String, u64), FletchError> {
+    match plan.source.kind {
+        SourceKind::Http => {
+            let mut client = reqwest::blocking::Client::builder();
+            if let Some(timeout_ms) = options.timeout_ms {
+                client = client.timeout(Duration::from_millis(timeout_ms));
+            }
+            let client = client.build().map_err(|source| FletchError::HttpFetch {
+                url: plan.source.url.clone(),
+                source,
+            })?;
+            let mut request = client.get(&plan.source.url);
+            for (name, value) in &plan.source.headers {
+                let header_name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                    .map_err(|source| FletchError::InvalidHeaderName {
+                        name: name.clone(),
+                        source,
+                    })?;
+                let header_value =
+                    reqwest::header::HeaderValue::from_str(value).map_err(|source| {
+                        FletchError::InvalidHeaderValue {
+                            name: name.clone(),
+                            source,
+                        }
+                    })?;
+                request = request.header(header_name, header_value);
+            }
+
+            let response = request.send().map_err(|source| FletchError::HttpFetch {
+                url: plan.source.url.clone(),
+                source,
+            })?;
+            let mut response =
+                response
+                    .error_for_status()
+                    .map_err(|source| FletchError::HttpFetch {
+                        url: plan.source.url.clone(),
+                        source,
+                    })?;
+            write_stream_to_temp(&mut response, temp_path, options.max_bytes_per_second)
+        }
+        SourceKind::File => {
+            let path = file_source_path(&plan.source.url);
+            let mut file = File::open(&path).map_err(|source| FletchError::ReadSource {
+                path: path.display().to_string(),
+                source,
+            })?;
+            write_stream_to_temp(&mut file, temp_path, options.max_bytes_per_second)
+        }
+        SourceKind::Adapter => {
+            return Err(FletchError::UnsupportedSourceKind {
+                kind: plan.source.kind.clone(),
+            });
+        }
+    }
+}
+
+fn is_retryable_fetch_error(error: &FletchError) -> bool {
+    matches!(
+        error,
+        FletchError::HttpFetch { .. }
+            | FletchError::ReadSource { .. }
+            | FletchError::WriteCache { .. }
+    )
 }
 
 fn cache_hit_is_fresh(
@@ -1909,6 +1974,49 @@ mod tests {
         );
 
         assert!(matches!(result, Err(FletchError::InvalidBandwidthLimit)));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn fetch_rejects_zero_timeout_limit() {
+        let root = unique_temp_dir("zero-timeout");
+        let source = root.join("source.txt");
+        std::fs::write(&source, b"hello").unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+
+        let result = fetch_to_cache(
+            &plan,
+            FetchOptions::new(root.join("cache")).with_timeout_ms(0),
+        );
+
+        assert!(matches!(result, Err(FletchError::InvalidTimeout)));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_fetch_accepts_retry_and_timeout_options() {
+        let root = unique_temp_dir("retry-timeout");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"hello retry").unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+
+        let outcome = fetch_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root)
+                .with_retry_attempts(2)
+                .with_timeout_ms(1_000),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.entry.bytes, 11);
+        assert!(outcome.entry.verified);
 
         let _ = std::fs::remove_dir_all(root);
     }

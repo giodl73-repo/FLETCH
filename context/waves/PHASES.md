@@ -41,7 +41,7 @@ FLETCH work is organized into Arrow-family phases, then small waves and pulses.
 
 ## Active wave
 
-- `2026-05-15-black-canary-graph`
+- `2026-05-15-speedy-cache-execution`
 
 ## Protocol
 

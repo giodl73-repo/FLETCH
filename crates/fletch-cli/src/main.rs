@@ -69,6 +69,12 @@ enum Commands {
         /// Maximum transfer/write rate in bytes per second.
         #[arg(long)]
         max_bytes_per_second: Option<u64>,
+        /// Request timeout in milliseconds for generic HTTP fetches.
+        #[arg(long)]
+        timeout_ms: Option<u64>,
+        /// Retry attempts after the initial generic fetch attempt fails.
+        #[arg(long, default_value_t = 0)]
+        retry_attempts: u32,
         /// Re-fetch even if the cache policy says the existing object is fresh.
         #[arg(long)]
         force: bool,
@@ -323,6 +329,8 @@ fn main() -> Result<()> {
             cache_root,
             expect_sha256,
             max_bytes_per_second,
+            timeout_ms,
+            retry_attempts,
             force,
             offline,
             freshness,
@@ -340,6 +348,10 @@ fn main() -> Result<()> {
             if let Some(max_bytes_per_second) = max_bytes_per_second {
                 options = options.with_max_bytes_per_second(max_bytes_per_second);
             }
+            if let Some(timeout_ms) = timeout_ms {
+                options = options.with_timeout_ms(timeout_ms);
+            }
+            options = options.with_retry_attempts(retry_attempts);
             let outcome = fetch_to_cache(&plan, options)?;
             let manifest = cache_manifest(cache_root.display().to_string(), vec![outcome.entry])?;
             let json = serde_json::to_string_pretty(&manifest)?;

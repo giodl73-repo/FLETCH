@@ -309,6 +309,11 @@ Freshness policy is not a promise that every fetch is one-time:
 - `offline`: if live fetches are disabled, report missing/stale fletches instead
   of assuming the last cached value is acceptable.
 
+Generic fetch execution can bound live source behavior with timeout, bandwidth,
+and retry controls. Retries are product-neutral and only reattempt generic
+HTTP/file acquisition failures; checksum mismatches and unsupported adapter
+shafts remain explicit failures.
+
 Fetch/merge semantics are deliberately separate. A fetch may acquire, verify,
 and record a candidate cache object, but it must not silently merge that object
 into a product's active data view. Future `pull` is reserved for fetch plus
