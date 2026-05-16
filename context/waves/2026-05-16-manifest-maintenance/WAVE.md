@@ -19,7 +19,7 @@ ledgers without reimplementing FLETCH merge rules.
 |------:|-------|--------|---------|
 | 01 | Batch manifest upsert | done | Added `upsert_cache_manifest_entries` for validated multi-entry manifest merges. |
 | 02 | Manifest file helpers | done | Added reusable cache manifest JSON read/write helpers without turning FLETCH into a manifest daemon. |
-| 03 | Consumer smoke docs | planned | Document manifest-first consumer patterns with cache index/report handoffs. |
+| 03 | Consumer smoke docs | done | Documented manifest-first consumer patterns with cache index/report handoffs. |
 
 ## Validation expectations
 
@@ -38,6 +38,9 @@ Before closing, run a `.roles` review with:
 - Editorial: scope keeper, contract checker, validation checker.
 - Stakeholders: ICELINES, BISECT/apportionment, ROUTE, CROP, PROOF, CI/release.
 - Panel reviewers: F-M1 through F-M5.
+
+Status: complete in `ROLES_REVIEW.md`; no blocking findings. Deferred findings
+feed future manifest streaming or lockfile/concurrency waves.
 
 ## Non-goals
 

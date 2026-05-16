@@ -2,10 +2,11 @@ use anyhow::Result;
 use fletch_core::{
     cache_manifest, dry_run_flight, export_quiver, fetch_plan_with_kind, fetch_to_cache,
     fletch_registry, graph_from_manifest_with_node_kinds, graph_from_registry, import_quiver,
-    inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest, tips_from_manifest,
-    CacheFreshnessStatus, CacheManifest, CacheObjectStatus, DataFormat, FetchOptions,
-    FletchDefinition, FletchGraph, FletchRegistry, FreshnessPolicy, GraphEdgeKind, GraphNodeKind,
-    GraphNodeKindHints, PrunePlan, RegistryEdge, SourceKind, SourceSpec,
+    inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest,
+    read_cache_manifest_json, tips_from_manifest, upsert_cache_manifest_entries,
+    write_cache_manifest_json, CacheFreshnessStatus, CacheManifest, CacheObjectStatus, DataFormat,
+    FetchOptions, FletchDefinition, FletchGraph, FletchRegistry, FreshnessPolicy, GraphEdgeKind,
+    GraphNodeKind, GraphNodeKindHints, PrunePlan, RegistryEdge, SourceKind, SourceSpec,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -109,8 +110,10 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
         entries.push(outcome.entry);
     }
 
-    let manifest = cache_manifest(cache_root.display().to_string(), entries)?;
-    std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
+    let manifest = cache_manifest(cache_root.display().to_string(), Vec::new())?;
+    let manifest = upsert_cache_manifest_entries(manifest, entries)?;
+    write_cache_manifest_json(&manifest_path, &manifest)?;
+    let manifest = read_cache_manifest_json(&manifest_path)?;
 
     let orphan_path = cache_root
         .join("objects")
@@ -432,6 +435,7 @@ fn cache_object_path(cache_root: &str, relative_path: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fletch_core::cache_index_from_manifest;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -497,6 +501,10 @@ mod tests {
             ]
         );
         assert!(Path::new(&report.manifest_path).exists());
+        let manifest = read_cache_manifest_json(&report.manifest_path).unwrap();
+        let index = cache_index_from_manifest(&manifest);
+        assert_eq!(index.entry_count, 4);
+        assert_eq!(index.verified_count, 4);
 
         let _ = std::fs::remove_dir_all(root);
     }

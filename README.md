@@ -156,6 +156,28 @@ object bytes. Verification compares cached object hashes and byte counts with
 the ledger. Status adds freshness evaluation, and prune emits a deletion plan for
 unreferenced cache objects without deleting them.
 
+### Manifest-first consumer pattern
+
+Consumers that expand dynamic source sets should keep their own
+`fletch.cache-manifest.v1` file next to the product cache root. The product owns
+the expansion semantics, fetch locks, parsing, validation, snapshots, and active
+pointers; FLETCH owns generic acquisition, cache object verification, manifest
+entry shape, and derived reports. A typical consumer flow is:
+
+1. Expand product-specific work into `FetchPlan` values.
+2. Execute generic fetches with `fetch_to_cache`, paged fetch, or batch fetch
+   helpers.
+3. Merge resulting entries into the durable ledger with
+   `upsert_cache_manifest_entries`.
+4. Persist and reload the ledger with `write_cache_manifest_json` and
+   `read_cache_manifest_json`.
+5. Feed the manifest to read-only reports such as cache index, status, verify,
+   graph, publisher, partition, or quiver handoff reports.
+
+This pattern supports ICELINES-style cache-index evidence, BISECT/ROUTE data
+ledgers, and CROP/PROOF publisher inputs without making FLETCH responsible for
+domain activation.
+
 Publisher commands are read-only derived views. `fletch publish crop-index`,
 `fletch publish proof-docs`, and `fletch publish local-url-map` accept
 `--offset` and `--limit` for bounded output; CROP index output also accepts
