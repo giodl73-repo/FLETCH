@@ -35,6 +35,19 @@ focused on product-neutral fetch/cache execution.
 - Fetch execution pulses must include offline/no-live behavior checks when live
   source behavior changes.
 
+## Wave close gate
+
+Before this wave can close or hand off to Arsenal, run the `.roles` review:
+
+- Parliament: cache systems, provenance, offline release, adapter boundary,
+  performance, and doc publisher.
+- Editorial: scope keeper, contract checker, validation checker.
+- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, CROP, PROOF, CI/release.
+- Panel reviewers: F-I1 through F-I6.
+
+Blocking findings become additional Speedy pulses. Non-blocking findings must be
+documented as deferred risks or next-wave inputs.
+
 ## Non-goals
 
 - FLETCH does not interpret NHL, Census, route, or villain-file semantics.

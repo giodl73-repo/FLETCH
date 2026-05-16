@@ -2,6 +2,17 @@
 
 FLETCH work is organized into Arrow-family phases, then small waves and pulses.
 
+## Delivery goal
+
+Deliver every Arrow phase in this file, from Green Arrow through Overwatch, as a
+coherent shared fetch/cache substrate for ICELINES, apportionment/BISECT, ROUTE,
+CROP, MDPATH, and PROOF.
+
+Each wave must close with a `.roles` review before the active wave advances. The
+review is part of delivery, not an optional retrospective: role findings either
+become follow-up pulses in the current wave or explicit non-goals/deferred risks
+in the next wave plan.
+
 ## Phase set
 
 1. **Green Arrow - Foundation**: product-neutral contracts, workspace, cache
@@ -52,3 +63,10 @@ FLETCH work is organized into Arrow-family phases, then small waves and pulses.
 4. Validate with `cargo fmt`, `cargo test --workspace`, focused CLI smokes, and
    `git diff --check`.
 5. Update the wave and pulse docs before committing.
+6. Before closing a wave, run `.roles` review using:
+   - parliament infrastructure voices,
+   - editorial quality gates,
+   - stakeholder consumer lenses,
+   - panel-reviewer expert checks.
+7. Advance the active wave only after the `.roles` review is documented and any
+   blocking findings have been resolved or explicitly deferred.
