@@ -3,11 +3,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
     export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
-    graph_from_registry, import_quiver, inspect_cache_manifest, offline_cache_report,
-    plan_cache_prune, preview_manifest_merge, publish_report_from_manifest,
+    graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
+    offline_cache_report, plan_cache_prune, preview_manifest_merge, publish_report_from_manifest,
     summarize_cache_manifest, tips_from_manifest, upsert_cache_manifest_entry,
-    verify_cache_manifest, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
-    FreshnessPolicy, SourceKind,
+    verify_cache_manifest, AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan,
+    FletchRegistry, FreshnessPolicy, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -389,6 +389,21 @@ enum MergeCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Emit labels and optional pins over an alias state.
+    LabelState {
+        /// Source fletch.alias-state.v1 JSON file.
+        #[arg(long)]
+        alias_state: PathBuf,
+        /// Label id to apply to every alias in the alias state.
+        #[arg(long)]
+        label_id: String,
+        /// Pin the label to the current alias targets.
+        #[arg(long)]
+        pin: bool,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -649,6 +664,18 @@ fn main() -> Result<()> {
                     output,
                 )?;
             }
+            MergeCommands::LabelState {
+                alias_state,
+                label_id,
+                pin,
+                output,
+            } => {
+                let alias_state = read_alias_state(&alias_state)?;
+                write_json(
+                    &label_state_from_aliases(&alias_state, label_id, pin),
+                    output,
+                )?;
+            }
         },
     }
     Ok(())
@@ -690,6 +717,11 @@ fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
 }
 
 fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_alias_state(path: &PathBuf) -> Result<AliasState> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

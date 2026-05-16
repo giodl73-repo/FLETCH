@@ -287,6 +287,11 @@ alias IDs pointing at manifest entries by dataset ID, cache key, hash, and
 relative path. Alias state names active views without moving cache objects or
 embedding product semantics.
 
+`fletch.label-state.v1` records labels over alias state. Labels name a current
+alias target set for repeatable references, and `pinned: true` marks that the
+label should continue pointing at the recorded cache keys until explicitly
+changed by a later merge/rollback operation.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.

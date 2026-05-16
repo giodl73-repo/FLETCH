@@ -21,6 +21,7 @@ pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
 pub const FLETCH_MERGE_PREVIEW_SCHEMA: &str = "fletch.merge-preview.v1";
 pub const FLETCH_ALIAS_SCHEMA: &str = "fletch.alias-state.v1";
+pub const FLETCH_LABEL_SCHEMA: &str = "fletch.label-state.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -325,6 +326,24 @@ pub struct AliasState {
     pub generated_by: String,
     pub cache_root: String,
     pub aliases: Vec<ActiveAlias>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelRecord {
+    pub label_id: String,
+    pub alias_id: String,
+    pub dataset_id: String,
+    pub cache_key: String,
+    pub sha256: String,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelState {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub labels: Vec<LabelRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1037,6 +1056,31 @@ pub fn alias_state_from_manifest(
             relative_path: entry.relative_path.clone(),
         }],
     })
+}
+
+pub fn label_state_from_aliases(
+    alias_state: &AliasState,
+    label_id: impl Into<String>,
+    pinned: bool,
+) -> LabelState {
+    let label_id = label_id.into();
+    LabelState {
+        schema_version: FLETCH_LABEL_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: alias_state.cache_root.clone(),
+        labels: alias_state
+            .aliases
+            .iter()
+            .map(|alias| LabelRecord {
+                label_id: label_id.clone(),
+                alias_id: alias.alias_id.clone(),
+                dataset_id: alias.dataset_id.clone(),
+                cache_key: alias.cache_key.clone(),
+                sha256: alias.sha256.clone(),
+                pinned,
+            })
+            .collect(),
+    }
 }
 
 fn merge_preview_entry(
@@ -3044,6 +3088,33 @@ mod tests {
             alias_state_from_manifest(&manifest, "missing", "test:missing"),
             Err(FletchError::AliasTargetMissing { .. })
         ));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn label_state_records_pinned_aliases() {
+        let root = unique_temp_dir("label-state");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"active").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:active",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+        let alias = alias_state_from_manifest(&manifest, "current", "test:active").unwrap();
+
+        let labels = label_state_from_aliases(&alias, "release-1", true);
+
+        assert_eq!(labels.schema_version, FLETCH_LABEL_SCHEMA);
+        assert_eq!(labels.labels[0].label_id, "release-1");
+        assert_eq!(labels.labels[0].alias_id, "current");
+        assert!(labels.labels[0].pinned);
 
         let _ = std::fs::remove_dir_all(root);
     }
