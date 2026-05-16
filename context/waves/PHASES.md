@@ -52,7 +52,7 @@ in the next wave plan.
 
 ## Active wave
 
-- `2026-05-15-oracle-partitions-rollups`
+- `2026-05-15-speedy-ii-quivers`
 
 ## Protocol
 
