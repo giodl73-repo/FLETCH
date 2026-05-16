@@ -132,6 +132,10 @@ keeps a plain technical contract:
 8. **Connor Hawke - Adapters**: Census/apportionment, NHL/icelines,
    route/geodata, and generic static archive adapters. Mock client: become the
    adapter harness that proves consumer code stays outside `fletch-core`.
+   Initial downstream migrations are complete for ROUTE generic source
+   orchestration, BISECT generic HTTP acquisition, and ICELINES stable
+   roster/MoneyPuck source-byte acquisition. Product semantics remain in each
+   consumer.
 9. **Overwatch - Publishers**: make FLETCH ledgers easy for CROP to index and
    for PROOF to render as local Markdown/status/backend views. Mock client:
    publish villain-file status, threat query summaries, tips, and quiver

@@ -59,11 +59,17 @@ ledger entries for offline use.
 - **Future offline/bundle path**: the workspace is prepared for bundle export,
   import, pruning, and stale/fresh reports.
 
-Initial consumers:
+Downstream migration status:
 
-- BISECT: census, election, geography, and evidence datasets.
-- ICELINES: NHL seasons, profiles, favorites, and bundled/offline data.
-- ROUTE: geospatial/routing datasets, tiles, profiles, and on-demand fetches.
+- ROUTE: generic source orchestration moved to FLETCH; ROUTE keeps route
+  scoring, geospatial interpretation, and product outputs.
+- BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
+  FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
+  validation.
+- ICELINES: roster and MoneyPuck source-byte acquisition moved to FLETCH, with
+  `icelines fetch fletch-sources --gate` documenting paged and dynamic sources
+  that remain adapter-owned. ICELINES keeps NHL parsing, snapshots, sealing, and
+  hockey-domain validation.
 - CROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
@@ -192,8 +198,8 @@ but the core cache contract must work for any source.
 - [`docs/specs/fletch-foundation.md`](docs/specs/fletch-foundation.md) defines
   the initial plan and cache-manifest contracts.
 - [`docs/specs/consumer-adapter-scout.md`](docs/specs/consumer-adapter-scout.md)
-  maps ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and PROOF to first
-  FLETCH migration slices.
+  maps ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and PROOF to
+  migration slices and records the first completed consumer handoffs.
 - `context/waves/` tracks implementation waves and pulse history.
 
 ## Validation

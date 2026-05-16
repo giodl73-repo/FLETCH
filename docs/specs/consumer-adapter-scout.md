@@ -57,13 +57,25 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 
 ## First migration slices
 
-1. ICELINES: register NHL schedule and boxscore partitions first, then season
-   quivers.
-2. Apportionment/BISECT: register Census/TIGER year-state fletches first, then
-   generated adjacency graph fletches.
-3. ROUTE: register HPMS/NBI year-state fletches first, then route evidence
-   rollups.
-4. CROP: index `fletch.cache-manifest.v1`, `fletch.quiver.v1`, and future
-   `fletch.graph.v1` outputs.
+1. ROUTE: generic source orchestration is moved to FLETCH; ROUTE keeps
+   geospatial scoring, validation, and product outputs.
+2. Apportionment/BISECT: generic HTTP acquisition for TIGER, PL 94-171, school
+   districts, EIA 861, LODES, and ACS housing is moved to FLETCH. BISECT keeps
+   GitHub release adjacency, extraction, derived artifacts, done markers,
+   `--force`, and redistricting/legal validation.
+3. ICELINES: `fetch fletch-sources --gate` inventories source surfaces, and
+   stable single-object roster/MoneyPuck source bytes are acquired through
+   FLETCH. ICELINES keeps NHL API pagination, dynamic source expansion, parsing,
+   snapshots, sealing, freshness, locks, and hockey-domain validation.
+4. CROP: index `fletch.cache-manifest.v1`, `fletch.quiver.v1`, `fletch.graph.v1`,
+   tips, and publish reports as evidence.
 5. MDPATH/PROOF: attach stable references and rendered views to FLETCH outputs
    without treating generated docs as source data.
+
+## Completed consumer handoffs
+
+| Consumer | FLETCH-owned now | Adapter-owned / product-owned remains |
+|---|---|---|
+| ROUTE | Generic source orchestration and source handoff/gate reporting. | Route scoring, geospatial semantics, user-facing outputs. |
+| BISECT | Generic HTTP source-byte acquisition under `data/.fletch` plus handoff/gate reporting. | Release adjacency, archive extraction, derived CSVs, done markers, local manifest overrides, legal/redistricting claims. |
+| ICELINES | Handoff/gate reporting plus roster and MoneyPuck source-byte acquisition. | Paged NHL stats, ESPN transaction windows, player landing batches, schedule/gamecenter expansion, snapshots, parsing, sealing, and hockey semantics. |
