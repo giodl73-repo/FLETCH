@@ -136,6 +136,10 @@ registry, graph, and flight contracts remain the source of truth.
 graph edges, and tips. Each row records its source schema so generated indexes
 can link back to the machine contract that remains authoritative.
 
+`fletch.proof-docs.v1` emits document IDs, titles, anchors, and source schemas
+derived from CROP index rows. PROOF backends can render Markdown, HTML, or other
+views from this manifest while linking back to authoritative machine contracts.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:

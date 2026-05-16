@@ -24,6 +24,7 @@ pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 pub const FLETCH_CROP_INDEX_SCHEMA: &str = "fletch.crop-index.v1";
+pub const FLETCH_PROOF_DOCS_SCHEMA: &str = "fletch.proof-docs.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
@@ -825,6 +826,23 @@ pub struct CropIndexReport {
     pub rows: Vec<CropIndexRow>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProofDocumentAnchor {
+    pub document_id: String,
+    pub title: String,
+    pub source_schema: String,
+    pub anchor: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProofDocumentManifest {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub source_schema: String,
+    pub document_count: usize,
+    pub documents: Vec<ProofDocumentAnchor>,
+}
+
 pub fn fletch_registry(
     registry_id: impl Into<String>,
     fletches: Vec<FletchDefinition>,
@@ -1198,6 +1216,30 @@ pub fn crop_index_from_manifest(
         tip_row_count: tips.tips.len(),
         rows,
     })
+}
+
+pub fn proof_document_manifest(index: &CropIndexReport) -> ProofDocumentManifest {
+    let documents = index
+        .rows
+        .iter()
+        .map(|row| ProofDocumentAnchor {
+            document_id: format!("{}:{}", row.row_type, row.id),
+            title: row.label.clone(),
+            source_schema: row.source_schema.clone(),
+            anchor: format!(
+                "#{}-{}",
+                safe_path_label(&row.row_type),
+                safe_path_label(&row.id)
+            ),
+        })
+        .collect::<Vec<_>>();
+    ProofDocumentManifest {
+        schema_version: FLETCH_PROOF_DOCS_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        source_schema: index.schema_version.clone(),
+        document_count: documents.len(),
+        documents,
+    }
 }
 
 fn cache_object_status_label(status: &CacheObjectStatus) -> &'static str {
@@ -4869,6 +4911,35 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn proof_document_manifest_points_back_to_crop_index_rows() {
+        let index = CropIndexReport {
+            schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            row_count: 1,
+            status_row_count: 1,
+            graph_node_row_count: 0,
+            graph_edge_row_count: 0,
+            tip_row_count: 0,
+            rows: vec![CropIndexRow {
+                row_type: "cache-status".to_string(),
+                id: "test:fletch".to_string(),
+                label: "objects/sha256/test".to_string(),
+                status: Some("verified".to_string()),
+                source_schema: FLETCH_VERIFY_SCHEMA.to_string(),
+            }],
+        };
+
+        let docs = proof_document_manifest(&index);
+
+        assert_eq!(docs.schema_version, FLETCH_PROOF_DOCS_SCHEMA);
+        assert_eq!(docs.source_schema, FLETCH_CROP_INDEX_SCHEMA);
+        assert_eq!(docs.document_count, 1);
+        assert_eq!(docs.documents[0].source_schema, FLETCH_VERIFY_SCHEMA);
+        assert!(docs.documents[0].anchor.starts_with("#cache-status-"));
     }
 
     fn unique_temp_dir(label: &str) -> PathBuf {

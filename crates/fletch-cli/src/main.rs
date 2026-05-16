@@ -8,11 +8,11 @@ use fletch_core::{
     inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
-    publish_report_from_manifest, quiver_merge_ready_report, summarize_cache_manifest,
-    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry, validate_registry,
-    verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry, CacheManifest,
-    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
-    QuiverManifest, RollupPreview, SourceKind,
+    proof_document_manifest, publish_report_from_manifest, quiver_merge_ready_report,
+    summarize_cache_manifest, summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry,
+    validate_registry, verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry,
+    CacheManifest, CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
+    LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -534,6 +534,15 @@ enum PublishCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Generate PROOF document anchors from a CROP index report.
+    ProofDocs {
+        /// Path to a fletch.crop-index.v1 JSON file.
+        #[arg(long)]
+        crop_index: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -889,6 +898,10 @@ fn main() -> Result<()> {
                     output,
                 )?;
             }
+            PublishCommands::ProofDocs { crop_index, output } => {
+                let crop_index = read_crop_index(&crop_index)?;
+                write_json(&proof_document_manifest(&crop_index), output)?;
+            }
         },
         Commands::Merge { command } => match command {
             MergeCommands::Preview {
@@ -1038,6 +1051,11 @@ fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
 }
 
 fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_crop_index(path: &PathBuf) -> Result<CropIndexReport> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }
