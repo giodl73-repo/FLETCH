@@ -20,6 +20,7 @@ pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
 pub const FLETCH_MERGE_PREVIEW_SCHEMA: &str = "fletch.merge-preview.v1";
+pub const FLETCH_ALIAS_SCHEMA: &str = "fletch.alias-state.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -29,6 +30,8 @@ pub enum FletchError {
     EmptySourceUrl,
     #[error("[PLAN] unsupported schema version {schema_version}; expected fletch.plan.v1")]
     InvalidPlanSchema { schema_version: String },
+    #[error("[ALIAS] dataset id {dataset_id} is not present in the manifest")]
+    AliasTargetMissing { dataset_id: String },
     #[error("[QUIVER] quiver id must not be empty")]
     EmptyQuiverId,
     #[error("[CACHE] cache entry {dataset_id} has invalid sha256: {sha256}")]
@@ -305,6 +308,23 @@ pub struct MergePreview {
     pub unchanged: Vec<MergePreviewEntry>,
     pub replacements: Vec<MergePreviewEntry>,
     pub conflicts: Vec<MergePreviewEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActiveAlias {
+    pub alias_id: String,
+    pub dataset_id: String,
+    pub cache_key: String,
+    pub sha256: String,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AliasState {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub aliases: Vec<ActiveAlias>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -989,6 +1009,34 @@ pub fn preview_manifest_merge(active: &CacheManifest, candidate: &CacheManifest)
         replacements,
         conflicts,
     }
+}
+
+pub fn alias_state_from_manifest(
+    manifest: &CacheManifest,
+    alias_id: impl Into<String>,
+    dataset_id: impl Into<String>,
+) -> Result<AliasState, FletchError> {
+    let alias_id = alias_id.into();
+    let dataset_id = dataset_id.into();
+    let Some(entry) = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.dataset_id == dataset_id)
+    else {
+        return Err(FletchError::AliasTargetMissing { dataset_id });
+    };
+    Ok(AliasState {
+        schema_version: FLETCH_ALIAS_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        aliases: vec![ActiveAlias {
+            alias_id,
+            dataset_id: entry.dataset_id.clone(),
+            cache_key: entry.cache_key.clone(),
+            sha256: entry.sha256.clone(),
+            relative_path: entry.relative_path.clone(),
+        }],
+    })
 }
 
 fn merge_preview_entry(
@@ -2962,6 +3010,40 @@ mod tests {
         assert_eq!(preview.conflict_count, 1);
         assert_eq!(preview.addition_count, 1);
         assert_eq!(preview.conflicts[0].reason, "same-dataset-different-source");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn alias_state_points_to_manifest_entry_without_moving_bytes() {
+        let root = unique_temp_dir("alias-state");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"active").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:active",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+
+        let alias = alias_state_from_manifest(&manifest, "current", "test:active").unwrap();
+
+        assert_eq!(alias.schema_version, FLETCH_ALIAS_SCHEMA);
+        assert_eq!(alias.aliases[0].alias_id, "current");
+        assert_eq!(alias.aliases[0].dataset_id, "test:active");
+        assert!(cache_path(
+            Path::new(&manifest.cache_root),
+            &alias.aliases[0].relative_path
+        )
+        .exists());
+        assert!(matches!(
+            alias_state_from_manifest(&manifest, "missing", "test:missing"),
+            Err(FletchError::AliasTargetMissing { .. })
+        ));
 
         let _ = std::fs::remove_dir_all(root);
     }

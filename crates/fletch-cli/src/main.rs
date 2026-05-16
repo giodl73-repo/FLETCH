@@ -1,12 +1,13 @@
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
-    cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
-    fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
-    inspect_cache_manifest, offline_cache_report, plan_cache_prune, preview_manifest_merge,
-    publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
-    upsert_cache_manifest_entry, verify_cache_manifest, CacheEntry, CacheManifest, FetchOptions,
-    FetchPlan, FletchRegistry, FreshnessPolicy, SourceKind,
+    alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
+    export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
+    graph_from_registry, import_quiver, inspect_cache_manifest, offline_cache_report,
+    plan_cache_prune, preview_manifest_merge, publish_report_from_manifest,
+    summarize_cache_manifest, tips_from_manifest, upsert_cache_manifest_entry,
+    verify_cache_manifest, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
+    FreshnessPolicy, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -373,6 +374,21 @@ enum MergeCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Emit an active alias state pointing at a manifest entry.
+    AliasState {
+        /// Source fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Product-neutral alias id, e.g. current or stable.
+        #[arg(long)]
+        alias_id: String,
+        /// Dataset id in the manifest that the alias should point at.
+        #[arg(long)]
+        dataset_id: String,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -620,6 +636,18 @@ fn main() -> Result<()> {
                 let active = read_manifest(&active)?;
                 let candidate = read_manifest(&candidate)?;
                 write_json(&preview_manifest_merge(&active, &candidate), output)?;
+            }
+            MergeCommands::AliasState {
+                manifest,
+                alias_id,
+                dataset_id,
+                output,
+            } => {
+                let manifest = read_manifest(&manifest)?;
+                write_json(
+                    &alias_state_from_manifest(&manifest, alias_id, dataset_id)?,
+                    output,
+                )?;
             }
         },
     }

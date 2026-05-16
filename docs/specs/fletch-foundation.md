@@ -282,6 +282,11 @@ entries, same-source replacements, and conflicts where the same logical dataset
 points at a different source. It does not mutate aliases, labels, cache objects,
 or product views.
 
+The first alias contract is `fletch.alias-state.v1`. It records product-neutral
+alias IDs pointing at manifest entries by dataset ID, cache key, hash, and
+relative path. Alias state names active views without moving cache objects or
+embedding product semantics.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.
