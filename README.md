@@ -77,6 +77,7 @@ cargo run -p fletch-cli -- graph export --manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- registry graph --file fletch.registry.json
 cargo run -p fletch-cli -- registry flight --file fletch.registry.json --fletch-id justice-league:villains:index
 cargo run -p fletch-cli -- tip from-manifest --manifest .fletch/cache/manifest.json --max-bytes 4096
+cargo run -p fletch-cli -- publish from-manifest --manifest .fletch/cache/manifest.json --freshness immutable
 ```
 
 `fletch plan` emits `fletch.plan.v1`, a source plan that downstream products can
@@ -126,6 +127,11 @@ The initial generic tipper samples bounded bytes and reports JSON fields, JSON
 arrays/values, text samples, or opaque byte samples without interpreting product
 semantics.
 
+`fletch publish from-manifest` emits a `fletch.publish.v1` report with cache
+status, graph, and tips bundled for CROP indexing, PROOF rendering, dashboards,
+or other local status backends. It is a machine-readable source view, not a
+generated document source of truth.
+
 ## Workspace
 
 | Crate | Purpose |
@@ -147,8 +153,8 @@ impacted so a downstream tool can track threat measures across years. The mock
 client fetches the fletches into a cache, verifies status, queries cached threat
 partitions by year, city, and villain, exports/imports a stage-first quiver for
 offline bootstrap, writes registry and dry-run flight files, emits graph views
-from both registry and cached state, writes generic tips, and emits a prune plan
-for an orphaned trick-arrow object.
+from both registry and cached state, writes generic tips and a publish-ready
+status report, and emits a prune plan for an orphaned trick-arrow object.
 
 ## Design rule
 

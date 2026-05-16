@@ -2,10 +2,10 @@ use anyhow::Result;
 use fletch_core::{
     cache_manifest, dry_run_flight, export_quiver, fetch_plan_with_kind, fetch_to_cache,
     fletch_registry, graph_from_manifest_with_node_kinds, graph_from_registry, import_quiver,
-    inspect_cache_manifest, plan_cache_prune, tips_from_manifest, CacheFreshnessStatus,
-    CacheManifest, CacheObjectStatus, DataFormat, FetchOptions, FletchDefinition, FletchGraph,
-    FletchRegistry, FreshnessPolicy, GraphEdgeKind, GraphNodeKind, GraphNodeKindHints, PrunePlan,
-    RegistryEdge, SourceKind, SourceSpec,
+    inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest, tips_from_manifest,
+    CacheFreshnessStatus, CacheManifest, CacheObjectStatus, DataFormat, FetchOptions,
+    FletchDefinition, FletchGraph, FletchRegistry, FreshnessPolicy, GraphEdgeKind, GraphNodeKind,
+    GraphNodeKindHints, PrunePlan, RegistryEdge, SourceKind, SourceSpec,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -30,6 +30,8 @@ pub struct MockClientReport {
     pub graph_edge_count: usize,
     pub tips_path: String,
     pub tip_count: usize,
+    pub publish_path: String,
+    pub publish_status_count: usize,
     pub threat_query: ThreatQueryReport,
 }
 
@@ -69,6 +71,7 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     let flight_path = workspace_root.join("mock-flight.json");
     let manifest_path = workspace_root.join("mock-manifest.json");
     let tips_path = workspace_root.join("mock-tips.json");
+    let publish_path = workspace_root.join("mock-publish.json");
 
     std::fs::create_dir_all(&source_root)?;
     std::fs::write(
@@ -137,6 +140,8 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     std::fs::write(&graph_path, serde_json::to_string_pretty(&graph)?)?;
     let tips = tips_from_manifest(&manifest, 2048)?;
     std::fs::write(&tips_path, serde_json::to_string_pretty(&tips)?)?;
+    let publish = publish_report_from_manifest(&manifest, &FreshnessPolicy::Immutable, 2048)?;
+    std::fs::write(&publish_path, serde_json::to_string_pretty(&publish)?)?;
 
     Ok(report(
         manifest_path,
@@ -154,6 +159,8 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
         graph.edges.len(),
         tips_path,
         tips.tips.len(),
+        publish_path,
+        publish.statuses.len(),
         threat_query,
     ))
 }
@@ -174,6 +181,8 @@ fn report(
     graph_edge_count: usize,
     tips_path: PathBuf,
     tip_count: usize,
+    publish_path: PathBuf,
+    publish_status_count: usize,
     threat_query: ThreatQueryReport,
 ) -> MockClientReport {
     MockClientReport {
@@ -200,6 +209,8 @@ fn report(
         graph_edge_count,
         tips_path: tips_path.display().to_string(),
         tip_count,
+        publish_path: publish_path.display().to_string(),
+        publish_status_count,
         threat_query,
     }
 }
@@ -441,9 +452,11 @@ mod tests {
         assert!(Path::new(&report.staged_quiver_root).exists());
         assert!(Path::new(&report.graph_path).exists());
         assert!(Path::new(&report.tips_path).exists());
+        assert!(Path::new(&report.publish_path).exists());
         assert_eq!(report.graph_node_count, 18);
         assert_eq!(report.graph_edge_count, 17);
         assert_eq!(report.tip_count, 4);
+        assert_eq!(report.publish_status_count, 4);
         assert_eq!(
             report
                 .threat_query

@@ -22,7 +22,7 @@ into `fletch-core`.
 | 03 | Role-review hardening | done | Hardened cache-hit trust metadata, temp promotion, quiver staging verification, and registry/manifest graph identity. |
 | 04 | Dry-run flights | done | Added `fletch.flight.v1` dry-run registry resolution, CLI output, and mock-client flight preview. |
 | 05 | Tips | done | Added `fletch.tip.v1` bounded cache previews, CLI output, and mock-client tip export. |
-| 06 | CROP/PROOF publish scout | pending | Emit graph/status views ready for CROP indexing and PROOF rendering. |
+| 06 | CROP/PROOF publish scout | done | Added `fletch.publish.v1` status/graph/tip reports, CLI output, and mock-client publish export. |
 
 ## Validation expectations
 

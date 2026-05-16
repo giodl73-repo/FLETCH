@@ -3,8 +3,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
     fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
-    inspect_cache_manifest, plan_cache_prune, tips_from_manifest, CacheManifest, FetchOptions,
-    FletchRegistry, FreshnessPolicy, SourceKind,
+    inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest, tips_from_manifest,
+    CacheManifest, FetchOptions, FletchRegistry, FreshnessPolicy, SourceKind,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -109,6 +109,11 @@ enum Commands {
     Tip {
         #[command(subcommand)]
         command: TipCommands,
+    },
+    /// Emit fletch.publish.v1 status/graph/tip reports.
+    Publish {
+        #[command(subcommand)]
+        command: PublishCommands,
     },
 }
 
@@ -237,6 +242,28 @@ enum TipCommands {
         /// Maximum bytes to sample from each cached object.
         #[arg(long, default_value_t = 4096)]
         max_bytes: usize,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum PublishCommands {
+    /// Generate a publish-ready report from a cache manifest.
+    FromManifest {
+        /// Path to a fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Freshness policy to evaluate.
+        #[arg(long, value_enum, default_value_t = CliFreshness::Immutable)]
+        freshness: CliFreshness,
+        /// Max age in days when --freshness max-age-days is used.
+        #[arg(long)]
+        max_age_days: Option<u32>,
+        /// Maximum bytes to sample from each cached object for tips.
+        #[arg(long, default_value_t = 4096)]
+        max_tip_bytes: usize,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -397,6 +424,22 @@ fn main() -> Result<()> {
             } => {
                 let manifest = read_manifest(&manifest)?;
                 write_json(&tips_from_manifest(&manifest, max_bytes)?, output)?;
+            }
+        },
+        Commands::Publish { command } => match command {
+            PublishCommands::FromManifest {
+                manifest,
+                freshness,
+                max_age_days,
+                max_tip_bytes,
+                output,
+            } => {
+                let manifest = read_manifest(&manifest)?;
+                let freshness = freshness_policy(freshness, max_age_days)?;
+                write_json(
+                    &publish_report_from_manifest(&manifest, &freshness, max_tip_bytes)?,
+                    output,
+                )?;
             }
         },
     }

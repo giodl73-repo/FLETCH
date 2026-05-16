@@ -15,6 +15,7 @@ pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
+pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -415,6 +416,16 @@ pub struct FletchTips {
     pub tips: Vec<FletchTip>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FletchPublishReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub graph: FletchGraph,
+    pub statuses: Vec<CacheStatus>,
+    pub tips: FletchTips,
+}
+
 pub fn fletch_registry(
     registry_id: impl Into<String>,
     fletches: Vec<FletchDefinition>,
@@ -576,6 +587,21 @@ pub fn tips_from_manifest(
         cache_root: manifest.cache_root.clone(),
         max_bytes,
         tips,
+    })
+}
+
+pub fn publish_report_from_manifest(
+    manifest: &CacheManifest,
+    freshness: &FreshnessPolicy,
+    max_tip_bytes: usize,
+) -> Result<FletchPublishReport, FletchError> {
+    Ok(FletchPublishReport {
+        schema_version: FLETCH_PUBLISH_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        graph: graph_from_manifest(manifest),
+        statuses: inspect_cache_manifest(manifest, freshness)?,
+        tips: tips_from_manifest(manifest, max_tip_bytes)?,
     })
 }
 
@@ -2230,6 +2256,38 @@ mod tests {
             .generated_from
             .starts_with("ledger-entry:sha256:"));
         assert!(!tips.tips[0].truncated);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn publish_report_from_manifest_combines_graph_status_and_tips() {
+        let root = unique_temp_dir("publish");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"alpha":1}"#).unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:publish",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+
+        let report =
+            publish_report_from_manifest(&manifest, &FreshnessPolicy::Immutable, 4096).unwrap();
+
+        assert_eq!(report.schema_version, FLETCH_PUBLISH_SCHEMA);
+        assert_eq!(report.graph.schema_version, FLETCH_GRAPH_SCHEMA);
+        assert_eq!(report.statuses.len(), 1);
+        assert_eq!(
+            report.statuses[0].object_status,
+            CacheObjectStatus::Verified
+        );
+        assert_eq!(report.tips.schema_version, FLETCH_TIP_SCHEMA);
+        assert_eq!(report.tips.tips.len(), 1);
 
         let _ = std::fs::remove_dir_all(root);
     }

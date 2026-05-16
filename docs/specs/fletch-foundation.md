@@ -386,6 +386,14 @@ cache key, preview kind, human summary, optional fields, sample reference,
 ledger-entry source, and truncation state. Tips are bounded previews for
 inspection and publishing; they are not authoritative data or product semantics.
 
+### `fletch.publish.v1`
+
+Machine-readable publish scout for CROP, PROOF, dashboards, and local status
+backends. A publish report bundles the cache graph, cache status rows, and
+bounded tips derived from a manifest. Generated Markdown, HTML, or other backend
+views should render this contract; they should not replace the manifest, graph,
+or tip contracts as source of truth.
+
 ### `fletch.merge.v1`
 
 Future transaction contract for staged candidate inputs, active-view updates,
