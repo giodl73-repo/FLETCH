@@ -314,6 +314,11 @@ partition metadata over a partition state. It exposes counts, per-partition
 flags, reasons, and missing partition IDs without deleting cache objects,
 materializing rollups, or changing active aliases.
 
+`fletch.active-partition-set.v1` reports query-facing partition rows with the
+alias IDs, label IDs, and rollup IDs that make each partition active. It is a
+derived view over partition, alias, label, and rollup-preview contracts; it does
+not make cache presence alone equivalent to activation.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.

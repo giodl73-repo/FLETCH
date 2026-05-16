@@ -26,6 +26,7 @@ pub const FLETCH_ROLLBACK_PREVIEW_SCHEMA: &str = "fletch.rollback-preview.v1";
 pub const FLETCH_PARTITION_SCHEMA: &str = "fletch.partition-state.v1";
 pub const FLETCH_ROLLUP_PREVIEW_SCHEMA: &str = "fletch.rollup-preview.v1";
 pub const FLETCH_PARTITION_INVALIDATION_SCHEMA: &str = "fletch.partition-invalidation.v1";
+pub const FLETCH_ACTIVE_PARTITION_SCHEMA: &str = "fletch.active-partition-set.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -439,6 +440,30 @@ pub struct PartitionInvalidationReport {
     pub missing_count: usize,
     pub missing_partition_ids: Vec<String>,
     pub entries: Vec<PartitionInvalidationEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivePartitionEntry {
+    pub partition_id: String,
+    pub dataset_id: String,
+    pub cache_key: String,
+    pub sha256: String,
+    pub relative_path: String,
+    pub verified: bool,
+    pub active: bool,
+    pub alias_ids: Vec<String>,
+    pub label_ids: Vec<String>,
+    pub rollup_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivePartitionSet {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub active_count: usize,
+    pub inactive_count: usize,
+    pub partitions: Vec<ActivePartitionEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1367,6 +1392,86 @@ pub fn partition_invalidation_report(
         missing_count: missing_partition_ids.len(),
         missing_partition_ids,
         entries,
+    }
+}
+
+pub fn active_partition_set(
+    partition_state: &PartitionState,
+    alias_state: Option<&AliasState>,
+    label_state: Option<&LabelState>,
+    rollup_preview: Option<&RollupPreview>,
+) -> ActivePartitionSet {
+    let mut aliases_by_cache_key = BTreeMap::<String, Vec<String>>::new();
+    if let Some(alias_state) = alias_state {
+        for alias in &alias_state.aliases {
+            aliases_by_cache_key
+                .entry(alias.cache_key.clone())
+                .or_default()
+                .push(alias.alias_id.clone());
+        }
+    }
+
+    let mut labels_by_cache_key = BTreeMap::<String, Vec<String>>::new();
+    if let Some(label_state) = label_state {
+        for label in &label_state.labels {
+            labels_by_cache_key
+                .entry(label.cache_key.clone())
+                .or_default()
+                .push(label.label_id.clone());
+        }
+    }
+
+    let mut rollups_by_partition_id = BTreeMap::<String, Vec<String>>::new();
+    if let Some(rollup_preview) = rollup_preview {
+        for edge in &rollup_preview.edges {
+            rollups_by_partition_id
+                .entry(edge.partition_id.clone())
+                .or_default()
+                .push(edge.rollup_id.clone());
+        }
+    }
+
+    let mut active_count = 0;
+    let partitions = partition_state
+        .partitions
+        .iter()
+        .map(|partition| {
+            let alias_ids = aliases_by_cache_key
+                .get(&partition.cache_key)
+                .cloned()
+                .unwrap_or_default();
+            let label_ids = labels_by_cache_key
+                .get(&partition.cache_key)
+                .cloned()
+                .unwrap_or_default();
+            let rollup_ids = rollups_by_partition_id
+                .get(&partition.partition_id)
+                .cloned()
+                .unwrap_or_default();
+            let active = !alias_ids.is_empty() || !label_ids.is_empty() || !rollup_ids.is_empty();
+            active_count += usize::from(active);
+            ActivePartitionEntry {
+                partition_id: partition.partition_id.clone(),
+                dataset_id: partition.dataset_id.clone(),
+                cache_key: partition.cache_key.clone(),
+                sha256: partition.sha256.clone(),
+                relative_path: partition.relative_path.clone(),
+                verified: partition.verified,
+                active,
+                alias_ids,
+                label_ids,
+                rollup_ids,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    ActivePartitionSet {
+        schema_version: FLETCH_ACTIVE_PARTITION_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: partition_state.cache_root.clone(),
+        active_count,
+        inactive_count: partitions.len().saturating_sub(active_count),
+        partitions,
     }
 }
 
@@ -3552,6 +3657,41 @@ mod tests {
         assert!(report.entries[0].folded);
         assert!(!report.entries[0].superseded);
         assert_eq!(report.entries[0].reasons, vec!["stale", "folded"]);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn active_partition_set_collects_alias_label_and_rollup_evidence() {
+        let root = unique_temp_dir("active-partition-set");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"partition").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:partition:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+        let partitions = partition_state_from_manifest(&manifest, Some("test:group".to_string()));
+        let aliases =
+            alias_state_from_manifest(&manifest, "current", "test:partition:001").unwrap();
+        let labels = label_state_from_aliases(&aliases, "release-1", true);
+        let rollup = preview_rollup_edges(&partitions, "test:rollup", &[]);
+
+        let active =
+            active_partition_set(&partitions, Some(&aliases), Some(&labels), Some(&rollup));
+
+        assert_eq!(active.schema_version, FLETCH_ACTIVE_PARTITION_SCHEMA);
+        assert_eq!(active.active_count, 1);
+        assert_eq!(active.inactive_count, 0);
+        assert!(active.partitions[0].active);
+        assert_eq!(active.partitions[0].alias_ids, vec!["current"]);
+        assert_eq!(active.partitions[0].label_ids, vec!["release-1"]);
+        assert_eq!(active.partitions[0].rollup_ids, vec!["test:rollup"]);
 
         let _ = std::fs::remove_dir_all(root);
     }

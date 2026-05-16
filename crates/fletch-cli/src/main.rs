@@ -1,15 +1,15 @@
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
-    alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
-    export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
-    graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
-    offline_cache_report, partition_invalidation_report, partition_state_from_manifest,
-    plan_cache_prune, preview_manifest_merge, preview_rollback, preview_rollup_edges,
-    publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
-    upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry, CacheManifest,
-    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
-    SourceKind,
+    active_partition_set, alias_state_from_manifest, cache_key, cache_list, cache_manifest,
+    dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
+    graph_from_manifest, graph_from_registry, import_quiver, inspect_cache_manifest,
+    label_state_from_aliases, offline_cache_report, partition_invalidation_report,
+    partition_state_from_manifest, plan_cache_prune, preview_manifest_merge, preview_rollback,
+    preview_rollup_edges, publish_report_from_manifest, summarize_cache_manifest,
+    tips_from_manifest, upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry,
+    CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState,
+    PartitionState, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -227,6 +227,24 @@ enum PartitionCommands {
         /// Partition id to mark superseded. Repeat for multiple partitions.
         #[arg(long = "superseded-partition-id")]
         superseded_partition_ids: Vec<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Emit query-facing active partition rows from alias, label, and rollup evidence.
+    ActiveSet {
+        /// Path to a fletch.partition-state.v1 JSON file.
+        #[arg(long)]
+        partition_state: PathBuf,
+        /// Optional fletch.alias-state.v1 JSON file.
+        #[arg(long)]
+        alias_state: Option<PathBuf>,
+        /// Optional fletch.label-state.v1 JSON file.
+        #[arg(long)]
+        label_state: Option<PathBuf>,
+        /// Optional fletch.rollup-preview.v1 JSON file.
+        #[arg(long)]
+        rollup_preview: Option<PathBuf>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -793,6 +811,30 @@ fn main() -> Result<()> {
                     output,
                 )?;
             }
+            PartitionCommands::ActiveSet {
+                partition_state,
+                alias_state,
+                label_state,
+                rollup_preview,
+                output,
+            } => {
+                let partition_state = read_partition_state(&partition_state)?;
+                let alias_state = alias_state.as_ref().map(read_alias_state).transpose()?;
+                let label_state = label_state.as_ref().map(read_label_state).transpose()?;
+                let rollup_preview = rollup_preview
+                    .as_ref()
+                    .map(read_rollup_preview)
+                    .transpose()?;
+                write_json(
+                    &active_partition_set(
+                        &partition_state,
+                        alias_state.as_ref(),
+                        label_state.as_ref(),
+                        rollup_preview.as_ref(),
+                    ),
+                    output,
+                )?;
+            }
         },
     }
     Ok(())
@@ -849,6 +891,11 @@ fn read_label_state(path: &PathBuf) -> Result<LabelState> {
 }
 
 fn read_partition_state(path: &PathBuf) -> Result<PartitionState> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_rollup_preview(path: &PathBuf) -> Result<RollupPreview> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }
