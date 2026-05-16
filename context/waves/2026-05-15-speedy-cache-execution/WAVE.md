@@ -49,6 +49,9 @@ Before this wave can close or hand off to Arsenal, run the `.roles` review:
 Blocking findings become additional Speedy pulses. Non-blocking findings must be
 documented as deferred risks or next-wave inputs.
 
+Status: complete in `ROLES_REVIEW.md`; no blocking findings. Deferred findings
+feed the Arsenal cache-operations wave.
+
 ## Non-goals
 
 - FLETCH does not interpret NHL, Census, route, or villain-file semantics.
