@@ -304,6 +304,11 @@ verification state. FLETCH does not parse the business meaning of a partition;
 adapters decide whether IDs represent seasons, years, districts, tiles, dates,
 or any other domain concept.
 
+`fletch.rollup-preview.v1` records proposed parent/child edges from a rollup ID
+to partition rows. It reports selected partitions, cache keys, hashes, byte
+counts, and missing child partition IDs before any rollup materialization or
+activation.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.

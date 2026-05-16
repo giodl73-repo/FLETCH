@@ -5,9 +5,10 @@ use fletch_core::{
     export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
     graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
     offline_cache_report, partition_state_from_manifest, plan_cache_prune, preview_manifest_merge,
-    preview_rollback, publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
-    upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry, CacheManifest,
-    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, SourceKind,
+    preview_rollback, preview_rollup_edges, publish_report_from_manifest, summarize_cache_manifest,
+    tips_from_manifest, upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry,
+    CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState,
+    PartitionState, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -192,6 +193,21 @@ enum PartitionCommands {
         /// Optional product-neutral group id assigned to every emitted row.
         #[arg(long)]
         group_id: Option<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Preview parent/child rollup edges over partition state.
+    RollupPreview {
+        /// Path to a fletch.partition-state.v1 JSON file.
+        #[arg(long)]
+        partition_state: PathBuf,
+        /// Product-neutral rollup id.
+        #[arg(long)]
+        rollup_id: String,
+        /// Child partition id to include. Repeat for a subset; omit to include all.
+        #[arg(long = "child-partition-id")]
+        child_partition_ids: Vec<String>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -728,6 +744,18 @@ fn main() -> Result<()> {
                 let manifest = read_manifest(&manifest)?;
                 write_json(&partition_state_from_manifest(&manifest, group_id), output)?;
             }
+            PartitionCommands::RollupPreview {
+                partition_state,
+                rollup_id,
+                child_partition_ids,
+                output,
+            } => {
+                let partition_state = read_partition_state(&partition_state)?;
+                write_json(
+                    &preview_rollup_edges(&partition_state, rollup_id, &child_partition_ids),
+                    output,
+                )?;
+            }
         },
     }
     Ok(())
@@ -779,6 +807,11 @@ fn read_alias_state(path: &PathBuf) -> Result<AliasState> {
 }
 
 fn read_label_state(path: &PathBuf) -> Result<LabelState> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_partition_state(path: &PathBuf) -> Result<PartitionState> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

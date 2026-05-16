@@ -24,6 +24,7 @@ pub const FLETCH_ALIAS_SCHEMA: &str = "fletch.alias-state.v1";
 pub const FLETCH_LABEL_SCHEMA: &str = "fletch.label-state.v1";
 pub const FLETCH_ROLLBACK_PREVIEW_SCHEMA: &str = "fletch.rollback-preview.v1";
 pub const FLETCH_PARTITION_SCHEMA: &str = "fletch.partition-state.v1";
+pub const FLETCH_ROLLUP_PREVIEW_SCHEMA: &str = "fletch.rollup-preview.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -388,6 +389,29 @@ pub struct PartitionState {
     pub partition_count: usize,
     pub group_id: Option<String>,
     pub partitions: Vec<PartitionRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollupEdge {
+    pub rollup_id: String,
+    pub partition_id: String,
+    pub dataset_id: String,
+    pub cache_key: String,
+    pub sha256: String,
+    pub bytes: u64,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollupPreview {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub rollup_id: String,
+    pub edge_count: usize,
+    pub missing_count: usize,
+    pub missing_partition_ids: Vec<String>,
+    pub edges: Vec<RollupEdge>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1188,6 +1212,55 @@ pub fn partition_state_from_manifest(
         partition_count: partitions.len(),
         group_id,
         partitions,
+    }
+}
+
+pub fn preview_rollup_edges(
+    partition_state: &PartitionState,
+    rollup_id: impl Into<String>,
+    child_partition_ids: &[String],
+) -> RollupPreview {
+    let rollup_id = rollup_id.into();
+    let partition_by_id = partition_state
+        .partitions
+        .iter()
+        .map(|partition| (partition.partition_id.clone(), partition))
+        .collect::<BTreeMap<_, _>>();
+    let selected_partition_ids = if child_partition_ids.is_empty() {
+        partition_state
+            .partitions
+            .iter()
+            .map(|partition| partition.partition_id.clone())
+            .collect::<Vec<_>>()
+    } else {
+        child_partition_ids.to_vec()
+    };
+    let mut edges = Vec::new();
+    let mut missing_partition_ids = Vec::new();
+    for partition_id in selected_partition_ids {
+        let Some(partition) = partition_by_id.get(&partition_id) else {
+            missing_partition_ids.push(partition_id);
+            continue;
+        };
+        edges.push(RollupEdge {
+            rollup_id: rollup_id.clone(),
+            partition_id: partition.partition_id.clone(),
+            dataset_id: partition.dataset_id.clone(),
+            cache_key: partition.cache_key.clone(),
+            sha256: partition.sha256.clone(),
+            bytes: partition.bytes,
+            relative_path: partition.relative_path.clone(),
+        });
+    }
+    RollupPreview {
+        schema_version: FLETCH_ROLLUP_PREVIEW_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: partition_state.cache_root.clone(),
+        rollup_id,
+        edge_count: edges.len(),
+        missing_count: missing_partition_ids.len(),
+        missing_partition_ids,
+        edges,
     }
 }
 
@@ -3297,6 +3370,43 @@ mod tests {
         assert_eq!(state.partitions[0].group_id.as_deref(), Some("test:group"));
         assert_eq!(state.partitions[0].bytes, 9);
         assert!(state.partitions[0].verified);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rollup_preview_reports_edges_and_missing_partitions() {
+        let root = unique_temp_dir("rollup-preview");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"partition").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:partition:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+        let partitions = partition_state_from_manifest(&manifest, Some("test:group".to_string()));
+
+        let preview = preview_rollup_edges(
+            &partitions,
+            "test:rollup",
+            &[
+                "test:partition:001".to_string(),
+                "test:partition:missing".to_string(),
+            ],
+        );
+
+        assert_eq!(preview.schema_version, FLETCH_ROLLUP_PREVIEW_SCHEMA);
+        assert_eq!(preview.rollup_id, "test:rollup");
+        assert_eq!(preview.edge_count, 1);
+        assert_eq!(preview.missing_count, 1);
+        assert_eq!(preview.missing_partition_ids[0], "test:partition:missing");
+        assert_eq!(preview.edges[0].partition_id, "test:partition:001");
+        assert_eq!(preview.edges[0].dataset_id, "test:partition:001");
 
         let _ = std::fs::remove_dir_all(root);
     }
