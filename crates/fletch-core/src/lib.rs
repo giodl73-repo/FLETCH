@@ -55,6 +55,10 @@ pub enum FletchError {
     EmptyQuiverId,
     #[error("[CACHE] cache entry {dataset_id} has invalid sha256: {sha256}")]
     InvalidSha256 { dataset_id: String, sha256: String },
+    #[error(
+        "[CACHE] unsupported cache manifest schema {schema_version}; expected fletch.cache-manifest.v1"
+    )]
+    InvalidManifestSchema { schema_version: String },
     #[error("[FETCH] source kind {kind:?} cannot be fetched by generic execution")]
     UnsupportedSourceKind { kind: SourceKind },
     #[error("[FETCH] invalid file shaft URL/path: {source_url}")]
@@ -125,6 +129,18 @@ pub enum FletchError {
     },
     #[error("[QUIVER] failed to write quiver JSON {path}: {source}")]
     WriteQuiverJson {
+        path: String,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("[CACHE] failed to read cache manifest JSON {path}: {source}")]
+    ReadManifestJson {
+        path: String,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("[CACHE] failed to write cache manifest JSON {path}: {source}")]
+    WriteManifestJson {
         path: String,
         #[source]
         source: serde_json::Error,
@@ -1628,7 +1644,23 @@ pub fn cache_manifest(
     cache_root: impl Into<String>,
     entries: Vec<CacheEntry>,
 ) -> Result<CacheManifest, FletchError> {
-    for entry in &entries {
+    let manifest = CacheManifest {
+        schema_version: FLETCH_MANIFEST_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: cache_root.into(),
+        entries,
+    };
+    validate_cache_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+pub fn validate_cache_manifest(manifest: &CacheManifest) -> Result<(), FletchError> {
+    if manifest.schema_version != FLETCH_MANIFEST_SCHEMA {
+        return Err(FletchError::InvalidManifestSchema {
+            schema_version: manifest.schema_version.clone(),
+        });
+    }
+    for entry in &manifest.entries {
         if !entry.sha256.starts_with("sha256:") || entry.sha256.len() != 71 {
             return Err(FletchError::InvalidSha256 {
                 dataset_id: entry.dataset_id.clone(),
@@ -1636,11 +1668,47 @@ pub fn cache_manifest(
             });
         }
     }
-    Ok(CacheManifest {
-        schema_version: FLETCH_MANIFEST_SCHEMA.to_string(),
-        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
-        cache_root: cache_root.into(),
-        entries,
+    Ok(())
+}
+
+pub fn read_cache_manifest_json(path: impl AsRef<Path>) -> Result<CacheManifest, FletchError> {
+    let path = path.as_ref();
+    let file = File::open(path).map_err(|source| FletchError::ReadSource {
+        path: path.display().to_string(),
+        source,
+    })?;
+    let manifest = serde_json::from_reader::<_, CacheManifest>(file).map_err(|source| {
+        FletchError::ReadManifestJson {
+            path: path.display().to_string(),
+            source,
+        }
+    })?;
+    validate_cache_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+pub fn write_cache_manifest_json(
+    path: impl AsRef<Path>,
+    manifest: &CacheManifest,
+) -> Result<(), FletchError> {
+    let path = path.as_ref();
+    validate_cache_manifest(manifest)?;
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent).map_err(|source| FletchError::WriteCache {
+            path: parent.display().to_string(),
+            source,
+        })?;
+    }
+    let file = File::create(path).map_err(|source| FletchError::WriteCache {
+        path: path.display().to_string(),
+        source,
+    })?;
+    serde_json::to_writer_pretty(file, manifest).map_err(|source| FletchError::WriteManifestJson {
+        path: path.display().to_string(),
+        source,
     })
 }
 
@@ -4401,6 +4469,49 @@ mod tests {
             cache_manifest(".fletch/cache", vec![entry]),
             Err(FletchError::InvalidSha256 { .. })
         ));
+    }
+
+    #[test]
+    fn cache_manifest_json_helpers_round_trip_and_validate_schema() {
+        let root = unique_temp_dir("manifest-json-helpers");
+        let path = root.join("nested").join("manifest.json");
+        let manifest = cache_manifest(
+            root.join("cache").display().to_string(),
+            vec![CacheEntry {
+                dataset_id: "test:dataset".to_string(),
+                version: Some("v1".to_string()),
+                source_url: "file://source.json".to_string(),
+                cache_key:
+                    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        .to_string(),
+                relative_path: "objects/sha256/aa".to_string(),
+                sha256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    .to_string(),
+                bytes: 42,
+                fetched_at_ms: 1,
+                verified: true,
+                fetch_attempts: 1,
+                retry_count: 0,
+                last_retryable_error: None,
+            }],
+        )
+        .unwrap();
+
+        write_cache_manifest_json(&path, &manifest).unwrap();
+        let round_trip = read_cache_manifest_json(&path).unwrap();
+
+        assert_eq!(round_trip, manifest);
+
+        let invalid_path = root.join("invalid.json");
+        let mut invalid = manifest;
+        invalid.schema_version = "fletch.cache-manifest.v0".to_string();
+        std::fs::write(&invalid_path, serde_json::to_string(&invalid).unwrap()).unwrap();
+        assert!(matches!(
+            read_cache_manifest_json(&invalid_path),
+            Err(FletchError::InvalidManifestSchema { .. })
+        ));
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

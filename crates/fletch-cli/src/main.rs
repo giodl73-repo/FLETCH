@@ -10,15 +10,15 @@ use fletch_core::{
     partition_state_from_manifest, plan_cache_prune, preview_archive_expansion,
     preview_manifest_merge, preview_rollback, preview_rollup_edges, proof_document_manifest,
     publish_report_from_manifest, publisher_bundle_report, quiver_merge_ready_report,
-    slice_active_partition_set, slice_adapter_source_report, slice_archive_expansion_preview,
-    slice_cache_index_report, slice_crop_index_report, slice_local_url_map, slice_partition_state,
-    slice_proof_document_manifest, slice_quiver_merge_ready_report,
-    slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
-    tips_from_manifest, upsert_cache_manifest_entries, validate_registry, verify_cache_manifest,
-    verify_quiver_bundle, AdapterHandoffReport, AliasState, CacheEntry, CacheIndexReport,
-    CacheManifest, CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
-    LabelState, LocalUrlMap, PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary,
-    RollupPreview, SourceKind,
+    read_cache_manifest_json, slice_active_partition_set, slice_adapter_source_report,
+    slice_archive_expansion_preview, slice_cache_index_report, slice_crop_index_report,
+    slice_local_url_map, slice_partition_state, slice_proof_document_manifest,
+    slice_quiver_merge_ready_report, slice_registry_validation_report, summarize_cache_manifest,
+    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entries, validate_registry,
+    verify_cache_manifest, verify_quiver_bundle, write_cache_manifest_json, AdapterHandoffReport,
+    AliasState, CacheEntry, CacheIndexReport, CacheManifest, CropIndexReport, FetchOptions,
+    FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap, PartitionState,
+    ProofDocumentManifest, QuiverManifest, QuiverSummary, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -1305,8 +1305,7 @@ fn parse_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
 }
 
 fn read_manifest(path: &PathBuf) -> Result<CacheManifest> {
-    let json = fs::read_to_string(path)?;
-    Ok(serde_json::from_str(&json)?)
+    Ok(read_cache_manifest_json(path)?)
 }
 
 fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
@@ -1393,7 +1392,12 @@ fn write_fetch_manifest(
     } else {
         cache_manifest(cache_root, vec![entry])?
     };
-    write_json(&manifest, output)
+    if let Some(output) = output {
+        write_cache_manifest_json(output, &manifest)?;
+        Ok(())
+    } else {
+        write_json(&manifest, None)
+    }
 }
 
 fn write_json<T: serde::Serialize + ?Sized>(value: &T, output: Option<PathBuf>) -> Result<()> {

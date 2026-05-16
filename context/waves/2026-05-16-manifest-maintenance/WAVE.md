@@ -18,7 +18,7 @@ ledgers without reimplementing FLETCH merge rules.
 | Pulse | Title | Status | Outcome |
 |------:|-------|--------|---------|
 | 01 | Batch manifest upsert | done | Added `upsert_cache_manifest_entries` for validated multi-entry manifest merges. |
-| 02 | Manifest file helpers | planned | Evaluate reusable read/write helpers without turning FLETCH into a manifest daemon. |
+| 02 | Manifest file helpers | done | Added reusable cache manifest JSON read/write helpers without turning FLETCH into a manifest daemon. |
 | 03 | Consumer smoke docs | planned | Document manifest-first consumer patterns with cache index/report handoffs. |
 
 ## Validation expectations

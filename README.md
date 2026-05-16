@@ -122,7 +122,9 @@ When `--output` points to an existing manifest, fetch commands upsert the new
 entry by cache key and preserve the rest of the ledger instead of replacing it
 with a single-entry manifest. Consumers that fetch expanded batches through
 `fletch-core` can use `upsert_cache_manifest_entries` to apply the same
-cache-key merge rule to multiple fetched entries at once.
+cache-key merge rule to multiple fetched entries at once. `read_cache_manifest_json`
+and `write_cache_manifest_json` provide reusable manifest file persistence with
+schema and entry validation; they do not inspect cached bytes or activate data.
 Fetching is acquisition, not activation: it verifies and records a candidate
 object, but it does not merge that object into a product's active data view. In
 the target model, `pull` is reserved for future fetch-plus-merge semantics
