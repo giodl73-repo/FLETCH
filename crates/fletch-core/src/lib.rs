@@ -2768,7 +2768,7 @@ pub fn fetch_batch_to_cache(
     plans: &[FetchPlan],
     options: FetchOptions,
 ) -> Result<BatchFetchOutcome, FletchError> {
-    let outcome = fetch_batch_to_cache_best_effort(plans, options)?;
+    let outcome = fetch_batch_to_cache_best_effort_with_delay(plans, options, 0)?;
     if let Some(failure) = outcome.failures.first() {
         return Err(FletchError::InvalidBatchOptions {
             detail: format!(
@@ -2784,6 +2784,14 @@ pub fn fetch_batch_to_cache_best_effort(
     plans: &[FetchPlan],
     options: FetchOptions,
 ) -> Result<BatchFetchOutcome, FletchError> {
+    fetch_batch_to_cache_best_effort_with_delay(plans, options, 0)
+}
+
+pub fn fetch_batch_to_cache_best_effort_with_delay(
+    plans: &[FetchPlan],
+    options: FetchOptions,
+    delay_between_items_ms: u64,
+) -> Result<BatchFetchOutcome, FletchError> {
     if options.expected_sha256.is_some() {
         return Err(FletchError::InvalidBatchOptions {
             detail:
@@ -2796,7 +2804,7 @@ pub fn fetch_batch_to_cache_best_effort(
     let mut fetched_count = 0usize;
     let mut cache_hit_count = 0usize;
     let mut failures = Vec::new();
-    for plan in plans {
+    for (index, plan) in plans.iter().enumerate() {
         match fetch_to_cache(plan, options.clone()) {
             Ok(outcome) => {
                 if outcome.attempt_status.attempts == 0 {
@@ -2811,6 +2819,9 @@ pub fn fetch_batch_to_cache_best_effort(
                 source_url: plan.source.url.clone(),
                 error: error.to_string(),
             }),
+        }
+        if delay_between_items_ms > 0 && index + 1 < plans.len() {
+            std::thread::sleep(Duration::from_millis(delay_between_items_ms));
         }
     }
 
@@ -4509,6 +4520,63 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(error, FletchError::InvalidBatchOptions { .. }));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn batch_fetch_best_effort_reports_failures_without_dropping_successes() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+
+        let root = unique_temp_dir("batch-http-best-effort");
+        let cache_root = root.join("cache");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buffer = [0u8; 2048];
+                let bytes = stream.read(&mut buffer).unwrap();
+                let request = String::from_utf8_lossy(&buffer[..bytes]);
+                if request.contains("GET /ok ") {
+                    let body = br#"{"ok":true}"#;
+                    write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+                        body.len()
+                    )
+                    .unwrap();
+                    stream.write_all(body).unwrap();
+                } else {
+                    let body = br#"missing"#;
+                    write!(
+                        stream,
+                        "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n",
+                        body.len()
+                    )
+                    .unwrap();
+                    stream.write_all(body).unwrap();
+                }
+            }
+        });
+        let plans = vec![
+            fetch_plan("test:batch:ok", format!("{base_url}/ok")).unwrap(),
+            fetch_plan("test:batch:missing", format!("{base_url}/missing")).unwrap(),
+        ];
+
+        let outcome = fetch_batch_to_cache_best_effort_with_delay(
+            &plans,
+            FetchOptions::new(&cache_root).with_timeout_ms(1_000),
+            1,
+        )
+        .unwrap();
+        server.join().unwrap();
+
+        assert_eq!(outcome.outcomes.len(), 1);
+        assert_eq!(outcome.fetched_count, 1);
+        assert_eq!(outcome.failure_count, 1);
+        assert_eq!(outcome.failures[0].dataset_id, "test:batch:missing");
 
         let _ = std::fs::remove_dir_all(root);
     }

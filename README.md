@@ -66,9 +66,10 @@ Downstream migration status:
 - BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
   validation.
-- ICELINES: roster, MoneyPuck, paged NHL stats report, and Gamecenter batch
-  acquisition moved to FLETCH, with `icelines fetch fletch-sources --gate`
-  documenting source handoff and `icelines fetch fletch-partitions --gate` mapping
+- ICELINES: roster, MoneyPuck, paged NHL stats report, Gamecenter batch, and
+  player landing batch acquisition moved to FLETCH, with
+  `icelines fetch fletch-sources --gate` documenting source handoff and
+  `icelines fetch fletch-partitions --gate` mapping
   leaders/player/compare, goalies, roster bios, MoneyPuck, career, and windowed
   game-line query surfaces to partition/rollup IDs.
   `icelines fetch fletch-quivers --gate` groups those partitions into query
