@@ -7,9 +7,9 @@ use fletch_core::{
     label_state_from_aliases, offline_cache_report, partition_invalidation_report,
     partition_state_from_manifest, plan_cache_prune, preview_manifest_merge, preview_rollback,
     preview_rollup_edges, publish_report_from_manifest, summarize_cache_manifest, summarize_quiver,
-    tips_from_manifest, upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry,
-    CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState,
-    PartitionState, QuiverManifest, RollupPreview, SourceKind,
+    tips_from_manifest, upsert_cache_manifest_entry, verify_cache_manifest, verify_quiver_bundle,
+    AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
+    FreshnessPolicy, LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -365,6 +365,15 @@ enum QuiverCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Verify bundled quiver members without importing them.
+    Verify {
+        /// Directory containing quiver.json and bundled objects.
+        #[arg(long)]
+        quiver_dir: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -693,6 +702,9 @@ fn main() -> Result<()> {
             QuiverCommands::Summary { quiver, output } => {
                 let quiver = read_quiver_manifest(&quiver)?;
                 write_json(&summarize_quiver(&quiver), output)?;
+            }
+            QuiverCommands::Verify { quiver_dir, output } => {
+                write_json(&verify_quiver_bundle(quiver_dir)?, output)?;
             }
         },
         Commands::Graph { command } => match command {

@@ -234,6 +234,11 @@ from a temporary stage so failed imports do not look activated or complete.
 verified member count, and unverified member count from a `fletch.quiver.v1`
 manifest without importing, copying, or activating bundle contents.
 
+`fletch.quiver-verify.v1` reports per-member bundle verification before import.
+It treats the quiver directory as the cache root for bundled objects and reports
+verified, missing, and hash-mismatch members as data instead of promoting or
+activating any content.
+
 ## Merge, labels, and rollback
 
 FLETCH merge is Git-inspired but not text merging. It promotes verified

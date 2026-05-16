@@ -12,6 +12,7 @@ pub const FLETCH_PLAN_SCHEMA: &str = "fletch.plan.v1";
 pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_QUIVER_SUMMARY_SCHEMA: &str = "fletch.quiver-summary.v1";
+pub const FLETCH_QUIVER_VERIFY_SCHEMA: &str = "fletch.quiver-verify.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
@@ -484,6 +485,19 @@ pub struct QuiverSummary {
     pub byte_count: u64,
     pub verified_count: usize,
     pub unverified_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuiverVerifyReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub quiver_id: String,
+    pub quiver_root: String,
+    pub entry_count: usize,
+    pub verified_count: usize,
+    pub missing_count: usize,
+    pub hash_mismatch_count: usize,
+    pub entries: Vec<CacheStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1614,6 +1628,35 @@ pub fn summarize_quiver(quiver: &QuiverManifest) -> QuiverSummary {
         verified_count,
         unverified_count: quiver.entries.len().saturating_sub(verified_count),
     }
+}
+
+pub fn verify_quiver_bundle(
+    quiver_root: impl AsRef<Path>,
+) -> Result<QuiverVerifyReport, FletchError> {
+    let quiver_root = quiver_root.as_ref();
+    let quiver = read_quiver_manifest(&quiver_root.join("quiver.json"))?;
+    let manifest = cache_manifest(quiver_root.display().to_string(), quiver.entries.clone())?;
+    let entries = inspect_cache_manifest(&manifest, &FreshnessPolicy::Immutable)?;
+    Ok(QuiverVerifyReport {
+        schema_version: FLETCH_QUIVER_VERIFY_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        quiver_id: quiver.quiver_id,
+        quiver_root: quiver_root.display().to_string(),
+        entry_count: entries.len(),
+        verified_count: entries
+            .iter()
+            .filter(|entry| entry.object_status == CacheObjectStatus::Verified)
+            .count(),
+        missing_count: entries
+            .iter()
+            .filter(|entry| entry.object_status == CacheObjectStatus::Missing)
+            .count(),
+        hash_mismatch_count: entries
+            .iter()
+            .filter(|entry| entry.object_status == CacheObjectStatus::HashMismatch)
+            .count(),
+        entries,
+    })
 }
 
 pub fn graph_from_manifest(manifest: &CacheManifest) -> FletchGraph {
@@ -3752,6 +3795,38 @@ mod tests {
         assert_eq!(summary.byte_count, 12);
         assert_eq!(summary.verified_count, 1);
         assert_eq!(summary.unverified_count, 1);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn quiver_verify_report_counts_missing_members() {
+        let root = unique_temp_dir("quiver-verify");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        let quiver_root = root.join("quiver");
+        std::fs::write(&source, b"quiver").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:quiver:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+        let exported = export_quiver(&manifest, "test:quiver", &quiver_root).unwrap();
+        let bundled_path = cache_path(&quiver_root, &exported.manifest.entries[0].relative_path);
+        std::fs::remove_file(bundled_path).unwrap();
+
+        let report = verify_quiver_bundle(&quiver_root).unwrap();
+
+        assert_eq!(report.schema_version, FLETCH_QUIVER_VERIFY_SCHEMA);
+        assert_eq!(report.quiver_id, "test:quiver");
+        assert_eq!(report.entry_count, 1);
+        assert_eq!(report.verified_count, 0);
+        assert_eq!(report.missing_count, 1);
+        assert_eq!(report.entries[0].object_status, CacheObjectStatus::Missing);
 
         let _ = std::fs::remove_dir_all(root);
     }
