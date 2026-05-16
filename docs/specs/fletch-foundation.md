@@ -117,6 +117,11 @@ records fletch ID, source kind, URL, header count, and whether the source is
 adapter-owned. The report is evidence of adapter output; FLETCH still treats
 adapter URLs as opaque handles and does not interpret product semantics.
 
+`fletch.registry-validation.v1` reports registry structure issues as data:
+invalid schema version, duplicate fletch IDs, missing shafts, source counts, and
+adapter-owned source counts. Validation does not fetch, expand, or interpret
+adapter-owned sources.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:

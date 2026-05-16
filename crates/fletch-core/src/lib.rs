@@ -17,6 +17,7 @@ pub const FLETCH_QUIVER_MERGE_READY_SCHEMA: &str = "fletch.quiver-merge-ready.v1
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_ADAPTER_SOURCES_SCHEMA: &str = "fletch.adapter-sources.v1";
+pub const FLETCH_REGISTRY_VALIDATION_SCHEMA: &str = "fletch.registry-validation.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
@@ -661,6 +662,27 @@ pub struct AdapterSourceReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryValidationFinding {
+    pub fletch_id: Option<String>,
+    pub severity: String,
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryValidationReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub registry_id: String,
+    pub valid: bool,
+    pub fletch_count: usize,
+    pub source_count: usize,
+    pub adapter_source_count: usize,
+    pub finding_count: usize,
+    pub findings: Vec<RegistryValidationFinding>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlightStepAction {
     WouldFetch,
@@ -779,6 +801,54 @@ pub fn adapter_sources_from_registry(registry: &FletchRegistry) -> AdapterSource
         source_count: sources.len(),
         adapter_source_count: sources.iter().filter(|source| source.adapter_owned).count(),
         sources,
+    }
+}
+
+pub fn validate_registry(registry: &FletchRegistry) -> RegistryValidationReport {
+    let source_report = adapter_sources_from_registry(registry);
+    let mut findings = Vec::new();
+    if registry.schema_version != FLETCH_REGISTRY_SCHEMA {
+        findings.push(RegistryValidationFinding {
+            fletch_id: None,
+            severity: "error".to_string(),
+            code: "invalid-schema".to_string(),
+            message: format!(
+                "registry schema is {}; expected {}",
+                registry.schema_version, FLETCH_REGISTRY_SCHEMA
+            ),
+        });
+    }
+
+    let mut seen = BTreeSet::new();
+    for fletch in &registry.fletches {
+        if !seen.insert(fletch.id.clone()) {
+            findings.push(RegistryValidationFinding {
+                fletch_id: Some(fletch.id.clone()),
+                severity: "error".to_string(),
+                code: "duplicate-fletch-id".to_string(),
+                message: "fletch id appears more than once".to_string(),
+            });
+        }
+        if fletch.shafts.is_empty() {
+            findings.push(RegistryValidationFinding {
+                fletch_id: Some(fletch.id.clone()),
+                severity: "error".to_string(),
+                code: "missing-shaft".to_string(),
+                message: "fletch has no declared shafts".to_string(),
+            });
+        }
+    }
+
+    RegistryValidationReport {
+        schema_version: FLETCH_REGISTRY_VALIDATION_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        registry_id: registry.registry_id.clone(),
+        valid: findings.is_empty(),
+        fletch_count: registry.fletches.len(),
+        source_count: source_report.source_count,
+        adapter_source_count: source_report.adapter_source_count,
+        finding_count: findings.len(),
+        findings,
     }
 }
 
@@ -4088,6 +4158,55 @@ mod tests {
         assert_eq!(report.adapter_source_count, 1);
         assert!(report.sources[0].adapter_owned);
         assert_eq!(report.sources[1].header_count, 1);
+    }
+
+    #[test]
+    fn validate_registry_reports_duplicate_ids_and_missing_shafts() {
+        let registry = FletchRegistry {
+            schema_version: FLETCH_REGISTRY_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            registry_id: "test:registry".to_string(),
+            fletches: vec![
+                FletchDefinition {
+                    id: "test:fletch".to_string(),
+                    node_kind: GraphNodeKind::Fletch,
+                    shafts: Vec::new(),
+                    edges: Vec::new(),
+                    format: None,
+                    tags: Vec::new(),
+                    metadata: BTreeMap::new(),
+                },
+                FletchDefinition {
+                    id: "test:fletch".to_string(),
+                    node_kind: GraphNodeKind::Fletch,
+                    shafts: vec![SourceSpec {
+                        kind: SourceKind::Adapter,
+                        url: "adapter://test/source".to_string(),
+                        headers: BTreeMap::new(),
+                    }],
+                    edges: Vec::new(),
+                    format: None,
+                    tags: Vec::new(),
+                    metadata: BTreeMap::new(),
+                },
+            ],
+        };
+
+        let report = validate_registry(&registry);
+
+        assert_eq!(report.schema_version, FLETCH_REGISTRY_VALIDATION_SCHEMA);
+        assert!(!report.valid);
+        assert_eq!(report.fletch_count, 2);
+        assert_eq!(report.adapter_source_count, 1);
+        assert_eq!(report.finding_count, 2);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "missing-shaft"));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "duplicate-fletch-id"));
     }
 
     #[test]

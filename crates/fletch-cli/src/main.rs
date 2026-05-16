@@ -8,9 +8,9 @@ use fletch_core::{
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_manifest_merge, preview_rollback, preview_rollup_edges, publish_report_from_manifest,
     quiver_merge_ready_report, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
-    upsert_cache_manifest_entry, verify_cache_manifest, verify_quiver_bundle, AliasState,
-    CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
-    LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
+    upsert_cache_manifest_entry, validate_registry, verify_cache_manifest, verify_quiver_bundle,
+    AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
+    FreshnessPolicy, LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -443,6 +443,15 @@ enum RegistryCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Validate registry structure and adapter-source declarations.
+    Validate {
+        /// Path to a fletch.registry.v1 JSON file.
+        #[arg(long)]
+        file: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -772,6 +781,10 @@ fn main() -> Result<()> {
             RegistryCommands::AdapterSources { file, output } => {
                 let registry = read_registry(&file)?;
                 write_json(&adapter_sources_from_registry(&registry), output)?;
+            }
+            RegistryCommands::Validate { file, output } => {
+                let registry = read_registry(&file)?;
+                write_json(&validate_registry(&registry), output)?;
             }
         },
         Commands::Tip { command } => match command {
