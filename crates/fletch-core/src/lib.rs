@@ -18,6 +18,7 @@ pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_ADAPTER_SOURCES_SCHEMA: &str = "fletch.adapter-sources.v1";
 pub const FLETCH_REGISTRY_VALIDATION_SCHEMA: &str = "fletch.registry-validation.v1";
+pub const FLETCH_ARCHIVE_EXPANSION_SCHEMA: &str = "fletch.archive-expansion-preview.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
@@ -683,6 +684,24 @@ pub struct RegistryValidationReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArchiveExpansionChild {
+    pub fletch_id: String,
+    pub present_in_registry: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArchiveExpansionPreview {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub registry_id: String,
+    pub archive_fletch_id: String,
+    pub source_count: usize,
+    pub child_count: usize,
+    pub missing_child_count: usize,
+    pub children: Vec<ArchiveExpansionChild>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlightStepAction {
     WouldFetch,
@@ -849,6 +868,48 @@ pub fn validate_registry(registry: &FletchRegistry) -> RegistryValidationReport 
         adapter_source_count: source_report.adapter_source_count,
         finding_count: findings.len(),
         findings,
+    }
+}
+
+pub fn preview_archive_expansion(
+    registry: &FletchRegistry,
+    archive_fletch_id: impl Into<String>,
+) -> ArchiveExpansionPreview {
+    let archive_fletch_id = archive_fletch_id.into();
+    let known_ids = registry
+        .fletches
+        .iter()
+        .map(|fletch| fletch.id.clone())
+        .collect::<BTreeSet<_>>();
+    let archive = registry
+        .fletches
+        .iter()
+        .find(|fletch| fletch.id == archive_fletch_id);
+    let children = archive
+        .into_iter()
+        .flat_map(|fletch| {
+            fletch
+                .edges
+                .iter()
+                .filter(|edge| edge.kind == GraphEdgeKind::ExpandsTo)
+                .map(|edge| ArchiveExpansionChild {
+                    fletch_id: edge.to.clone(),
+                    present_in_registry: known_ids.contains(&edge.to),
+                })
+        })
+        .collect::<Vec<_>>();
+    ArchiveExpansionPreview {
+        schema_version: FLETCH_ARCHIVE_EXPANSION_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        registry_id: registry.registry_id.clone(),
+        archive_fletch_id,
+        source_count: archive.map_or(0, |fletch| fletch.shafts.len()),
+        child_count: children.len(),
+        missing_child_count: children
+            .iter()
+            .filter(|child| !child.present_in_registry)
+            .count(),
+        children,
     }
 }
 
@@ -4207,6 +4268,60 @@ mod tests {
             .findings
             .iter()
             .any(|finding| finding.code == "duplicate-fletch-id"));
+    }
+
+    #[test]
+    fn archive_expansion_preview_reports_declared_children() {
+        let registry = fletch_registry(
+            "test:registry",
+            vec![
+                FletchDefinition {
+                    id: "test:archive".to_string(),
+                    node_kind: GraphNodeKind::Fletch,
+                    shafts: vec![SourceSpec {
+                        kind: SourceKind::Adapter,
+                        url: "adapter://test/archive".to_string(),
+                        headers: BTreeMap::new(),
+                    }],
+                    edges: vec![
+                        RegistryEdge {
+                            to: "test:child".to_string(),
+                            kind: GraphEdgeKind::ExpandsTo,
+                            label: None,
+                            metadata: BTreeMap::new(),
+                        },
+                        RegistryEdge {
+                            to: "test:missing".to_string(),
+                            kind: GraphEdgeKind::ExpandsTo,
+                            label: None,
+                            metadata: BTreeMap::new(),
+                        },
+                    ],
+                    format: None,
+                    tags: Vec::new(),
+                    metadata: BTreeMap::new(),
+                },
+                FletchDefinition {
+                    id: "test:child".to_string(),
+                    node_kind: GraphNodeKind::Fletch,
+                    shafts: Vec::new(),
+                    edges: Vec::new(),
+                    format: None,
+                    tags: Vec::new(),
+                    metadata: BTreeMap::new(),
+                },
+            ],
+        );
+
+        let preview = preview_archive_expansion(&registry, "test:archive");
+
+        assert_eq!(preview.schema_version, FLETCH_ARCHIVE_EXPANSION_SCHEMA);
+        assert_eq!(preview.archive_fletch_id, "test:archive");
+        assert_eq!(preview.source_count, 1);
+        assert_eq!(preview.child_count, 2);
+        assert_eq!(preview.missing_child_count, 1);
+        assert!(preview.children[0].present_in_registry);
+        assert!(!preview.children[1].present_in_registry);
     }
 
     #[test]

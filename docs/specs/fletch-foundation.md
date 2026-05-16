@@ -122,6 +122,11 @@ invalid schema version, duplicate fletch IDs, missing shafts, source counts, and
 adapter-owned source counts. Validation does not fetch, expand, or interpret
 adapter-owned sources.
 
+`fletch.archive-expansion-preview.v1` reads registry `expands-to` edges for an
+archive/source fletch and reports the child fletches it would produce. It does
+not extract archive contents; adapters own archive parsing and product-specific
+child discovery.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:

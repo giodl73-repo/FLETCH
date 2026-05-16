@@ -6,11 +6,12 @@ use fletch_core::{
     fetch_to_cache, graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
     inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
-    preview_manifest_merge, preview_rollback, preview_rollup_edges, publish_report_from_manifest,
-    quiver_merge_ready_report, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
-    upsert_cache_manifest_entry, validate_registry, verify_cache_manifest, verify_quiver_bundle,
-    AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
-    FreshnessPolicy, LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
+    preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
+    publish_report_from_manifest, quiver_merge_ready_report, summarize_cache_manifest,
+    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry, validate_registry,
+    verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry, CacheManifest,
+    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
+    QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -452,6 +453,18 @@ enum RegistryCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Preview archive expansion edges without extracting archive contents.
+    ArchivePreview {
+        /// Path to a fletch.registry.v1 JSON file.
+        #[arg(long)]
+        file: PathBuf,
+        /// Fletch id for the archive/source that expands to children.
+        #[arg(long)]
+        archive_fletch_id: String,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -785,6 +798,17 @@ fn main() -> Result<()> {
             RegistryCommands::Validate { file, output } => {
                 let registry = read_registry(&file)?;
                 write_json(&validate_registry(&registry), output)?;
+            }
+            RegistryCommands::ArchivePreview {
+                file,
+                archive_fletch_id,
+                output,
+            } => {
+                let registry = read_registry(&file)?;
+                write_json(
+                    &preview_archive_expansion(&registry, archive_fletch_id),
+                    output,
+                )?;
             }
         },
         Commands::Tip { command } => match command {
