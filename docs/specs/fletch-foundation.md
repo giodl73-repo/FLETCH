@@ -131,6 +131,9 @@ child discovery.
 downstream tooling: validation status, source counts, adapter source counts,
 graph size, and flight step counts. It is a compact handoff report; detailed
 registry, graph, and flight contracts remain the source of truth.
+Large adapter reports can be bounded without mutating registries:
+adapter-source rows support `--adapter-owned`, validation findings support
+`--severity`, and archive-preview children support `--offset`/`--limit`.
 
 `fletch.crop-index.v1` emits CROP-indexable rows over cache status, graph nodes,
 graph edges, and tips. Each row records its source schema so generated indexes
@@ -152,6 +155,11 @@ be bounded with `--offset` and `--limit`.
 CROP row counts, PROOF document counts, local URL counts, and optional quiver or
 adapter handoff counts. It is a compact index of publishable views, not a
 replacement for the underlying contracts.
+
+Large partition and quiver reports expose the same read-only slicing pattern:
+partition state and active partition sets support `--offset`/`--limit`, active
+sets can filter by `--active`, and quiver merge-ready reports can filter by
+candidate `--status`.
 
 ## Data format model
 

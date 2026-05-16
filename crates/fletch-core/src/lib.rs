@@ -962,6 +962,70 @@ pub fn validate_registry(registry: &FletchRegistry) -> RegistryValidationReport 
     }
 }
 
+pub fn slice_adapter_source_report(
+    report: &AdapterSourceReport,
+    adapter_owned: Option<bool>,
+    offset: usize,
+    limit: Option<usize>,
+) -> AdapterSourceReport {
+    let sources = report
+        .sources
+        .iter()
+        .filter(|source| match adapter_owned {
+            Some(adapter_owned) => source.adapter_owned == adapter_owned,
+            None => true,
+        })
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    let fletch_count = sources
+        .iter()
+        .map(|source| source.fletch_id.clone())
+        .collect::<BTreeSet<_>>()
+        .len();
+    let adapter_source_count = sources.iter().filter(|source| source.adapter_owned).count();
+    AdapterSourceReport {
+        schema_version: report.schema_version.clone(),
+        generated_by: report.generated_by.clone(),
+        registry_id: report.registry_id.clone(),
+        fletch_count,
+        source_count: sources.len(),
+        adapter_source_count,
+        sources,
+    }
+}
+
+pub fn slice_registry_validation_report(
+    report: &RegistryValidationReport,
+    severity: Option<&str>,
+    offset: usize,
+    limit: Option<usize>,
+) -> RegistryValidationReport {
+    let findings = report
+        .findings
+        .iter()
+        .filter(|finding| match severity {
+            Some(severity) => finding.severity == severity,
+            None => true,
+        })
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    RegistryValidationReport {
+        schema_version: report.schema_version.clone(),
+        generated_by: report.generated_by.clone(),
+        registry_id: report.registry_id.clone(),
+        valid: report.valid,
+        fletch_count: report.fletch_count,
+        source_count: report.source_count,
+        adapter_source_count: report.adapter_source_count,
+        finding_count: findings.len(),
+        findings,
+    }
+}
+
 pub fn preview_archive_expansion(
     registry: &FletchRegistry,
     archive_fletch_id: impl Into<String>,
@@ -1000,6 +1064,34 @@ pub fn preview_archive_expansion(
             .iter()
             .filter(|child| !child.present_in_registry)
             .count(),
+        children,
+    }
+}
+
+pub fn slice_archive_expansion_preview(
+    preview: &ArchiveExpansionPreview,
+    offset: usize,
+    limit: Option<usize>,
+) -> ArchiveExpansionPreview {
+    let children = preview
+        .children
+        .iter()
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    let missing_child_count = children
+        .iter()
+        .filter(|child| !child.present_in_registry)
+        .count();
+    ArchiveExpansionPreview {
+        schema_version: preview.schema_version.clone(),
+        generated_by: preview.generated_by.clone(),
+        registry_id: preview.registry_id.clone(),
+        archive_fletch_id: preview.archive_fletch_id.clone(),
+        source_count: preview.source_count,
+        child_count: children.len(),
+        missing_child_count,
         children,
     }
 }
@@ -1826,6 +1918,28 @@ pub fn partition_state_from_manifest(
     }
 }
 
+pub fn slice_partition_state(
+    state: &PartitionState,
+    offset: usize,
+    limit: Option<usize>,
+) -> PartitionState {
+    let partitions = state
+        .partitions
+        .iter()
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    PartitionState {
+        schema_version: state.schema_version.clone(),
+        generated_by: state.generated_by.clone(),
+        cache_root: state.cache_root.clone(),
+        partition_count: partitions.len(),
+        group_id: state.group_id.clone(),
+        partitions,
+    }
+}
+
 pub fn preview_rollup_edges(
     partition_state: &PartitionState,
     rollup_id: impl Into<String>,
@@ -2028,6 +2142,37 @@ pub fn active_partition_set(
         schema_version: FLETCH_ACTIVE_PARTITION_SCHEMA.to_string(),
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         cache_root: partition_state.cache_root.clone(),
+        active_count,
+        inactive_count: partitions.len().saturating_sub(active_count),
+        partitions,
+    }
+}
+
+pub fn slice_active_partition_set(
+    active_set: &ActivePartitionSet,
+    active: Option<bool>,
+    offset: usize,
+    limit: Option<usize>,
+) -> ActivePartitionSet {
+    let partitions = active_set
+        .partitions
+        .iter()
+        .filter(|partition| match active {
+            Some(active) => partition.active == active,
+            None => true,
+        })
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    let active_count = partitions
+        .iter()
+        .filter(|partition| partition.active)
+        .count();
+    ActivePartitionSet {
+        schema_version: active_set.schema_version.clone(),
+        generated_by: active_set.generated_by.clone(),
+        cache_root: active_set.cache_root.clone(),
         active_count,
         inactive_count: partitions.len().saturating_sub(active_count),
         partitions,
@@ -2299,6 +2444,38 @@ pub fn quiver_merge_ready_report(
         schema_version: FLETCH_QUIVER_MERGE_READY_SCHEMA.to_string(),
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         quiver_id: quiver.quiver_id.clone(),
+        candidate_count: candidates.len(),
+        ready_count,
+        blocked_count: candidates.len().saturating_sub(ready_count),
+        candidates,
+    }
+}
+
+pub fn slice_quiver_merge_ready_report(
+    report: &QuiverMergeReadyReport,
+    status: Option<&str>,
+    offset: usize,
+    limit: Option<usize>,
+) -> QuiverMergeReadyReport {
+    let candidates = report
+        .candidates
+        .iter()
+        .filter(|candidate| match status {
+            Some(status) => candidate.status == status,
+            None => true,
+        })
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    let ready_count = candidates
+        .iter()
+        .filter(|candidate| candidate.verified)
+        .count();
+    QuiverMergeReadyReport {
+        schema_version: report.schema_version.clone(),
+        generated_by: report.generated_by.clone(),
+        quiver_id: report.quiver_id.clone(),
         candidate_count: candidates.len(),
         ready_count,
         blocked_count: candidates.len().saturating_sub(ready_count),
@@ -5910,6 +6087,207 @@ mod tests {
         let url_slice = slice_local_url_map(&urls, 2, Some(1));
         assert_eq!(url_slice.url_count, 1);
         assert_eq!(url_slice.urls[0].document_id, "tip:tip-2");
+    }
+
+    #[test]
+    fn report_slice_helpers_filter_registry_partition_and_quiver_rows() {
+        let adapter_sources = AdapterSourceReport {
+            schema_version: FLETCH_ADAPTER_SOURCES_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            registry_id: "registry".to_string(),
+            fletch_count: 3,
+            source_count: 3,
+            adapter_source_count: 2,
+            sources: vec![
+                AdapterSourceRecord {
+                    fletch_id: "http".to_string(),
+                    source_kind: SourceKind::Http,
+                    url: "https://example.test/a".to_string(),
+                    header_count: 0,
+                    adapter_owned: false,
+                },
+                AdapterSourceRecord {
+                    fletch_id: "adapter-1".to_string(),
+                    source_kind: SourceKind::Adapter,
+                    url: "adapter://one".to_string(),
+                    header_count: 0,
+                    adapter_owned: true,
+                },
+                AdapterSourceRecord {
+                    fletch_id: "adapter-2".to_string(),
+                    source_kind: SourceKind::Adapter,
+                    url: "adapter://two".to_string(),
+                    header_count: 0,
+                    adapter_owned: true,
+                },
+            ],
+        };
+        let adapter_slice = slice_adapter_source_report(&adapter_sources, Some(true), 1, Some(1));
+        assert_eq!(adapter_slice.source_count, 1);
+        assert_eq!(adapter_slice.adapter_source_count, 1);
+        assert_eq!(adapter_slice.sources[0].fletch_id, "adapter-2");
+
+        let validation = RegistryValidationReport {
+            schema_version: FLETCH_REGISTRY_VALIDATION_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            registry_id: "registry".to_string(),
+            valid: false,
+            fletch_count: 1,
+            source_count: 1,
+            adapter_source_count: 0,
+            finding_count: 2,
+            findings: vec![
+                RegistryValidationFinding {
+                    fletch_id: Some("one".to_string()),
+                    severity: "warning".to_string(),
+                    code: "warn".to_string(),
+                    message: "warning".to_string(),
+                },
+                RegistryValidationFinding {
+                    fletch_id: Some("two".to_string()),
+                    severity: "error".to_string(),
+                    code: "err".to_string(),
+                    message: "error".to_string(),
+                },
+            ],
+        };
+        let validation_slice =
+            slice_registry_validation_report(&validation, Some("error"), 0, Some(1));
+        assert!(!validation_slice.valid);
+        assert_eq!(validation_slice.finding_count, 1);
+        assert_eq!(validation_slice.findings[0].code, "err");
+
+        let archive = ArchiveExpansionPreview {
+            schema_version: FLETCH_ARCHIVE_EXPANSION_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            registry_id: "registry".to_string(),
+            archive_fletch_id: "archive".to_string(),
+            source_count: 1,
+            child_count: 2,
+            missing_child_count: 1,
+            children: vec![
+                ArchiveExpansionChild {
+                    fletch_id: "present".to_string(),
+                    present_in_registry: true,
+                },
+                ArchiveExpansionChild {
+                    fletch_id: "missing".to_string(),
+                    present_in_registry: false,
+                },
+            ],
+        };
+        let archive_slice = slice_archive_expansion_preview(&archive, 1, Some(1));
+        assert_eq!(archive_slice.child_count, 1);
+        assert_eq!(archive_slice.missing_child_count, 1);
+
+        let partitions = PartitionState {
+            schema_version: FLETCH_PARTITION_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            partition_count: 2,
+            group_id: Some("group".to_string()),
+            partitions: vec![
+                PartitionRecord {
+                    partition_id: "p1".to_string(),
+                    dataset_id: "p1".to_string(),
+                    group_id: Some("group".to_string()),
+                    version: None,
+                    source_url: "file://p1".to_string(),
+                    cache_key: "k1".to_string(),
+                    sha256: "s1".to_string(),
+                    bytes: 1,
+                    relative_path: "one".to_string(),
+                    verified: true,
+                },
+                PartitionRecord {
+                    partition_id: "p2".to_string(),
+                    dataset_id: "p2".to_string(),
+                    group_id: Some("group".to_string()),
+                    version: None,
+                    source_url: "file://p2".to_string(),
+                    cache_key: "k2".to_string(),
+                    sha256: "s2".to_string(),
+                    bytes: 2,
+                    relative_path: "two".to_string(),
+                    verified: true,
+                },
+            ],
+        };
+        let partition_slice = slice_partition_state(&partitions, 1, Some(1));
+        assert_eq!(partition_slice.partition_count, 1);
+        assert_eq!(partition_slice.partitions[0].partition_id, "p2");
+
+        let active_set = ActivePartitionSet {
+            schema_version: FLETCH_ACTIVE_PARTITION_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            active_count: 1,
+            inactive_count: 1,
+            partitions: vec![
+                ActivePartitionEntry {
+                    partition_id: "p1".to_string(),
+                    dataset_id: "p1".to_string(),
+                    cache_key: "k1".to_string(),
+                    sha256: "s1".to_string(),
+                    relative_path: "one".to_string(),
+                    verified: true,
+                    active: true,
+                    alias_ids: vec!["alias".to_string()],
+                    label_ids: Vec::new(),
+                    rollup_ids: Vec::new(),
+                },
+                ActivePartitionEntry {
+                    partition_id: "p2".to_string(),
+                    dataset_id: "p2".to_string(),
+                    cache_key: "k2".to_string(),
+                    sha256: "s2".to_string(),
+                    relative_path: "two".to_string(),
+                    verified: true,
+                    active: false,
+                    alias_ids: Vec::new(),
+                    label_ids: Vec::new(),
+                    rollup_ids: Vec::new(),
+                },
+            ],
+        };
+        let active_slice = slice_active_partition_set(&active_set, Some(false), 0, Some(1));
+        assert_eq!(active_slice.active_count, 0);
+        assert_eq!(active_slice.inactive_count, 1);
+        assert_eq!(active_slice.partitions[0].partition_id, "p2");
+
+        let quiver = QuiverMergeReadyReport {
+            schema_version: FLETCH_QUIVER_MERGE_READY_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            quiver_id: "quiver".to_string(),
+            candidate_count: 2,
+            ready_count: 1,
+            blocked_count: 1,
+            candidates: vec![
+                QuiverMergeCandidate {
+                    dataset_id: "ready".to_string(),
+                    candidate_alias_id: None,
+                    cache_key: "k1".to_string(),
+                    sha256: "s1".to_string(),
+                    relative_path: "one".to_string(),
+                    verified: true,
+                    status: "ready".to_string(),
+                },
+                QuiverMergeCandidate {
+                    dataset_id: "blocked".to_string(),
+                    candidate_alias_id: None,
+                    cache_key: "k2".to_string(),
+                    sha256: "s2".to_string(),
+                    relative_path: "two".to_string(),
+                    verified: false,
+                    status: "blocked-unverified".to_string(),
+                },
+            ],
+        };
+        let quiver_slice =
+            slice_quiver_merge_ready_report(&quiver, Some("blocked-unverified"), 0, Some(1));
+        assert_eq!(quiver_slice.ready_count, 0);
+        assert_eq!(quiver_slice.blocked_count, 1);
+        assert_eq!(quiver_slice.candidates[0].dataset_id, "blocked");
     }
 
     #[test]

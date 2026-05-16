@@ -150,6 +150,10 @@ Publisher commands are read-only derived views. `fletch publish crop-index`,
 `fletch publish proof-docs`, and `fletch publish local-url-map` accept
 `--offset` and `--limit` for bounded output; CROP index output also accepts
 `--row-type` to focus large local publisher surfaces.
+Large read-only report commands also expose bounded output: partition state and
+active-set rows, quiver merge-ready candidates, adapter source rows, validation
+findings, and archive-preview children can be sliced with `--offset`/`--limit`
+and focused with their report-specific filters.
 
 `fletch quiver export` writes a `fletch.quiver.v1` directory with `quiver.json`
 and referenced cache objects. `fletch quiver import` verifies bundled bytes,

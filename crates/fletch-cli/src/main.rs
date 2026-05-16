@@ -9,12 +9,15 @@ use fletch_core::{
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
     proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
-    quiver_merge_ready_report, slice_crop_index_report, slice_local_url_map,
-    slice_proof_document_manifest, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
-    upsert_cache_manifest_entry, validate_registry, verify_cache_manifest, verify_quiver_bundle,
-    AdapterHandoffReport, AliasState, CacheEntry, CacheManifest, CropIndexReport, FetchOptions,
-    FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap, PartitionState,
-    ProofDocumentManifest, QuiverManifest, QuiverSummary, RollupPreview, SourceKind,
+    quiver_merge_ready_report, slice_active_partition_set, slice_adapter_source_report,
+    slice_archive_expansion_preview, slice_crop_index_report, slice_local_url_map,
+    slice_partition_state, slice_proof_document_manifest, slice_quiver_merge_ready_report,
+    slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
+    tips_from_manifest, upsert_cache_manifest_entry, validate_registry, verify_cache_manifest,
+    verify_quiver_bundle, AdapterHandoffReport, AliasState, CacheEntry, CacheManifest,
+    CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState,
+    LocalUrlMap, PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary,
+    RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -199,6 +202,12 @@ enum PartitionCommands {
         /// Optional product-neutral group id assigned to every emitted row.
         #[arg(long)]
         group_id: Option<String>,
+        /// Number of partition rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of partition rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -250,6 +259,15 @@ enum PartitionCommands {
         /// Optional fletch.rollup-preview.v1 JSON file.
         #[arg(long)]
         rollup_preview: Option<PathBuf>,
+        /// Filter active rows: true for active, false for inactive.
+        #[arg(long)]
+        active: Option<bool>,
+        /// Number of active-set rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of active-set rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -396,6 +414,15 @@ enum QuiverCommands {
         /// Optional alias id to propose for every candidate row.
         #[arg(long)]
         alias_id: Option<String>,
+        /// Optional candidate status filter, such as ready or blocked-unverified.
+        #[arg(long)]
+        status: Option<String>,
+        /// Number of candidate rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of candidate rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -443,6 +470,15 @@ enum RegistryCommands {
         /// Path to a fletch.registry.v1 JSON file.
         #[arg(long)]
         file: PathBuf,
+        /// Filter source rows by adapter-owned status.
+        #[arg(long)]
+        adapter_owned: Option<bool>,
+        /// Number of source rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of source rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -452,6 +488,15 @@ enum RegistryCommands {
         /// Path to a fletch.registry.v1 JSON file.
         #[arg(long)]
         file: PathBuf,
+        /// Optional finding severity filter, such as error or warning.
+        #[arg(long)]
+        severity: Option<String>,
+        /// Number of validation findings to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of validation findings to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -464,6 +509,12 @@ enum RegistryCommands {
         /// Fletch id for the archive/source that expands to children.
         #[arg(long)]
         archive_fletch_id: String,
+        /// Number of child rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of child rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -862,10 +913,17 @@ fn main() -> Result<()> {
             QuiverCommands::MergeReady {
                 quiver,
                 alias_id,
+                status,
+                offset,
+                limit,
                 output,
             } => {
                 let quiver = read_quiver_manifest(&quiver)?;
-                write_json(&quiver_merge_ready_report(&quiver, alias_id), output)?;
+                let report = quiver_merge_ready_report(&quiver, alias_id);
+                write_json(
+                    &slice_quiver_merge_ready_report(&report, status.as_deref(), offset, limit),
+                    output,
+                )?;
             }
         },
         Commands::Graph { command } => match command {
@@ -887,22 +945,45 @@ fn main() -> Result<()> {
                 let registry = read_registry(&file)?;
                 write_json(&dry_run_flight(&registry, &fletch_ids), output)?;
             }
-            RegistryCommands::AdapterSources { file, output } => {
+            RegistryCommands::AdapterSources {
+                file,
+                adapter_owned,
+                offset,
+                limit,
+                output,
+            } => {
                 let registry = read_registry(&file)?;
-                write_json(&adapter_sources_from_registry(&registry), output)?;
+                let report = adapter_sources_from_registry(&registry);
+                write_json(
+                    &slice_adapter_source_report(&report, adapter_owned, offset, limit),
+                    output,
+                )?;
             }
-            RegistryCommands::Validate { file, output } => {
+            RegistryCommands::Validate {
+                file,
+                severity,
+                offset,
+                limit,
+                output,
+            } => {
                 let registry = read_registry(&file)?;
-                write_json(&validate_registry(&registry), output)?;
+                let report = validate_registry(&registry);
+                write_json(
+                    &slice_registry_validation_report(&report, severity.as_deref(), offset, limit),
+                    output,
+                )?;
             }
             RegistryCommands::ArchivePreview {
                 file,
                 archive_fletch_id,
+                offset,
+                limit,
                 output,
             } => {
                 let registry = read_registry(&file)?;
+                let preview = preview_archive_expansion(&registry, archive_fletch_id);
                 write_json(
-                    &preview_archive_expansion(&registry, archive_fletch_id),
+                    &slice_archive_expansion_preview(&preview, offset, limit),
                     output,
                 )?;
             }
@@ -1058,10 +1139,13 @@ fn main() -> Result<()> {
             PartitionCommands::State {
                 manifest,
                 group_id,
+                offset,
+                limit,
                 output,
             } => {
                 let manifest = read_manifest(&manifest)?;
-                write_json(&partition_state_from_manifest(&manifest, group_id), output)?;
+                let state = partition_state_from_manifest(&manifest, group_id);
+                write_json(&slice_partition_state(&state, offset, limit), output)?;
             }
             PartitionCommands::RollupPreview {
                 partition_state,
@@ -1098,6 +1182,9 @@ fn main() -> Result<()> {
                 alias_state,
                 label_state,
                 rollup_preview,
+                active,
+                offset,
+                limit,
                 output,
             } => {
                 let partition_state = read_partition_state(&partition_state)?;
@@ -1107,13 +1194,14 @@ fn main() -> Result<()> {
                     .as_ref()
                     .map(read_rollup_preview)
                     .transpose()?;
+                let active_set = active_partition_set(
+                    &partition_state,
+                    alias_state.as_ref(),
+                    label_state.as_ref(),
+                    rollup_preview.as_ref(),
+                );
                 write_json(
-                    &active_partition_set(
-                        &partition_state,
-                        alias_state.as_ref(),
-                        label_state.as_ref(),
-                        rollup_preview.as_ref(),
-                    ),
+                    &slice_active_partition_set(&active_set, active, offset, limit),
                     output,
                 )?;
             }
