@@ -91,6 +91,8 @@ pub enum FletchError {
     InvalidBandwidthLimit,
     #[error("[FETCH] request timeout must be greater than zero milliseconds")]
     InvalidTimeout,
+    #[error("[FETCH] invalid paged JSON response from {url}: {detail}")]
+    InvalidPagedJson { url: String, detail: String },
     #[error("[TIP] max bytes must be greater than zero")]
     InvalidTipByteLimit,
     #[error("[OFFLINE] cache entry {dataset_id} is missing and live fetches are disabled")]
@@ -2490,6 +2492,68 @@ pub struct FetchOutcome {
     pub attempt_status: FetchAttemptStatus,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PagedJsonOptions {
+    pub start_param: String,
+    pub limit_param: String,
+    pub start: usize,
+    pub limit: usize,
+    pub data_field: String,
+    pub total_field: String,
+}
+
+impl Default for PagedJsonOptions {
+    fn default() -> Self {
+        Self {
+            start_param: "start".to_string(),
+            limit_param: "limit".to_string(),
+            start: 0,
+            limit: 100,
+            data_field: "data".to_string(),
+            total_field: "total".to_string(),
+        }
+    }
+}
+
+impl PagedJsonOptions {
+    pub fn with_start_param(mut self, start_param: impl Into<String>) -> Self {
+        self.start_param = start_param.into();
+        self
+    }
+
+    pub fn with_limit_param(mut self, limit_param: impl Into<String>) -> Self {
+        self.limit_param = limit_param.into();
+        self
+    }
+
+    pub fn with_start(mut self, start: usize) -> Self {
+        self.start = start;
+        self
+    }
+
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    pub fn with_data_field(mut self, data_field: impl Into<String>) -> Self {
+        self.data_field = data_field.into();
+        self
+    }
+
+    pub fn with_total_field(mut self, total_field: impl Into<String>) -> Self {
+        self.total_field = total_field.into();
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PagedJsonFetchOutcome {
+    pub outcome: FetchOutcome,
+    pub page_count: usize,
+    pub row_count: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FetchAttemptStatus {
     pub attempts: u32,
@@ -2579,11 +2643,160 @@ pub fn fetch_to_cache(
     })
 }
 
+pub fn fetch_paged_json_to_cache(
+    plan: &FetchPlan,
+    options: FetchOptions,
+    page_options: PagedJsonOptions,
+) -> Result<PagedJsonFetchOutcome, FletchError> {
+    validate_fetch_plan(plan)?;
+    if plan.source.kind != SourceKind::Http {
+        return Err(FletchError::UnsupportedSourceKind {
+            kind: plan.source.kind.clone(),
+        });
+    }
+    if options.max_bytes_per_second == Some(0) {
+        return Err(FletchError::InvalidBandwidthLimit);
+    }
+    if options.timeout_ms == Some(0) {
+        return Err(FletchError::InvalidTimeout);
+    }
+    if page_options.limit == 0 {
+        return Err(FletchError::InvalidPagedJson {
+            url: plan.source.url.clone(),
+            detail: "page limit must be greater than zero".to_string(),
+        });
+    }
+
+    let key = cache_key(plan);
+    let relative_path = relative_cache_path(&key);
+    let destination = cache_path(&options.cache_root, &relative_path);
+    let temp_path = temp_path_for(&destination);
+
+    let destination_exists = destination.exists();
+    if !options.force && cache_hit_is_fresh(&destination, &plan.cache_policy.freshness)? {
+        let row_count = cached_paged_json_row_count(&destination, &page_options)?;
+        return Ok(PagedJsonFetchOutcome {
+            outcome: cache_hit_outcome(plan, &key, relative_path, destination, &options)?,
+            page_count: 0,
+            row_count,
+        });
+    }
+
+    if options.offline {
+        if destination_exists {
+            return Err(FletchError::OfflineCacheStale {
+                dataset_id: plan.dataset_id.clone(),
+                relative_path,
+            });
+        }
+        return Err(FletchError::OfflineCacheMiss {
+            dataset_id: plan.dataset_id.clone(),
+        });
+    }
+
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent).map_err(|source| FletchError::WriteCache {
+            path: parent.display().to_string(),
+            source,
+        })?;
+    }
+
+    let paged = fetch_paged_json_with_retries(plan, &options, &page_options)?;
+    write_bytes_to_temp(&paged.bytes, &temp_path)?;
+
+    if let Some(expected) = &options.expected_sha256 {
+        if &paged.sha256 != expected {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(FletchError::ChecksumMismatch {
+                dataset_id: plan.dataset_id.clone(),
+                expected: expected.clone(),
+                actual: paged.sha256,
+            });
+        }
+    }
+
+    promote_temp(&temp_path, &destination)?;
+    let fetched_at_ms = match options.fetched_at_ms {
+        Some(value) => value,
+        None => now_ms()?,
+    };
+    let entry = CacheEntry {
+        dataset_id: plan.dataset_id.clone(),
+        version: plan.version.clone(),
+        source_url: plan.source.url.clone(),
+        cache_key: key,
+        relative_path,
+        sha256: paged.sha256,
+        bytes: paged.bytes.len() as u64,
+        fetched_at_ms,
+        verified: true,
+        fetch_attempts: paged.attempt_status.attempts,
+        retry_count: paged.attempt_status.retries,
+        last_retryable_error: paged.attempt_status.last_retryable_error.clone(),
+    };
+
+    Ok(PagedJsonFetchOutcome {
+        outcome: FetchOutcome {
+            entry,
+            path: destination,
+            attempt_status: paged.attempt_status,
+        },
+        page_count: paged.page_count,
+        row_count: paged.row_count,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FetchSourceOutcome {
     sha256: String,
     bytes: u64,
     attempt_status: FetchAttemptStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PagedJsonSourceOutcome {
+    sha256: String,
+    bytes: Vec<u8>,
+    page_count: usize,
+    row_count: usize,
+    attempt_status: FetchAttemptStatus,
+}
+
+fn fetch_paged_json_with_retries(
+    plan: &FetchPlan,
+    options: &FetchOptions,
+    page_options: &PagedJsonOptions,
+) -> Result<PagedJsonSourceOutcome, FletchError> {
+    let mut attempts_remaining = options.retry_attempts + 1;
+    let mut attempts = 0;
+    let mut retries = 0;
+    let mut last_retryable_error = None;
+    loop {
+        attempts += 1;
+        let result = fetch_paged_json_once(plan, options, page_options);
+        match result {
+            Ok((bytes, page_count, row_count)) => {
+                let sha256 = sha256_hex(&bytes);
+                return Ok(PagedJsonSourceOutcome {
+                    sha256,
+                    bytes,
+                    page_count,
+                    row_count,
+                    attempt_status: FetchAttemptStatus {
+                        attempts,
+                        retries,
+                        last_retryable_error,
+                    },
+                });
+            }
+            Err(error) if attempts_remaining > 1 && is_retryable_fetch_error(&error) => {
+                attempts_remaining -= 1;
+                retries += 1;
+                last_retryable_error = Some(error.to_string());
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 fn fetch_source_with_retries(
@@ -2683,6 +2896,117 @@ fn fetch_source_once(
             });
         }
     }
+}
+
+fn fetch_paged_json_once(
+    plan: &FetchPlan,
+    options: &FetchOptions,
+    page_options: &PagedJsonOptions,
+) -> Result<(Vec<u8>, usize, usize), FletchError> {
+    let mut client = reqwest::blocking::Client::builder();
+    if let Some(timeout_ms) = options.timeout_ms {
+        client = client.timeout(Duration::from_millis(timeout_ms));
+    }
+    let client = client.build().map_err(|source| FletchError::HttpFetch {
+        url: plan.source.url.clone(),
+        source,
+    })?;
+
+    let mut rows = Vec::<serde_json::Value>::new();
+    let mut total = None::<usize>;
+    let mut start = page_options.start;
+    let mut page_count = 0usize;
+    loop {
+        let url = paged_url(plan.source.url.as_str(), page_options, start)?;
+        let mut request = client.get(&url);
+        for (name, value) in &plan.source.headers {
+            let header_name =
+                reqwest::header::HeaderName::from_bytes(name.as_bytes()).map_err(|source| {
+                    FletchError::InvalidHeaderName {
+                        name: name.clone(),
+                        source,
+                    }
+                })?;
+            let header_value = reqwest::header::HeaderValue::from_str(value).map_err(|source| {
+                FletchError::InvalidHeaderValue {
+                    name: name.clone(),
+                    source,
+                }
+            })?;
+            request = request.header(header_name, header_value);
+        }
+        let response = request.send().map_err(|source| FletchError::HttpFetch {
+            url: url.clone(),
+            source,
+        })?;
+        let mut response =
+            response
+                .error_for_status()
+                .map_err(|source| FletchError::HttpFetch {
+                    url: url.clone(),
+                    source,
+                })?;
+        let mut page_bytes = Vec::new();
+        response
+            .read_to_end(&mut page_bytes)
+            .map_err(|source| FletchError::ReadSource {
+                path: url.clone(),
+                source,
+            })?;
+        let page = serde_json::from_slice::<serde_json::Value>(&page_bytes).map_err(|source| {
+            FletchError::InvalidPagedJson {
+                url: url.clone(),
+                detail: source.to_string(),
+            }
+        })?;
+        let page_total = page
+            .get(&page_options.total_field)
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| FletchError::InvalidPagedJson {
+                url: url.clone(),
+                detail: format!("missing numeric '{}' field", page_options.total_field),
+            })? as usize;
+        let page_rows = page
+            .get(&page_options.data_field)
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| FletchError::InvalidPagedJson {
+                url: url.clone(),
+                detail: format!("missing array '{}' field", page_options.data_field),
+            })?;
+        if total.is_some_and(|expected| expected != page_total) {
+            return Err(FletchError::InvalidPagedJson {
+                url: url.clone(),
+                detail: format!(
+                    "inconsistent '{}' field across pages",
+                    page_options.total_field
+                ),
+            });
+        }
+        let expected_total = *total.get_or_insert(page_total);
+        page_count += 1;
+        let page_len = page_rows.len();
+        rows.extend(page_rows.iter().cloned());
+        if rows.len() >= expected_total || page_len == 0 {
+            break;
+        }
+        start = start.saturating_add(page_options.limit);
+    }
+
+    let row_count = rows.len();
+    let envelope = serde_json::json!({
+        page_options.data_field.clone(): rows,
+        page_options.total_field.clone(): total.unwrap_or(row_count),
+    });
+    let bytes = serde_json::to_vec(&envelope).map_err(|source| FletchError::InvalidPagedJson {
+        url: plan.source.url.clone(),
+        detail: source.to_string(),
+    })?;
+    throttle_bandwidth(
+        bytes.len() as u64,
+        options.max_bytes_per_second,
+        Instant::now(),
+    );
+    Ok((bytes, page_count, row_count))
 }
 
 fn is_retryable_fetch_error(error: &FletchError) -> bool {
@@ -2850,6 +3174,83 @@ fn cache_hit_outcome(
             last_retryable_error: None,
         },
     })
+}
+
+fn cached_paged_json_row_count(
+    destination: &Path,
+    page_options: &PagedJsonOptions,
+) -> Result<usize, FletchError> {
+    let file = File::open(destination).map_err(|source| FletchError::ReadSource {
+        path: destination.display().to_string(),
+        source,
+    })?;
+    let value = serde_json::from_reader::<_, serde_json::Value>(file).map_err(|source| {
+        FletchError::InvalidPagedJson {
+            url: destination.display().to_string(),
+            detail: source.to_string(),
+        }
+    })?;
+    value
+        .get(&page_options.data_field)
+        .and_then(serde_json::Value::as_array)
+        .map(Vec::len)
+        .ok_or_else(|| FletchError::InvalidPagedJson {
+            url: destination.display().to_string(),
+            detail: format!("missing array '{}' field", page_options.data_field),
+        })
+}
+
+fn write_bytes_to_temp(bytes: &[u8], temp_path: &Path) -> Result<(), FletchError> {
+    let mut file = File::create(temp_path).map_err(|source| FletchError::WriteCache {
+        path: temp_path.display().to_string(),
+        source,
+    })?;
+    file.write_all(bytes)
+        .map_err(|source| FletchError::WriteCache {
+            path: temp_path.display().to_string(),
+            source,
+        })?;
+    file.flush().map_err(|source| FletchError::WriteCache {
+        path: temp_path.display().to_string(),
+        source,
+    })?;
+    file.sync_all().map_err(|source| FletchError::WriteCache {
+        path: temp_path.display().to_string(),
+        source,
+    })
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("sha256:{:x}", hasher.finalize())
+}
+
+fn paged_url(
+    base_url: &str,
+    page_options: &PagedJsonOptions,
+    start: usize,
+) -> Result<String, FletchError> {
+    let mut url =
+        reqwest::Url::parse(base_url).map_err(|source| FletchError::InvalidPagedJson {
+            url: base_url.to_string(),
+            detail: format!("invalid page URL: {source}"),
+        })?;
+    let retained = url
+        .query_pairs()
+        .filter(|(name, _)| name != &page_options.start_param && name != &page_options.limit_param)
+        .map(|(name, value)| (name.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    {
+        let mut query = url.query_pairs_mut();
+        query.clear();
+        for (name, value) in retained {
+            query.append_pair(&name, &value);
+        }
+        query.append_pair(&page_options.limit_param, &page_options.limit.to_string());
+        query.append_pair(&page_options.start_param, &start.to_string());
+    }
+    Ok(url.to_string())
 }
 
 fn write_stream_to_temp<R: Read>(
@@ -3851,6 +4252,102 @@ mod tests {
 
         assert_eq!(outcome.entry.bytes, 12);
         assert!(outcome.entry.verified);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn paged_json_fetch_combines_pages_into_one_cache_entry() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+
+        let root = unique_temp_dir("paged-json");
+        let cache_root = root.join("cache");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://{}/stats?season=20252026",
+            listener.local_addr().unwrap()
+        );
+        let server = std::thread::spawn(move || {
+            let responses = [
+                br#"{"data":[{"id":1},{"id":2}],"total":3}"#.as_slice(),
+                br#"{"data":[{"id":3}],"total":3}"#.as_slice(),
+            ];
+            for (index, body) in responses.iter().enumerate() {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buffer = [0u8; 2048];
+                let bytes = stream.read(&mut buffer).unwrap();
+                let request = String::from_utf8_lossy(&buffer[..bytes]);
+                if index == 0 {
+                    assert!(request.contains("limit=2"));
+                    assert!(request.contains("start=0"));
+                } else {
+                    assert!(request.contains("limit=2"));
+                    assert!(request.contains("start=2"));
+                }
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+                    body.len()
+                )
+                .unwrap();
+                stream.write_all(body).unwrap();
+            }
+        });
+        let plan = fetch_plan("test:paged-json", url).unwrap();
+
+        let outcome = fetch_paged_json_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root).with_timeout_ms(1_000),
+            PagedJsonOptions::default().with_limit(2),
+        )
+        .unwrap();
+        server.join().unwrap();
+
+        assert_eq!(outcome.page_count, 2);
+        assert_eq!(outcome.row_count, 3);
+        assert!(outcome.outcome.entry.verified);
+        let value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(outcome.outcome.path).unwrap()).unwrap();
+        assert_eq!(value["total"], 3);
+        assert_eq!(value["data"].as_array().unwrap().len(), 3);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn paged_json_fetch_rejects_invalid_envelope() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+
+        let root = unique_temp_dir("paged-json-invalid");
+        let cache_root = root.join("cache");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/stats", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0u8; 1024];
+            let _ = stream.read(&mut buffer).unwrap();
+            let body = br#"{"rows":[{"id":1}],"total":1}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+                body.len()
+            )
+            .unwrap();
+            stream.write_all(body).unwrap();
+        });
+        let plan = fetch_plan("test:paged-json-invalid", url).unwrap();
+
+        let error = fetch_paged_json_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root).with_timeout_ms(1_000),
+            PagedJsonOptions::default(),
+        )
+        .unwrap_err();
+        server.join().unwrap();
+
+        assert!(matches!(error, FletchError::InvalidPagedJson { .. }));
 
         let _ = std::fs::remove_dir_all(root);
     }

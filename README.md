@@ -66,14 +66,14 @@ Downstream migration status:
 - BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
   validation.
-- ICELINES: roster and MoneyPuck source-byte acquisition moved to FLETCH, with
-  `icelines fetch fletch-sources --gate` documenting source handoff and
-  `icelines fetch fletch-partitions --gate` mapping leaders/player/compare,
-  goalies, roster bios, MoneyPuck, career, and windowed game-line query surfaces
-  to partition/rollup IDs. `icelines fetch fletch-quivers --gate` now groups
-  those partitions into query bootstrap and enrichment quiver handoff candidates.
-  ICELINES keeps NHL parsing, snapshots, sealing, active pointers, and
-  hockey-domain validation.
+- ICELINES: roster, MoneyPuck, and paged NHL stats report acquisition moved to
+  FLETCH, with `icelines fetch fletch-sources --gate` documenting source
+  handoff and `icelines fetch fletch-partitions --gate` mapping
+  leaders/player/compare, goalies, roster bios, MoneyPuck, career, and windowed
+  game-line query surfaces to partition/rollup IDs.
+  `icelines fetch fletch-quivers --gate` groups those partitions into query
+  bootstrap and enrichment quiver handoff candidates. ICELINES keeps NHL
+  parsing, snapshots, sealing, active pointers, and hockey-domain validation.
 - CROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
@@ -107,6 +107,10 @@ manifest. `fletch fetch-plan` executes a saved `fletch.plan.v1` file with the
 same cache execution controls, preserving checked-in or generated plan details.
 Saved plans are validated before execution so stale or malformed plan schemas do
 not accidentally touch live sources.
+`fletch-core` also exposes a product-neutral paged JSON acquisition primitive
+for HTTP endpoints with `data` arrays and `total` counts; products such as
+ICELINES can use it while retaining their own parsing, locks, snapshot writes,
+and activation rules.
 When `--output` points to an existing manifest, fetch commands upsert the new
 entry by cache key and preserve the rest of the ledger instead of replacing it
 with a single-entry manifest.
