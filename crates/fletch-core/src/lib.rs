@@ -163,6 +163,12 @@ pub struct CacheEntry {
     pub bytes: u64,
     pub fetched_at_ms: u64,
     pub verified: bool,
+    #[serde(default = "default_fetch_attempts")]
+    pub fetch_attempts: u32,
+    #[serde(default)]
+    pub retry_count: u32,
+    #[serde(default)]
+    pub last_retryable_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -881,6 +887,17 @@ pub fn graph_from_manifest_with_node_kinds(
         ledger_metadata.insert("sha256".to_string(), entry.sha256.clone());
         ledger_metadata.insert("bytes".to_string(), entry.bytes.to_string());
         ledger_metadata.insert("verified".to_string(), entry.verified.to_string());
+        ledger_metadata.insert(
+            "fetch_attempts".to_string(),
+            entry.fetch_attempts.to_string(),
+        );
+        ledger_metadata.insert("retry_count".to_string(), entry.retry_count.to_string());
+        if let Some(last_retryable_error) = &entry.last_retryable_error {
+            ledger_metadata.insert(
+                "last_retryable_error".to_string(),
+                last_retryable_error.clone(),
+            );
+        }
         ledger_metadata.insert("cache_root".to_string(), manifest.cache_root.clone());
         push_graph_node(
             &mut nodes,
@@ -1065,6 +1082,14 @@ impl FetchOptions {
 pub struct FetchOutcome {
     pub entry: CacheEntry,
     pub path: PathBuf,
+    pub attempt_status: FetchAttemptStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FetchAttemptStatus {
+    pub attempts: u32,
+    pub retries: u32,
+    pub last_retryable_error: Option<String>,
 }
 
 pub fn fetch_to_cache(
@@ -1100,15 +1125,15 @@ pub fn fetch_to_cache(
         })?;
     }
 
-    let (sha256, bytes) = fetch_source_with_retries(plan, &options, &temp_path)?;
+    let source = fetch_source_with_retries(plan, &options, &temp_path)?;
 
     if let Some(expected) = &options.expected_sha256 {
-        if &sha256 != expected {
+        if &source.sha256 != expected {
             let _ = std::fs::remove_file(&temp_path);
             return Err(FletchError::ChecksumMismatch {
                 dataset_id: plan.dataset_id.clone(),
                 expected: expected.clone(),
-                actual: sha256,
+                actual: source.sha256,
             });
         }
     }
@@ -1125,30 +1150,57 @@ pub fn fetch_to_cache(
         source_url: plan.source.url.clone(),
         cache_key: key,
         relative_path,
-        sha256,
-        bytes,
+        sha256: source.sha256,
+        bytes: source.bytes,
         fetched_at_ms,
         verified: true,
+        fetch_attempts: source.attempt_status.attempts,
+        retry_count: source.attempt_status.retries,
+        last_retryable_error: source.attempt_status.last_retryable_error.clone(),
     };
 
     Ok(FetchOutcome {
         entry,
         path: destination,
+        attempt_status: source.attempt_status,
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FetchSourceOutcome {
+    sha256: String,
+    bytes: u64,
+    attempt_status: FetchAttemptStatus,
 }
 
 fn fetch_source_with_retries(
     plan: &FetchPlan,
     options: &FetchOptions,
     temp_path: &Path,
-) -> Result<(String, u64), FletchError> {
+) -> Result<FetchSourceOutcome, FletchError> {
     let mut attempts_remaining = options.retry_attempts + 1;
+    let mut attempts = 0;
+    let mut retries = 0;
+    let mut last_retryable_error = None;
     loop {
+        attempts += 1;
         let result = fetch_source_once(plan, options, temp_path);
         match result {
-            Ok(result) => return Ok(result),
+            Ok((sha256, bytes)) => {
+                return Ok(FetchSourceOutcome {
+                    sha256,
+                    bytes,
+                    attempt_status: FetchAttemptStatus {
+                        attempts,
+                        retries,
+                        last_retryable_error,
+                    },
+                })
+            }
             Err(error) if attempts_remaining > 1 && is_retryable_fetch_error(&error) => {
                 attempts_remaining -= 1;
+                retries += 1;
+                last_retryable_error = Some(error.to_string());
                 let _ = std::fs::remove_file(temp_path);
             }
             Err(error) => {
@@ -1348,8 +1400,16 @@ fn cache_hit_outcome(
                 .fetched_at_ms
                 .unwrap_or(file_modified_ms(&destination)?),
             verified: options.expected_sha256.is_some(),
+            fetch_attempts: 0,
+            retry_count: 0,
+            last_retryable_error: None,
         },
         path: destination,
+        attempt_status: FetchAttemptStatus {
+            attempts: 0,
+            retries: 0,
+            last_retryable_error: None,
+        },
     })
 }
 
@@ -1490,6 +1550,10 @@ fn source_kind_key(kind: &SourceKind) -> &'static str {
         SourceKind::File => "file",
         SourceKind::Adapter => "adapter",
     }
+}
+
+fn default_fetch_attempts() -> u32 {
+    1
 }
 
 fn cache_path(cache_root: &Path, relative_path: &str) -> PathBuf {
@@ -1861,6 +1925,9 @@ mod tests {
             bytes: 42,
             fetched_at_ms: 0,
             verified: false,
+            fetch_attempts: 1,
+            retry_count: 0,
+            last_retryable_error: None,
         };
 
         assert!(matches!(
@@ -1890,6 +1957,10 @@ mod tests {
         assert_eq!(outcome.entry.bytes, 11);
         assert_eq!(outcome.entry.fetched_at_ms, 123);
         assert!(outcome.entry.verified);
+        assert_eq!(outcome.entry.fetch_attempts, 1);
+        assert_eq!(outcome.entry.retry_count, 0);
+        assert_eq!(outcome.entry.last_retryable_error, None);
+        assert_eq!(outcome.attempt_status.attempts, 1);
         assert!(outcome.entry.sha256.starts_with("sha256:"));
         assert!(std::fs::read_dir(outcome.path.parent().unwrap())
             .unwrap()
@@ -1926,6 +1997,8 @@ mod tests {
 
         assert_ne!(hit_without_expected.entry.fetched_at_ms, 0);
         assert!(!hit_without_expected.entry.verified);
+        assert_eq!(hit_without_expected.entry.fetch_attempts, 0);
+        assert_eq!(hit_without_expected.attempt_status.attempts, 0);
         assert!(hit_with_expected.entry.verified);
 
         let _ = std::fs::remove_dir_all(root);
@@ -2017,6 +2090,64 @@ mod tests {
 
         assert_eq!(outcome.entry.bytes, 11);
         assert!(outcome.entry.verified);
+        assert_eq!(outcome.attempt_status.attempts, 1);
+        assert_eq!(outcome.attempt_status.retries, 0);
+        assert_eq!(outcome.entry.fetch_attempts, 1);
+        assert_eq!(outcome.entry.retry_count, 0);
+        assert_eq!(outcome.entry.last_retryable_error, None);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn http_fetch_records_retry_status_after_retryable_failure() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+
+        let root = unique_temp_dir("http-retry-status");
+        let cache_root = root.join("cache");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/data.json", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for index in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buffer = [0u8; 1024];
+                let _ = stream.read(&mut buffer);
+                if index == 0 {
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
+                        )
+                        .unwrap();
+                } else {
+                    stream
+                        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\n{\"ok\":true}\n")
+                        .unwrap();
+                }
+            }
+        });
+        let plan = fetch_plan("test:http-retry", url).unwrap();
+
+        let outcome = fetch_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root)
+                .with_retry_attempts(1)
+                .with_timeout_ms(1_000),
+        )
+        .unwrap();
+        server.join().unwrap();
+
+        assert_eq!(outcome.entry.bytes, 12);
+        assert_eq!(outcome.attempt_status.attempts, 2);
+        assert_eq!(outcome.attempt_status.retries, 1);
+        assert_eq!(outcome.entry.fetch_attempts, 2);
+        assert_eq!(outcome.entry.retry_count, 1);
+        assert!(outcome
+            .entry
+            .last_retryable_error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("500"));
 
         let _ = std::fs::remove_dir_all(root);
     }

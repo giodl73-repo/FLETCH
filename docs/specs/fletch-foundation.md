@@ -312,7 +312,9 @@ Freshness policy is not a promise that every fetch is one-time:
 Generic fetch execution can bound live source behavior with timeout, bandwidth,
 and retry controls. Retries are product-neutral and only reattempt generic
 HTTP/file acquisition failures; checksum mismatches and unsupported adapter
-shafts remain explicit failures.
+shafts remain explicit failures. Successful fetch outcomes and ledger entries
+record attempt count, retry count, and the last retryable error observed before
+success.
 
 Fetch/merge semantics are deliberately separate. A fetch may acquire, verify,
 and record a candidate cache object, but it must not silently merge that object
@@ -353,7 +355,9 @@ Records cached artifacts:
 - content hash,
 - byte count,
 - fetched timestamp,
-- verification status.
+- verification status,
+- fetch attempts, retry count, and last retryable error when retry recovery was
+  needed.
 
 Ledger entries should remain safe to publish through CROP/PROOF. They should
 include enough provenance for local status pages without requiring generated

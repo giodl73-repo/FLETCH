@@ -91,7 +91,9 @@ view. In the target model, `pull` is reserved for future fetch-plus-merge
 semantics rather than a plain fetch alias.
 Use `--max-bytes-per-second` to respect bandwidth-sensitive environments.
 Use `--timeout-ms` and `--retry-attempts` to bound generic HTTP waits and retry
-transient generic fetch/read/write failures.
+transient generic fetch/read/write failures. Ledger entries include
+`fetch_attempts`, `retry_count`, and `last_retryable_error` so status publishers
+can explain retry recovery.
 Use `--freshness immutable`, `--freshness max-age-days --max-age-days N`, or
 `--freshness always-check` to say whether a shaft is effectively fixed,
 periodically refreshed, or mutable on every fetch. Add `--force` to re-fetch a
