@@ -107,7 +107,9 @@ rejected.
 Use `--freshness immutable`, `--freshness max-age-days --max-age-days N`, or
 `--freshness always-check` to say whether a shaft is effectively fixed,
 periodically refreshed, or mutable on every fetch. Add `--force` to re-fetch a
-fresh cache hit, or `--offline` to fail instead of touching the network.
+fresh cache hit, or `--offline` to fail instead of touching the network. Offline
+fetch errors distinguish a true missing cache object from an existing object that
+is stale or explicitly bypassed.
 
 `fletch cache list`, `fletch cache verify`, `fletch cache status`, and
 `fletch cache prune` operate on `fletch.cache-manifest.v1` ledger files.

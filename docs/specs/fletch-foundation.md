@@ -309,6 +309,11 @@ Freshness policy is not a promise that every fetch is one-time:
 - `offline`: if live fetches are disabled, report missing/stale fletches instead
   of assuming the last cached value is acceptable.
 
+When offline execution cannot use a cache entry, it reports whether the object is
+missing or exists but is stale/bypassed. This keeps bootstrap and on-demand tools
+from confusing "download this shaft first" with "you have a candidate, but policy
+requires a refresh before activation."
+
 Generic fetch execution can bound live source behavior with timeout, bandwidth,
 and retry controls. Retries are product-neutral and only reattempt generic
 HTTP/file acquisition failures; checksum mismatches and unsupported adapter

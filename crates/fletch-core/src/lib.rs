@@ -69,6 +69,13 @@ pub enum FletchError {
     InvalidTipByteLimit,
     #[error("[OFFLINE] cache entry {dataset_id} is missing and live fetches are disabled")]
     OfflineCacheMiss { dataset_id: String },
+    #[error(
+        "[OFFLINE] cache entry {dataset_id} exists at {relative_path} but is stale or bypassed and live fetches are disabled"
+    )]
+    OfflineCacheStale {
+        dataset_id: String,
+        relative_path: String,
+    },
     #[error("[CACHE] relative cache path is unsafe: {relative_path}")]
     UnsafeCachePath { relative_path: String },
     #[error(
@@ -1117,11 +1124,18 @@ pub fn fetch_to_cache(
     let destination = cache_path(&options.cache_root, &relative_path);
     let temp_path = temp_path_for(&destination);
 
+    let destination_exists = destination.exists();
     if !options.force && cache_hit_is_fresh(&destination, &plan.cache_policy.freshness)? {
         return cache_hit_outcome(plan, &key, relative_path, destination, &options);
     }
 
     if options.offline {
+        if destination_exists {
+            return Err(FletchError::OfflineCacheStale {
+                dataset_id: plan.dataset_id.clone(),
+                relative_path,
+            });
+        }
         return Err(FletchError::OfflineCacheMiss {
             dataset_id: plan.dataset_id.clone(),
         });
@@ -2116,6 +2130,37 @@ mod tests {
         );
 
         assert!(matches!(result, Err(FletchError::ChecksumMismatch { .. })));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn offline_fetch_distinguishes_stale_cache_from_missing_cache() {
+        let root = unique_temp_dir("offline-stale");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"ok":true}"#).unwrap();
+        let mut plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        plan.cache_policy.freshness = FreshnessPolicy::AlwaysCheck;
+
+        let stale_result = fetch_to_cache(&plan, FetchOptions::new(&cache_root).with_offline(true));
+
+        assert!(matches!(
+            stale_result,
+            Err(FletchError::OfflineCacheStale { .. })
+        ));
+
+        let missing_root = root.join("missing-cache");
+        let missing_result =
+            fetch_to_cache(&plan, FetchOptions::new(&missing_root).with_offline(true));
+
+        assert!(matches!(
+            missing_result,
+            Err(FletchError::OfflineCacheMiss { .. })
+        ));
 
         let _ = std::fs::remove_dir_all(root);
     }
