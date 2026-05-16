@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
-    cache_key, cache_list, cache_manifest, export_quiver, fetch_plan, fetch_plan_with_kind,
-    fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
+    cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
+    fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
     inspect_cache_manifest, plan_cache_prune, CacheManifest, FetchOptions, FletchRegistry,
     FreshnessPolicy, SourceKind,
 };
@@ -208,6 +208,18 @@ enum RegistryCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Resolve registered fletches into a fletch.flight.v1 dry-run plan.
+    Flight {
+        /// Path to a fletch.registry.v1 JSON file.
+        #[arg(long)]
+        file: PathBuf,
+        /// Fletch id to resolve. Repeat to request multiple roots; omit for all.
+        #[arg(long = "fletch-id")]
+        fletch_ids: Vec<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -346,6 +358,14 @@ fn main() -> Result<()> {
             RegistryCommands::Graph { file, output } => {
                 let registry = read_registry(&file)?;
                 write_json(&graph_from_registry(&registry), output)?;
+            }
+            RegistryCommands::Flight {
+                file,
+                fletch_ids,
+                output,
+            } => {
+                let registry = read_registry(&file)?;
+                write_json(&dry_run_flight(&registry, &fletch_ids), output)?;
             }
         },
     }

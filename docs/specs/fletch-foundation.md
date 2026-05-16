@@ -311,18 +311,25 @@ merge when policy allows. Merge, activation, or "make current" decisions belong
 to later ledger/quiver operations or product adapters, where stale data,
 replacement policy, and feature activation can be reviewed explicitly.
 
-Future flight resolution should support multiple fletches and emit:
+`fletch.flight.v1` records dry-run resolution before fetch execution. The first
+implementation resolves `fletch.registry.v1` declarations without touching the
+network or cache and emits:
 
 - requested fletch IDs,
 - dependency and expansion edges,
 - data-link edges such as contains, derived-from, supersedes, mirrors, and cites,
 - acceptable and chosen data format options,
-- shafts that will be fetched or reused,
-- verified cache hits that will be skipped,
+- shafts that would be fetched by generic execution,
+- adapter-required shafts that need product code,
+- metadata-only nodes such as rollups and aliases,
 - stale or missing fletches,
 - quivers that can satisfy requested fletches,
 - activation outcomes owned by adapters,
 - tips that preview or index relevant data without replacing the artifact.
+
+Future flight execution can add verified cache hits, skip decisions, stale/missing
+cache status, and quiver satisfaction choices while preserving the same dry-run
+shape.
 
 ### `fletch.cache-manifest.v1`
 
@@ -358,6 +365,14 @@ Initial cache operations are manifest-led:
 Future graph export contract for typed fletch, shaft, quiver, flight,
 ledger-entry, partition, rollup, alias, and document nodes plus the edge kinds
 defined above.
+
+### `fletch.flight.v1`
+
+Dry-run contract for graph-shaped execution previews. A flight contains requested
+fletch IDs, ordered steps, each step's action (`would-fetch`, `adapter-required`,
+`metadata-only`, or `missing-fletch`), the chosen shaft when known, deterministic
+cache key preview, declared dependencies, and an embedded graph view rooted at a
+flight node. It is planning data only; it does not fetch, merge, or activate.
 
 ### `fletch.merge.v1`
 

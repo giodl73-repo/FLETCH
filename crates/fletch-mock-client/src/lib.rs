@@ -1,7 +1,7 @@
 use anyhow::Result;
 use fletch_core::{
-    cache_manifest, export_quiver, fetch_plan_with_kind, fetch_to_cache, fletch_registry,
-    graph_from_manifest_with_node_kinds, graph_from_registry, import_quiver,
+    cache_manifest, dry_run_flight, export_quiver, fetch_plan_with_kind, fetch_to_cache,
+    fletch_registry, graph_from_manifest_with_node_kinds, graph_from_registry, import_quiver,
     inspect_cache_manifest, plan_cache_prune, CacheFreshnessStatus, CacheManifest,
     CacheObjectStatus, DataFormat, FetchOptions, FletchDefinition, FletchGraph, FletchRegistry,
     FreshnessPolicy, GraphEdgeKind, GraphNodeKind, GraphNodeKindHints, PrunePlan, RegistryEdge,
@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 pub struct MockClientReport {
     pub client: String,
     pub registry_path: String,
+    pub flight_path: String,
+    pub flight_step_count: usize,
     pub manifest_path: String,
     pub fetched_fletches: Vec<String>,
     pub verified_count: usize,
@@ -62,6 +64,7 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     let source_root = workspace_root.join("source");
     let cache_root = workspace_root.join("cache");
     let registry_path = workspace_root.join("mock-registry.json");
+    let flight_path = workspace_root.join("mock-flight.json");
     let manifest_path = workspace_root.join("mock-manifest.json");
 
     std::fs::create_dir_all(&source_root)?;
@@ -84,6 +87,8 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
 
     let registry = villain_files_registry(&source_root);
     std::fs::write(&registry_path, serde_json::to_string_pretty(&registry)?)?;
+    let flight = dry_run_flight(&registry, &["justice-league:villains:index".to_string()]);
+    std::fs::write(&flight_path, serde_json::to_string_pretty(&flight)?)?;
 
     let mut fetched_fletches = Vec::new();
     let mut entries = Vec::new();
@@ -131,6 +136,8 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     Ok(report(
         manifest_path,
         registry_path,
+        flight_path,
+        flight.steps.len(),
         fetched_fletches,
         &statuses,
         &prune,
@@ -147,6 +154,8 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
 fn report(
     manifest_path: PathBuf,
     registry_path: PathBuf,
+    flight_path: PathBuf,
+    flight_step_count: usize,
     fetched_fletches: Vec<String>,
     statuses: &[fletch_core::CacheStatus],
     prune: &PrunePlan,
@@ -161,6 +170,8 @@ fn report(
     MockClientReport {
         client: "justice-league-villain-files-mock".to_string(),
         registry_path: registry_path.display().to_string(),
+        flight_path: flight_path.display().to_string(),
+        flight_step_count,
         manifest_path: manifest_path.display().to_string(),
         fetched_fletches,
         verified_count: statuses
@@ -413,6 +424,8 @@ mod tests {
         assert_eq!(report.prune_count, 1);
         assert_eq!(report.staged_import_count, 4);
         assert!(Path::new(&report.registry_path).exists());
+        assert!(Path::new(&report.flight_path).exists());
+        assert_eq!(report.flight_step_count, 6);
         assert!(Path::new(&report.quiver_path).exists());
         assert!(Path::new(&report.staged_quiver_root).exists());
         assert!(Path::new(&report.graph_path).exists());

@@ -13,6 +13,7 @@ pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
+pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -336,6 +337,49 @@ pub struct FletchRegistry {
     pub fletches: Vec<FletchDefinition>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlightStepAction {
+    WouldFetch,
+    AdapterRequired,
+    MetadataOnly,
+    MissingFletch,
+}
+
+impl FlightStepAction {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::WouldFetch => "would-fetch",
+            Self::AdapterRequired => "adapter-required",
+            Self::MetadataOnly => "metadata-only",
+            Self::MissingFletch => "missing-fletch",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlightStep {
+    pub fletch_id: String,
+    pub node_kind: Option<GraphNodeKind>,
+    pub action: FlightStepAction,
+    pub shaft: Option<SourceSpec>,
+    pub cache_key: Option<String>,
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FletchFlight {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub registry_id: String,
+    pub mode: String,
+    pub requested: Vec<String>,
+    pub steps: Vec<FlightStep>,
+    pub graph: FletchGraph,
+}
+
 pub fn fletch_registry(
     registry_id: impl Into<String>,
     fletches: Vec<FletchDefinition>,
@@ -345,6 +389,121 @@ pub fn fletch_registry(
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         registry_id: registry_id.into(),
         fletches,
+    }
+}
+
+pub fn dry_run_flight(registry: &FletchRegistry, requested: &[String]) -> FletchFlight {
+    let requested = if requested.is_empty() {
+        registry
+            .fletches
+            .iter()
+            .map(|definition| definition.id.clone())
+            .collect::<Vec<_>>()
+    } else {
+        requested.to_vec()
+    };
+    let definitions = registry
+        .fletches
+        .iter()
+        .map(|definition| (definition.id.as_str(), definition))
+        .collect::<BTreeMap<_, _>>();
+    let mut visited = BTreeSet::new();
+    let mut stack = requested.iter().rev().cloned().collect::<Vec<_>>();
+    let mut included = Vec::new();
+    let mut steps = Vec::new();
+
+    while let Some(fletch_id) = stack.pop() {
+        if !visited.insert(fletch_id.clone()) {
+            continue;
+        }
+        let Some(definition) = definitions.get(fletch_id.as_str()) else {
+            steps.push(FlightStep {
+                fletch_id,
+                node_kind: None,
+                action: FlightStepAction::MissingFletch,
+                shaft: None,
+                cache_key: None,
+                dependencies: Vec::new(),
+                reason: "requested fletch is not present in registry".to_string(),
+            });
+            continue;
+        };
+
+        included.push((*definition).clone());
+        for edge in definition.edges.iter().rev() {
+            if definitions.contains_key(edge.to.as_str()) {
+                stack.push(edge.to.clone());
+            }
+        }
+        let shaft = definition.shafts.first().cloned();
+        let cache_key = shaft.as_ref().and_then(|shaft| {
+            fetch_plan_with_kind(definition.id.clone(), shaft.url.clone(), shaft.kind.clone())
+                .ok()
+                .map(|plan| cache_key(&plan))
+        });
+        let (action, reason) = match shaft.as_ref().map(|shaft| &shaft.kind) {
+            Some(SourceKind::Http | SourceKind::File) => (
+                FlightStepAction::WouldFetch,
+                "registered shaft can be fetched by generic execution",
+            ),
+            Some(SourceKind::Adapter) => (
+                FlightStepAction::AdapterRequired,
+                "registered shaft requires a product adapter",
+            ),
+            None => (
+                FlightStepAction::MetadataOnly,
+                "registry node has no direct shaft and is resolved as graph metadata",
+            ),
+        };
+        steps.push(FlightStep {
+            fletch_id: definition.id.clone(),
+            node_kind: Some(definition.node_kind.clone()),
+            action,
+            shaft,
+            cache_key,
+            dependencies: definition
+                .edges
+                .iter()
+                .map(|edge| edge.to.clone())
+                .collect::<Vec<_>>(),
+            reason: reason.to_string(),
+        });
+    }
+
+    let mut graph = graph_from_registry(&fletch_registry(registry.registry_id.clone(), included));
+    let flight_id = format!("{}:dry-run", registry.registry_id);
+    graph.nodes.insert(
+        0,
+        GraphNode {
+            id: graph_node_id(&GraphNodeKind::Flight, &flight_id),
+            kind: GraphNodeKind::Flight,
+            label: flight_id.clone(),
+            metadata: BTreeMap::from([
+                ("mode".to_string(), "dry-run".to_string()),
+                ("registry_id".to_string(), registry.registry_id.clone()),
+            ]),
+        },
+    );
+    for step in &steps {
+        if let Some(kind) = &step.node_kind {
+            graph.edges.push(GraphEdge {
+                from: graph_node_id(&GraphNodeKind::Flight, &flight_id),
+                to: graph_node_id(kind, &step.fletch_id),
+                kind: GraphEdgeKind::Contains,
+                label: Some(step.action.label().to_string()),
+                metadata: BTreeMap::new(),
+            });
+        }
+    }
+
+    FletchFlight {
+        schema_version: FLETCH_FLIGHT_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        registry_id: registry.registry_id.clone(),
+        mode: "dry-run".to_string(),
+        requested,
+        steps,
+        graph,
     }
 }
 
@@ -1846,6 +2005,61 @@ mod tests {
             .edges
             .iter()
             .any(|edge| edge.kind == GraphEdgeKind::SatisfiedBy));
+    }
+
+    #[test]
+    fn dry_run_flight_resolves_registry_graph_without_fetching() {
+        let registry = fletch_registry(
+            "test-registry",
+            vec![
+                FletchDefinition {
+                    id: "test:index".to_string(),
+                    node_kind: GraphNodeKind::Fletch,
+                    shafts: vec![SourceSpec {
+                        kind: SourceKind::File,
+                        url: "index.json".to_string(),
+                        headers: BTreeMap::new(),
+                    }],
+                    edges: vec![RegistryEdge {
+                        to: "test:partition:2026".to_string(),
+                        kind: GraphEdgeKind::ExpandsTo,
+                        label: None,
+                        metadata: BTreeMap::new(),
+                    }],
+                    format: None,
+                    tags: Vec::new(),
+                    metadata: BTreeMap::new(),
+                },
+                FletchDefinition {
+                    id: "test:partition:2026".to_string(),
+                    node_kind: GraphNodeKind::Partition,
+                    shafts: Vec::new(),
+                    edges: Vec::new(),
+                    format: None,
+                    tags: Vec::new(),
+                    metadata: BTreeMap::new(),
+                },
+            ],
+        );
+
+        let flight = dry_run_flight(&registry, &["test:index".to_string()]);
+
+        assert_eq!(flight.schema_version, FLETCH_FLIGHT_SCHEMA);
+        assert_eq!(flight.requested, vec!["test:index"]);
+        assert_eq!(flight.steps.len(), 2);
+        assert_eq!(flight.steps[0].action, FlightStepAction::WouldFetch);
+        assert_eq!(flight.steps[1].action, FlightStepAction::MetadataOnly);
+        assert!(flight
+            .graph
+            .nodes
+            .iter()
+            .any(|node| node.kind == GraphNodeKind::Flight));
+        assert!(flight
+            .graph
+            .edges
+            .iter()
+            .any(|edge| edge.kind == GraphEdgeKind::Contains
+                && edge.label == Some("would-fetch".to_string())));
     }
 
     fn unique_temp_dir(label: &str) -> PathBuf {
