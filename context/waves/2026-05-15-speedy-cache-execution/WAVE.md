@@ -20,7 +20,7 @@ focused on product-neutral fetch/cache execution.
 |------:|-------|--------|---------|
 | 01 | Retry and timeout controls | done | Added generic request timeout and retry-attempt fetch options plus CLI support. |
 | 02 | Retry status reporting | done | Added attempt counts, retry counts, and last retryable error to fetch outcomes and manifest entries. |
-| 03 | File shaft path hardening | pending | Tighten local file shaft handling and status messages for local-only sources. |
+| 03 | File shaft path hardening | done | Normalized common `file://` shaft paths and rejected empty local file shafts. |
 | 04 | Cache-hit ledger trust | pending | Prepare persistent ledger-backed skip decisions beyond single-command manifests. |
 
 ## Validation expectations

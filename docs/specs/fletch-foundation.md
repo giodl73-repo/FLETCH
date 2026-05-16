@@ -316,6 +316,10 @@ shafts remain explicit failures. Successful fetch outcomes and ledger entries
 record attempt count, retry count, and the last retryable error observed before
 success.
 
+Local file shafts accept native paths and common `file://` URL forms. Empty file
+shafts are invalid, and URL normalization remains generic path handling rather
+than a product-specific source catalog.
+
 Fetch/merge semantics are deliberately separate. A fetch may acquire, verify,
 and record a candidate cache object, but it must not silently merge that object
 into a product's active data view. Future `pull` is reserved for fetch plus

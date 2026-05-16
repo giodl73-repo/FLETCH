@@ -29,6 +29,8 @@ pub enum FletchError {
     InvalidSha256 { dataset_id: String, sha256: String },
     #[error("[FETCH] source kind {kind:?} cannot be fetched by generic execution")]
     UnsupportedSourceKind { kind: SourceKind },
+    #[error("[FETCH] invalid file shaft URL/path: {source_url}")]
+    InvalidFileSource { source_url: String },
     #[error("[FETCH] failed to read {path}: {source}")]
     ReadSource {
         path: String,
@@ -1257,7 +1259,7 @@ fn fetch_source_once(
             write_stream_to_temp(&mut response, temp_path, options.max_bytes_per_second)
         }
         SourceKind::File => {
-            let path = file_source_path(&plan.source.url);
+            let path = file_source_path(&plan.source.url)?;
             let mut file = File::open(&path).map_err(|source| FletchError::ReadSource {
                 path: path.display().to_string(),
                 source,
@@ -1532,11 +1534,37 @@ fn promote_directory(temp_path: &Path, destination: &Path) -> Result<(), FletchE
     })
 }
 
-fn file_source_path(source_url: &str) -> PathBuf {
-    source_url
-        .strip_prefix("file://")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(source_url))
+fn file_source_path(source_url: &str) -> Result<PathBuf, FletchError> {
+    let source_url = source_url.trim();
+    if source_url.is_empty() || source_url == "file://" {
+        return Err(FletchError::InvalidFileSource {
+            source_url: source_url.to_string(),
+        });
+    }
+    let Some(stripped) = source_url.strip_prefix("file://") else {
+        return Ok(PathBuf::from(source_url));
+    };
+    let without_host = stripped
+        .strip_prefix("localhost/")
+        .or_else(|| stripped.strip_prefix("localhost\\"))
+        .unwrap_or(stripped);
+    let normalized = normalize_file_url_path(without_host);
+    if normalized.trim().is_empty() {
+        return Err(FletchError::InvalidFileSource {
+            source_url: source_url.to_string(),
+        });
+    }
+    Ok(PathBuf::from(normalized))
+}
+
+fn normalize_file_url_path(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let bytes = path.as_bytes();
+    if bytes.len() >= 4 && bytes[0] == b'/' && bytes[2] == b':' && bytes[1].is_ascii_alphabetic() {
+        path[1..].to_string()
+    } else {
+        path
+    }
 }
 
 fn relative_cache_path(cache_key: &str) -> String {
@@ -2095,6 +2123,38 @@ mod tests {
         assert_eq!(outcome.entry.fetch_attempts, 1);
         assert_eq!(outcome.entry.retry_count, 0);
         assert_eq!(outcome.entry.last_retryable_error, None);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_fetch_normalizes_file_url_paths() {
+        let root = unique_temp_dir("file-url");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"file_url":true}"#).unwrap();
+        let file_url = format!(
+            "file:///{}",
+            source.display().to_string().replace('\\', "/")
+        );
+        let plan = fetch_plan_with_kind("test:file-url", file_url, SourceKind::File).unwrap();
+
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+
+        assert_eq!(outcome.entry.bytes, 17);
+        assert!(outcome.entry.verified);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_fetch_rejects_empty_file_url() {
+        let root = unique_temp_dir("empty-file-url");
+        let plan = fetch_plan_with_kind("test:file-url", "file://", SourceKind::File).unwrap();
+
+        let result = fetch_to_cache(&plan, FetchOptions::new(root.join("cache")));
+
+        assert!(matches!(result, Err(FletchError::InvalidFileSource { .. })));
 
         let _ = std::fs::remove_dir_all(root);
     }
