@@ -69,8 +69,8 @@ Downstream migration status:
 - BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
   validation. `bisect fletch-cache-index --gate` maps BISECT's FLETCH cache
-  manifest to compact evidence using FLETCH's shared manifest read/write and
-  batch upsert helpers.
+  manifest to compact evidence using FLETCH's shared manifest read/write,
+  batch upsert, and cache-index gate helpers.
 - ICELINES: roster, MoneyPuck, paged NHL stats report, Gamecenter batch,
   player landing batch, and ESPN transaction window acquisition moved to FLETCH, with
   `icelines fetch fletch-sources --gate` documenting source handoff and
