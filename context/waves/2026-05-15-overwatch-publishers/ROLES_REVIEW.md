@@ -13,7 +13,7 @@ final Arrow phase listed in `PHASES.md`.
 | Provenance Auditor | CROP, PROOF, URL, and publisher bundle rows retain source schema references back to authoritative machine contracts. | Pass |
 | Offline Release Operator | Publisher reports can be generated from local manifests/indexes without live fetches. | Pass |
 | Adapter Boundary Keeper | Publisher contracts remain backend-neutral and do not embed product UI or adapter semantics. | Pass |
-| Performance Engineer | Reports summarize existing rows; large publisher surfaces may need pagination or streaming output later. | Follow-up |
+| Performance Engineer | Reports summarize existing rows and read-only CROP/PROOF/URL outputs now support bounded slices for large local publisher surfaces. | Pass |
 | PROOF/CROP Publisher | Overwatch directly provides index rows, document anchors, URL maps, and bundle summaries for local rendering/indexing. | Pass |
 
 ## Editorial findings
@@ -52,7 +52,7 @@ None.
 
 ## Deferred risks
 
-- Very large publisher surfaces may need pagination, streaming, or filtered views.
+- Extremely large publisher surfaces may eventually need streaming output beyond bounded slices.
 - Future PROOF backends should keep generated Markdown/HTML linked to these
   source contracts instead of duplicating state.
 - Consumer-specific dashboards should live in consumer repos or publisher

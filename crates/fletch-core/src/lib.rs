@@ -1276,6 +1276,71 @@ pub fn proof_document_manifest(index: &CropIndexReport) -> ProofDocumentManifest
     }
 }
 
+pub fn slice_crop_index_report(
+    index: &CropIndexReport,
+    row_type: Option<&str>,
+    offset: usize,
+    limit: Option<usize>,
+) -> CropIndexReport {
+    let take = limit.unwrap_or(usize::MAX);
+    let rows = index
+        .rows
+        .iter()
+        .filter(|row| match row_type {
+            Some(row_type) => row.row_type == row_type,
+            None => true,
+        })
+        .skip(offset)
+        .take(take)
+        .cloned()
+        .collect::<Vec<_>>();
+    let status_row_count = rows
+        .iter()
+        .filter(|row| row.row_type == "cache-status")
+        .count();
+    let graph_node_row_count = rows
+        .iter()
+        .filter(|row| row.row_type == "graph-node")
+        .count();
+    let graph_edge_row_count = rows
+        .iter()
+        .filter(|row| row.row_type == "graph-edge")
+        .count();
+    let tip_row_count = rows.iter().filter(|row| row.row_type == "tip").count();
+    CropIndexReport {
+        schema_version: index.schema_version.clone(),
+        generated_by: index.generated_by.clone(),
+        cache_root: index.cache_root.clone(),
+        row_count: rows.len(),
+        status_row_count,
+        graph_node_row_count,
+        graph_edge_row_count,
+        tip_row_count,
+        rows,
+    }
+}
+
+pub fn slice_proof_document_manifest(
+    docs: &ProofDocumentManifest,
+    offset: usize,
+    limit: Option<usize>,
+) -> ProofDocumentManifest {
+    let documents = docs
+        .documents
+        .iter()
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    ProofDocumentManifest {
+        schema_version: docs.schema_version.clone(),
+        generated_by: docs.generated_by.clone(),
+        source_schema: docs.source_schema.clone(),
+        document_count: documents.len(),
+        documents,
+    }
+}
+
 pub fn local_url_map(docs: &ProofDocumentManifest, base_path: impl Into<String>) -> LocalUrlMap {
     let base_path = base_path.into();
     let base = base_path.trim_end_matches('/').to_string();
@@ -1302,6 +1367,23 @@ pub fn local_url_map(docs: &ProofDocumentManifest, base_path: impl Into<String>)
         base_path,
         url_count: urls.len(),
         urls,
+    }
+}
+
+pub fn slice_local_url_map(urls: &LocalUrlMap, offset: usize, limit: Option<usize>) -> LocalUrlMap {
+    let entries = urls
+        .urls
+        .iter()
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    LocalUrlMap {
+        schema_version: urls.schema_version.clone(),
+        generated_by: urls.generated_by.clone(),
+        base_path: urls.base_path.clone(),
+        url_count: entries.len(),
+        urls: entries,
     }
 }
 
@@ -5768,6 +5850,66 @@ mod tests {
         assert!(urls.urls[0]
             .local_url
             .starts_with("docs/fletch/cache-status_test_fletch"));
+    }
+
+    #[test]
+    fn publisher_slice_helpers_filter_and_bound_rows() {
+        let index = CropIndexReport {
+            schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            row_count: 4,
+            status_row_count: 1,
+            graph_node_row_count: 1,
+            graph_edge_row_count: 1,
+            tip_row_count: 1,
+            rows: vec![
+                CropIndexRow {
+                    row_type: "cache-status".to_string(),
+                    id: "status".to_string(),
+                    label: "status".to_string(),
+                    status: Some("verified".to_string()),
+                    source_schema: FLETCH_VERIFY_SCHEMA.to_string(),
+                },
+                CropIndexRow {
+                    row_type: "tip".to_string(),
+                    id: "tip-1".to_string(),
+                    label: "tip 1".to_string(),
+                    status: None,
+                    source_schema: FLETCH_TIP_SCHEMA.to_string(),
+                },
+                CropIndexRow {
+                    row_type: "tip".to_string(),
+                    id: "tip-2".to_string(),
+                    label: "tip 2".to_string(),
+                    status: None,
+                    source_schema: FLETCH_TIP_SCHEMA.to_string(),
+                },
+                CropIndexRow {
+                    row_type: "graph-node".to_string(),
+                    id: "node".to_string(),
+                    label: "node".to_string(),
+                    status: None,
+                    source_schema: FLETCH_GRAPH_SCHEMA.to_string(),
+                },
+            ],
+        };
+
+        let tips = slice_crop_index_report(&index, Some("tip"), 1, Some(1));
+
+        assert_eq!(tips.row_count, 1);
+        assert_eq!(tips.tip_row_count, 1);
+        assert_eq!(tips.rows[0].id, "tip-2");
+
+        let docs = proof_document_manifest(&index);
+        let doc_slice = slice_proof_document_manifest(&docs, 1, Some(2));
+        assert_eq!(doc_slice.document_count, 2);
+        assert_eq!(doc_slice.documents[0].document_id, "tip:tip-1");
+
+        let urls = local_url_map(&docs, "docs");
+        let url_slice = slice_local_url_map(&urls, 2, Some(1));
+        assert_eq!(url_slice.url_count, 1);
+        assert_eq!(url_slice.urls[0].document_id, "tip:tip-2");
     }
 
     #[test]

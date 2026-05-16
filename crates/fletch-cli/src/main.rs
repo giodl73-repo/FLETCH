@@ -9,7 +9,8 @@ use fletch_core::{
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
     proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
-    quiver_merge_ready_report, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
+    quiver_merge_ready_report, slice_crop_index_report, slice_local_url_map,
+    slice_proof_document_manifest, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
     upsert_cache_manifest_entry, validate_registry, verify_cache_manifest, verify_quiver_bundle,
     AdapterHandoffReport, AliasState, CacheEntry, CacheManifest, CropIndexReport, FetchOptions,
     FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap, PartitionState,
@@ -531,6 +532,15 @@ enum PublishCommands {
         /// Maximum bytes to sample from each cached object for tips.
         #[arg(long, default_value_t = 4096)]
         max_tip_bytes: usize,
+        /// Optional row type filter, such as cache-status, graph-node, graph-edge, or tip.
+        #[arg(long)]
+        row_type: Option<String>,
+        /// Number of matching rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of matching rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -540,6 +550,12 @@ enum PublishCommands {
         /// Path to a fletch.crop-index.v1 JSON file.
         #[arg(long)]
         crop_index: PathBuf,
+        /// Number of generated document anchors to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of generated document anchors to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -552,6 +568,12 @@ enum PublishCommands {
         /// Local base path or URL prefix for generated documents.
         #[arg(long, default_value = "fletch")]
         base_path: String,
+        /// Number of generated URL entries to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of generated URL entries to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -923,26 +945,39 @@ fn main() -> Result<()> {
                 freshness,
                 max_age_days,
                 max_tip_bytes,
+                row_type,
+                offset,
+                limit,
                 output,
             } => {
                 let manifest = read_manifest(&manifest)?;
                 let freshness = freshness_policy(freshness, max_age_days)?;
+                let index = crop_index_from_manifest(&manifest, &freshness, max_tip_bytes)?;
                 write_json(
-                    &crop_index_from_manifest(&manifest, &freshness, max_tip_bytes)?,
+                    &slice_crop_index_report(&index, row_type.as_deref(), offset, limit),
                     output,
                 )?;
             }
-            PublishCommands::ProofDocs { crop_index, output } => {
+            PublishCommands::ProofDocs {
+                crop_index,
+                offset,
+                limit,
+                output,
+            } => {
                 let crop_index = read_crop_index(&crop_index)?;
-                write_json(&proof_document_manifest(&crop_index), output)?;
+                let docs = proof_document_manifest(&crop_index);
+                write_json(&slice_proof_document_manifest(&docs, offset, limit), output)?;
             }
             PublishCommands::LocalUrlMap {
                 proof_docs,
                 base_path,
+                offset,
+                limit,
                 output,
             } => {
                 let proof_docs = read_proof_docs(&proof_docs)?;
-                write_json(&local_url_map(&proof_docs, base_path), output)?;
+                let urls = local_url_map(&proof_docs, base_path);
+                write_json(&slice_local_url_map(&urls, offset, limit), output)?;
             }
             PublishCommands::Bundle {
                 crop_index,

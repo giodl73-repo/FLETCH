@@ -146,6 +146,11 @@ Verification compares cached object hashes and byte counts with the ledger.
 Status adds freshness evaluation, and prune emits a deletion plan for
 unreferenced cache objects without deleting them.
 
+Publisher commands are read-only derived views. `fletch publish crop-index`,
+`fletch publish proof-docs`, and `fletch publish local-url-map` accept
+`--offset` and `--limit` for bounded output; CROP index output also accepts
+`--row-type` to focus large local publisher surfaces.
+
 `fletch quiver export` writes a `fletch.quiver.v1` directory with `quiver.json`
 and referenced cache objects. `fletch quiver import` verifies bundled bytes,
 copies through a temporary stage, then promotes into

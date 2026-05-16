@@ -134,15 +134,19 @@ registry, graph, and flight contracts remain the source of truth.
 
 `fletch.crop-index.v1` emits CROP-indexable rows over cache status, graph nodes,
 graph edges, and tips. Each row records its source schema so generated indexes
-can link back to the machine contract that remains authoritative.
+can link back to the machine contract that remains authoritative. Publisher
+commands can emit bounded CROP slices with `--row-type`, `--offset`, and
+`--limit`; slices remain derived views rather than activation state.
 
 `fletch.proof-docs.v1` emits document IDs, titles, anchors, and source schemas
 derived from CROP index rows. PROOF backends can render Markdown, HTML, or other
 views from this manifest while linking back to authoritative machine contracts.
+CLI output can be bounded with `--offset` and `--limit`.
 
 `fletch.local-url-map.v1` maps PROOF document IDs and anchors to stable local
 paths or URL prefixes. It is a navigation layer for generated views; source
-schemas still point back to the authoritative FLETCH contracts.
+schemas still point back to the authoritative FLETCH contracts. CLI output can
+be bounded with `--offset` and `--limit`.
 
 `fletch.publisher-bundle.v1` summarizes publisher inputs for CROP/PROOF backends:
 CROP row counts, PROOF document counts, local URL counts, and optional quiver or

@@ -22,6 +22,7 @@ making generated artifacts the source of truth.
 | 02 | PROOF document manifest | done | Added `fletch.proof-docs.v1` document anchors over CROP index rows. |
 | 03 | Local URL map | done | Added `fletch.local-url-map.v1` stable local URLs over PROOF document anchors. |
 | 04 | Publisher bundle report | done | Added `fletch.publisher-bundle.v1` summary over CROP, PROOF, URL, quiver, and adapter views. |
+| 05 | Publisher slices | done | Added bounded CROP/PROOF/URL publisher slices for large local surfaces. |
 
 ## Validation expectations
 
