@@ -260,6 +260,12 @@ offline bootstrap, writes registry and dry-run flight files, emits graph views
 from both registry and cached state, writes generic tips and a publish-ready
 status report, and emits a prune plan for an orphaned trick-arrow object.
 
+The same mock also includes a MAXIM-style source-corpus slice: a CROP view
+recipe selects a frontend-framework guide, the fetched PEBBLE pack carries the
+portable article context, and PROOF table/block sidecars provide structured data
+for React-focused queries. FLETCH treats all four artifacts as generic cache
+entries while the mock adapter owns the CROP/PEBBLE/PROOF interpretation.
+
 ## Design rule
 
 FLETCH stays product-neutral. Adapters can know about Census, NHL, or route data,

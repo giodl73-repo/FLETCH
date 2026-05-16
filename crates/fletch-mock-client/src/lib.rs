@@ -38,6 +38,21 @@ pub struct MockClientReport {
     pub publish_path: String,
     pub publish_status_count: usize,
     pub threat_query: ThreatQueryReport,
+    pub maxim_source_corpus: MaximSourceCorpusReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MaximSourceCorpusReport {
+    pub registry_path: String,
+    pub manifest_path: String,
+    pub fetched_fletches: Vec<String>,
+    pub verified_count: usize,
+    pub view_count: usize,
+    pub frontend_view_query_count: usize,
+    pub guide_count: usize,
+    pub table_count: usize,
+    pub structured_block_count: usize,
+    pub react_context_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -162,6 +177,7 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     std::fs::write(&tips_path, serde_json::to_string_pretty(&tips)?)?;
     let publish = publish_report_from_manifest(&manifest, &FreshnessPolicy::Immutable, 2048)?;
     std::fs::write(&publish_path, serde_json::to_string_pretty(&publish)?)?;
+    let maxim_source_corpus = run_maxim_source_corpus_scenario(workspace_root)?;
 
     Ok(report(
         manifest_path,
@@ -183,6 +199,7 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
         publish_path,
         publish.statuses.len(),
         threat_query,
+        maxim_source_corpus,
     ))
 }
 
@@ -206,6 +223,7 @@ fn report(
     publish_path: PathBuf,
     publish_status_count: usize,
     threat_query: ThreatQueryReport,
+    maxim_source_corpus: MaximSourceCorpusReport,
 ) -> MockClientReport {
     MockClientReport {
         client: "justice-league-villain-files-mock".to_string(),
@@ -236,7 +254,156 @@ fn report(
         publish_path: publish_path.display().to_string(),
         publish_status_count,
         threat_query,
+        maxim_source_corpus,
     }
+}
+
+fn run_maxim_source_corpus_scenario(workspace_root: &Path) -> Result<MaximSourceCorpusReport> {
+    let source_root = workspace_root.join("maxim-source");
+    let cache_root = workspace_root.join("maxim-cache");
+    let registry_path = workspace_root.join("maxim-source-corpus-registry.json");
+    let manifest_path = workspace_root.join("maxim-source-corpus-manifest.json");
+    std::fs::create_dir_all(&source_root)?;
+
+    std::fs::write(
+        source_root.join("maxim-computing-frontend-frameworks.view.json"),
+        br###"{
+  "schema_version": "crop.view.v1",
+  "name": "maxim-computing-frontend-frameworks",
+  "root": "../../computing",
+  "task": "Backfill MAXIM frontend frameworks as a partial source-custody fact/context pack.",
+  "token_budget": 12000,
+  "seed": 0,
+  "frontmatter_query": "id eq 'maxim:computing-software:frontend-frameworks'",
+  "include_extensions": ["md"]
+}"###,
+    )?;
+    std::fs::write(
+        source_root.join("maxim-computing-frontend-frameworks.pebble.json"),
+        br###"{
+  "schema": "pebble.v1",
+  "kind": "corpus-slice",
+  "title": "maxim-computing-frontend-frameworks",
+  "source": "../../computing",
+  "format": "markdown",
+  "metadata": {},
+  "sections": [
+    {
+      "id": "05-FRONTEND.md#000",
+      "path": ["05-FRONTEND.md"],
+      "level": 0,
+      "line": 1,
+      "metadata": {
+        "maxim_schema": "maxim.frontmatter.v1",
+        "id": "maxim:computing-software:frontend-frameworks",
+        "kind": "guide",
+        "source_custody": "partial",
+        "current_path": "computing/05-FRONTEND.md",
+        "concepts": "[frontend frameworks, react, vue, angular, svelte]"
+      },
+      "text": "# Frontend Frameworks - A Layered Guide"
+    },
+    {
+      "id": "05-FRONTEND.md#001",
+      "path": ["05-FRONTEND.md"],
+      "level": 2,
+      "line": 35,
+      "metadata": {
+        "maxim_schema": "maxim.frontmatter.v1",
+        "id": "maxim:computing-software:frontend-frameworks",
+        "source_custody": "partial",
+        "current_path": "computing/05-FRONTEND.md"
+      },
+      "text": "React, Vue, Angular, and Svelte all keep UI synchronized with state."
+    }
+  ]
+}"###,
+    )?;
+    std::fs::write(
+        source_root.join("05-FRONTEND.tables.json"),
+        br###"{
+  "schema_version": "1",
+  "source_markdown": "computing\\05-FRONTEND.md",
+  "tables": [
+    {
+      "id": "table-1",
+      "line": 710,
+      "heading_context": "## Old World -> New World Bridge",
+      "headers": [".NET concept", "Frontend equivalent", "Notes"],
+      "rows": [
+        ["WinForms control tree", "Component tree", "UI hierarchy"],
+        ["Data binding", "React props/state", "State drives rendering"]
+      ]
+    }
+  ]
+}"###,
+    )?;
+    std::fs::write(
+        source_root.join("05-FRONTEND.blocks.json"),
+        br###"{
+  "schema_version": "1",
+  "source_markdown": "computing\\05-FRONTEND.md",
+  "blocks": [
+    {
+      "id": "block-1",
+      "kind": "ascii_table_candidate",
+      "line": 7,
+      "heading_context": "## The Big Picture",
+      "confidence": "candidate",
+      "text": "REACT | VUE | ANGULAR | SVELTE",
+      "notes": ["fenced visual/source block"]
+    },
+    {
+      "id": "block-2",
+      "kind": "diagram_like",
+      "line": 120,
+      "heading_context": "## React mental model",
+      "confidence": "candidate",
+      "text": "state -> render -> DOM",
+      "notes": ["detected from arrows or box-drawing glyphs"]
+    }
+  ]
+}"###,
+    )?;
+
+    let registry = maxim_source_corpus_registry(&source_root);
+    std::fs::write(&registry_path, serde_json::to_string_pretty(&registry)?)?;
+
+    let mut fetched_fletches = Vec::new();
+    let mut entries = Vec::new();
+    for definition in &registry.fletches {
+        let Some(shaft) = definition.shafts.first() else {
+            continue;
+        };
+        let plan =
+            fetch_plan_with_kind(definition.id.clone(), shaft.url.clone(), shaft.kind.clone())?;
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root))?;
+        fetched_fletches.push(definition.id.clone());
+        entries.push(outcome.entry);
+    }
+
+    let manifest = cache_manifest(cache_root.display().to_string(), Vec::new())?;
+    let manifest = upsert_cache_manifest_entries(manifest, entries)?;
+    write_cache_manifest_json(&manifest_path, &manifest)?;
+    let manifest = read_cache_manifest_json(&manifest_path)?;
+    let statuses = inspect_cache_manifest(&manifest, &FreshnessPolicy::Immutable)?;
+    let query = query_maxim_source_corpus(&manifest)?;
+
+    Ok(MaximSourceCorpusReport {
+        registry_path: registry_path.display().to_string(),
+        manifest_path: manifest_path.display().to_string(),
+        fetched_fletches,
+        verified_count: statuses
+            .iter()
+            .filter(|status| status.object_status == CacheObjectStatus::Verified)
+            .count(),
+        view_count: query.view_count,
+        frontend_view_query_count: query.frontend_view_query_count,
+        guide_count: query.guide_count,
+        table_count: query.table_count,
+        structured_block_count: query.structured_block_count,
+        react_context_count: query.react_context_count,
+    })
 }
 
 fn villain_files_graph(manifest: &CacheManifest, registry: &FletchRegistry) -> FletchGraph {
@@ -321,6 +488,51 @@ fn villain_files_registry(source_root: &Path) -> FletchRegistry {
                 None,
                 Vec::new(),
                 None,
+            ),
+        ],
+    )
+}
+
+fn maxim_source_corpus_registry(source_root: &Path) -> FletchRegistry {
+    fletch_registry(
+        "maxim:computing-source-corpus:mock",
+        vec![
+            fletch_definition(
+                "maxim.computing-frontend-frameworks.view",
+                GraphNodeKind::Fletch,
+                Some(source_root.join("maxim-computing-frontend-frameworks.view.json")),
+                Vec::new(),
+                Some("crop.view.v1"),
+            ),
+            fletch_definition(
+                "maxim.computing-frontend-frameworks.pebble",
+                GraphNodeKind::Fletch,
+                Some(source_root.join("maxim-computing-frontend-frameworks.pebble.json")),
+                vec![edge(
+                    "maxim.computing-frontend-frameworks.view",
+                    GraphEdgeKind::DerivedFrom,
+                )],
+                Some("pebble.v1"),
+            ),
+            fletch_definition(
+                "maxim.computing-frontend-frameworks.tables",
+                GraphNodeKind::Fletch,
+                Some(source_root.join("05-FRONTEND.tables.json")),
+                vec![edge(
+                    "maxim.computing-frontend-frameworks.pebble",
+                    GraphEdgeKind::DerivedFrom,
+                )],
+                Some("proof.backfill.tables.v1"),
+            ),
+            fletch_definition(
+                "maxim.computing-frontend-frameworks.blocks",
+                GraphNodeKind::Fletch,
+                Some(source_root.join("05-FRONTEND.blocks.json")),
+                vec![edge(
+                    "maxim.computing-frontend-frameworks.pebble",
+                    GraphEdgeKind::DerivedFrom,
+                )],
+                Some("proof.backfill.blocks.v1"),
             ),
         ],
     )
@@ -453,6 +665,118 @@ fn cache_object_path(cache_root: &str, relative_path: &str) -> PathBuf {
         .fold(PathBuf::from(cache_root), |path, part| path.join(part))
 }
 
+#[derive(Debug, Default)]
+struct MaximQuerySummary {
+    view_count: usize,
+    frontend_view_query_count: usize,
+    guide_count: usize,
+    table_count: usize,
+    structured_block_count: usize,
+    react_context_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct PebblePack {
+    sections: Vec<PebbleSection>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PebbleSection {
+    metadata: BTreeMap<String, String>,
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CropViewRecipe {
+    frontmatter_query: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProofTableDataset {
+    tables: Vec<ProofTable>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProofTable {
+    rows: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProofBlockDataset {
+    blocks: Vec<ProofBlock>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProofBlock {
+    heading_context: Option<String>,
+    text: String,
+}
+
+fn query_maxim_source_corpus(manifest: &CacheManifest) -> Result<MaximQuerySummary> {
+    let mut summary = MaximQuerySummary::default();
+    let mut guides = BTreeMap::<String, ()>::new();
+
+    for entry in &manifest.entries {
+        let bytes = std::fs::read(cache_object_path(
+            &manifest.cache_root,
+            &entry.relative_path,
+        ))?;
+        if entry.dataset_id.ends_with(".view") {
+            let view: CropViewRecipe = serde_json::from_slice(&bytes)?;
+            summary.view_count += 1;
+            if view
+                .frontmatter_query
+                .as_deref()
+                .is_some_and(|query| query.contains("maxim:computing-software:frontend-frameworks"))
+            {
+                summary.frontend_view_query_count += 1;
+            }
+        } else if entry.dataset_id.ends_with(".pebble") {
+            let pack: PebblePack = serde_json::from_slice(&bytes)?;
+            for section in pack.sections {
+                if let Some(path) = section.metadata.get("current_path") {
+                    guides.insert(path.clone(), ());
+                }
+                if contains_react(&section.text)
+                    || section
+                        .metadata
+                        .get("concepts")
+                        .is_some_and(|concepts| contains_react(concepts))
+                {
+                    summary.react_context_count += 1;
+                }
+            }
+        } else if entry.dataset_id.ends_with(".tables") {
+            let tables: ProofTableDataset = serde_json::from_slice(&bytes)?;
+            summary.table_count += tables.tables.len();
+            summary.react_context_count += tables
+                .tables
+                .iter()
+                .flat_map(|table| &table.rows)
+                .filter(|row| row.iter().any(|cell| contains_react(cell)))
+                .count();
+        } else if entry.dataset_id.ends_with(".blocks") {
+            let blocks: ProofBlockDataset = serde_json::from_slice(&bytes)?;
+            summary.structured_block_count += blocks.blocks.len();
+            summary.react_context_count += blocks
+                .blocks
+                .iter()
+                .filter(|block| {
+                    contains_react(&block.text)
+                        || block.heading_context.as_deref().is_some_and(contains_react)
+                })
+                .count();
+        }
+    }
+
+    summary.guide_count = guides.len();
+    Ok(summary)
+}
+
+fn contains_react(value: &str) -> bool {
+    value.to_ascii_lowercase().contains("react")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,6 +806,24 @@ mod tests {
         assert_eq!(report.graph_edge_count, 17);
         assert_eq!(report.tip_count, 4);
         assert_eq!(report.publish_status_count, 4);
+        assert_eq!(
+            report.maxim_source_corpus.fetched_fletches,
+            vec![
+                "maxim.computing-frontend-frameworks.view",
+                "maxim.computing-frontend-frameworks.pebble",
+                "maxim.computing-frontend-frameworks.tables",
+                "maxim.computing-frontend-frameworks.blocks"
+            ]
+        );
+        assert_eq!(report.maxim_source_corpus.verified_count, 4);
+        assert_eq!(report.maxim_source_corpus.view_count, 1);
+        assert_eq!(report.maxim_source_corpus.frontend_view_query_count, 1);
+        assert_eq!(report.maxim_source_corpus.guide_count, 1);
+        assert_eq!(report.maxim_source_corpus.table_count, 1);
+        assert_eq!(report.maxim_source_corpus.structured_block_count, 2);
+        assert_eq!(report.maxim_source_corpus.react_context_count, 5);
+        assert!(Path::new(&report.maxim_source_corpus.registry_path).exists());
+        assert!(Path::new(&report.maxim_source_corpus.manifest_path).exists());
         assert_eq!(
             report
                 .threat_query

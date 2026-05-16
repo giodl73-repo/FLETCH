@@ -54,6 +54,9 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 8. **Overwatch / Publishers**: later, the mock should publish local status,
    threat query summaries, tips, and quiver contents through CROP/PROOF-shaped
    views.
+9. **MAXIM / Source corpus**: the mock now fetches a CROP view recipe, a PEBBLE
+   guide pack, and PROOF table/block sidecars for a frontend-framework guide,
+   then leaves CROP/PEBBLE/PROOF-specific querying in the adapter layer.
 
 ## First migration slices
 
@@ -86,3 +89,4 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 | ROUTE | Generic source orchestration and source handoff/gate reporting. | Route scoring, geospatial semantics, user-facing outputs. |
 | BISECT | Generic HTTP source-byte acquisition under `data/.fletch` plus handoff/gate reporting. | Release adjacency, archive extraction, derived CSVs, done markers, local manifest overrides, legal/redistricting claims. |
 | ICELINES | Handoff/gate reporting, roster, MoneyPuck, paged NHL stats, schedule-expanded Gamecenter, player-set-expanded landing, and season-window-expanded ESPN transaction source-byte acquisition, query partition/rollup handoff reporting, and query quiver handoff reporting. | Schedule/player-set/window expansion semantics, snapshots, parsing, sealing, active pointers, event streams, classifiers, and hockey semantics. |
+| MAXIM | Generic cache acquisition and verification for CROP view recipes, PEBBLE packs, and PROOF sidecars. | Source-corpus authoring, CROP query semantics, PEBBLE metadata interpretation, PROOF document parsing, and guide-specific search behavior. |
