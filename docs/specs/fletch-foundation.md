@@ -307,6 +307,9 @@ two requests to the same URL with different generic headers do not collide.
 Saved `fletch.plan.v1` documents are executable by generic fetch tooling so
 adapters, CROP/PROOF generated files, or checked-in configs can hand FLETCH a
 complete acquisition intent without rebuilding it from flags.
+Fetch execution validates saved or in-memory plans before acquisition: the schema
+must be `fletch.plan.v1`, and required source identity fields must be present.
+Invalid plans fail before cache lookup or live source access.
 
 Freshness policy is not a promise that every fetch is one-time:
 

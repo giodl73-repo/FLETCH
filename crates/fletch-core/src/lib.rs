@@ -23,6 +23,8 @@ pub enum FletchError {
     EmptyDatasetId,
     #[error("[PLAN] source URL must not be empty")]
     EmptySourceUrl,
+    #[error("[PLAN] unsupported schema version {schema_version}; expected fletch.plan.v1")]
+    InvalidPlanSchema { schema_version: String },
     #[error("[QUIVER] quiver id must not be empty")]
     EmptyQuiverId,
     #[error("[CACHE] cache entry {dataset_id} has invalid sha256: {sha256}")]
@@ -657,6 +659,21 @@ pub fn fetch_plan_with_kind(
     })
 }
 
+pub fn validate_fetch_plan(plan: &FetchPlan) -> Result<(), FletchError> {
+    if plan.schema_version != FLETCH_PLAN_SCHEMA {
+        return Err(FletchError::InvalidPlanSchema {
+            schema_version: plan.schema_version.clone(),
+        });
+    }
+    if plan.dataset_id.trim().is_empty() {
+        return Err(FletchError::EmptyDatasetId);
+    }
+    if plan.source.url.trim().is_empty() {
+        return Err(FletchError::EmptySourceUrl);
+    }
+    Ok(())
+}
+
 pub fn cache_key(plan: &FetchPlan) -> String {
     let mut hasher = Sha256::new();
     hasher.update(plan.dataset_id.as_bytes());
@@ -1118,6 +1135,7 @@ pub fn fetch_to_cache(
     plan: &FetchPlan,
     options: FetchOptions,
 ) -> Result<FetchOutcome, FletchError> {
+    validate_fetch_plan(plan)?;
     if options.max_bytes_per_second == Some(0) {
         return Err(FletchError::InvalidBandwidthLimit);
     }
@@ -2010,6 +2028,28 @@ mod tests {
             fetch_plan("route:tiles", ""),
             Err(FletchError::EmptySourceUrl)
         ));
+    }
+
+    #[test]
+    fn fetch_execution_rejects_invalid_saved_plan_shape() {
+        let root = unique_temp_dir("invalid-plan-shape");
+        let mut plan = fetch_plan("test:invalid-plan", "https://example.test/data.json").unwrap();
+        plan.schema_version = "fletch.plan.v0".to_string();
+
+        assert!(matches!(
+            fetch_to_cache(&plan, FetchOptions::new(root.join("cache"))),
+            Err(FletchError::InvalidPlanSchema { .. })
+        ));
+
+        plan.schema_version = FLETCH_PLAN_SCHEMA.to_string();
+        plan.source.url.clear();
+
+        assert!(matches!(
+            fetch_to_cache(&plan, FetchOptions::new(root.join("cache"))),
+            Err(FletchError::EmptySourceUrl)
+        ));
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

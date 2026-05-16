@@ -95,6 +95,8 @@ dataset/source/header identity.
 `fletch fetch` acquires a HTTP/file shaft into the cache and emits a ledger
 manifest. `fletch fetch-plan` executes a saved `fletch.plan.v1` file with the
 same cache execution controls, preserving checked-in or generated plan details.
+Saved plans are validated before execution so stale or malformed plan schemas do
+not accidentally touch live sources.
 Fetching is acquisition, not activation: it verifies and records a candidate
 object, but it does not merge that object into a product's active data view. In
 the target model, `pull` is reserved for future fetch-plus-merge semantics
