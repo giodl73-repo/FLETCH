@@ -62,7 +62,10 @@ ledger entries for offline use.
 Downstream migration status:
 
 - ROUTE: generic source orchestration moved to FLETCH; ROUTE keeps route
-  scoring, geospatial interpretation, and product outputs.
+  scoring, geospatial interpretation, and product outputs. ROUTE maintains a
+  ROUTE-owned FLETCH cache manifest for manifest downloads and exposes
+  `route fletch-cache-index --gate` evidence using FLETCH's shared manifest
+  read/write and batch upsert helpers.
 - BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
   validation. `bisect fletch-cache-index --gate` maps BISECT's FLETCH cache
@@ -177,9 +180,9 @@ entry shape, and derived reports. A typical consumer flow is:
 5. Feed the manifest to read-only reports such as cache index, status, verify,
    graph, publisher, partition, or quiver handoff reports.
 
-This pattern is now used by ICELINES and BISECT for cache-index evidence and
-supports ROUTE data ledgers plus CROP/PROOF publisher inputs without making
-FLETCH responsible for domain activation.
+This pattern is now used by ICELINES, BISECT, and ROUTE for cache-index
+evidence and supports CROP/PROOF publisher inputs without making FLETCH
+responsible for domain activation.
 
 Publisher commands are read-only derived views. `fletch publish crop-index`,
 `fletch publish proof-docs`, and `fletch publish local-url-map` accept
