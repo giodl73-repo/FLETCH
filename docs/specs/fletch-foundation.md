@@ -512,6 +512,11 @@ that does not need full source URLs or retry metadata. CLI output can be focused
 with exact `--dataset-id` or `--cache-key`, filtered by `--verified`, and bounded
 with `--offset` and `--limit`.
 
+`fletch.cache-index-diff.v1` compares two compact cache indexes by cache key and
+reports added, removed, changed, and unchanged counts. It does not read object
+bytes or replace verification; it helps automation decide which ledger rows need
+deeper inspection.
+
 Ledger entries should remain safe to publish through CROP/PROOF. They should
 include enough provenance for local status pages without requiring generated
 Markdown to become the source of truth.

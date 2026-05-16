@@ -2,19 +2,20 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     active_partition_set, adapter_handoff_report, adapter_sources_from_registry,
-    alias_state_from_manifest, cache_index_from_manifest, cache_key, cache_list, cache_manifest,
-    crop_index_from_manifest, dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind,
-    fetch_to_cache, graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
-    inspect_cache_manifest, label_state_from_aliases, local_url_map, offline_cache_report,
-    partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
-    preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
-    proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
-    quiver_merge_ready_report, slice_active_partition_set, slice_adapter_source_report,
-    slice_archive_expansion_preview, slice_cache_index_report, slice_crop_index_report,
-    slice_local_url_map, slice_partition_state, slice_proof_document_manifest,
-    slice_quiver_merge_ready_report, slice_registry_validation_report, summarize_cache_manifest,
-    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry, validate_registry,
-    verify_cache_manifest, verify_quiver_bundle, AdapterHandoffReport, AliasState, CacheEntry,
+    alias_state_from_manifest, cache_index_diff, cache_index_from_manifest, cache_key, cache_list,
+    cache_manifest, crop_index_from_manifest, dry_run_flight, export_quiver, fetch_plan,
+    fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_quiver,
+    graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
+    local_url_map, offline_cache_report, partition_invalidation_report,
+    partition_state_from_manifest, plan_cache_prune, preview_archive_expansion,
+    preview_manifest_merge, preview_rollback, preview_rollup_edges, proof_document_manifest,
+    publish_report_from_manifest, publisher_bundle_report, quiver_merge_ready_report,
+    slice_active_partition_set, slice_adapter_source_report, slice_archive_expansion_preview,
+    slice_cache_index_report, slice_crop_index_report, slice_local_url_map, slice_partition_state,
+    slice_proof_document_manifest, slice_quiver_merge_ready_report,
+    slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
+    tips_from_manifest, upsert_cache_manifest_entry, validate_registry, verify_cache_manifest,
+    verify_quiver_bundle, AdapterHandoffReport, AliasState, CacheEntry, CacheIndexReport,
     CacheManifest, CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
     LabelState, LocalUrlMap, PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary,
     RollupPreview, SourceKind,
@@ -296,6 +297,18 @@ enum CacheCommands {
         /// Maximum number of index rows to output.
         #[arg(long)]
         limit: Option<usize>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Compare two fletch.cache-index.v1 reports without reading object bytes.
+    IndexDiff {
+        /// Path to the base fletch.cache-index.v1 JSON file.
+        #[arg(long)]
+        base_index: PathBuf,
+        /// Path to the candidate fletch.cache-index.v1 JSON file.
+        #[arg(long)]
+        candidate_index: PathBuf,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -884,6 +897,15 @@ fn main() -> Result<()> {
                     output,
                 )?;
             }
+            CacheCommands::IndexDiff {
+                base_index,
+                candidate_index,
+                output,
+            } => {
+                let base_index = read_cache_index(&base_index)?;
+                let candidate_index = read_cache_index(&candidate_index)?;
+                write_json(&cache_index_diff(&base_index, &candidate_index), output)?;
+            }
             CacheCommands::List { manifest, output } => {
                 let manifest = read_manifest(&manifest)?;
                 write_json(cache_list(&manifest), output)?;
@@ -1298,6 +1320,11 @@ fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
 }
 
 fn read_crop_index(path: &PathBuf) -> Result<CropIndexReport> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_cache_index(path: &PathBuf) -> Result<CacheIndexReport> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

@@ -144,10 +144,11 @@ is stale or explicitly bypassed.
 `fletch cache prune` operate on `fletch.cache-manifest.v1` ledger files.
 The index command emits compact `fletch.cache-index.v1` rows for large-ledger
 lookup and publisher inputs; use `--dataset-id`, `--cache-key`, `--verified`,
-`--offset`, and `--limit` to focus large indexes. Verification compares cached
-object hashes and byte counts with the ledger. Status adds freshness evaluation,
-and prune emits a deletion plan for unreferenced cache objects without deleting
-them.
+`--offset`, and `--limit` to focus large indexes. `fletch cache index-diff`
+compares two compact indexes as `fletch.cache-index-diff.v1` without reading
+object bytes. Verification compares cached object hashes and byte counts with
+the ledger. Status adds freshness evaluation, and prune emits a deletion plan for
+unreferenced cache objects without deleting them.
 
 Publisher commands are read-only derived views. `fletch publish crop-index`,
 `fletch publish proof-docs`, and `fletch publish local-url-map` accept

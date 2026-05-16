@@ -11,6 +11,7 @@ use thiserror::Error;
 pub const FLETCH_PLAN_SCHEMA: &str = "fletch.plan.v1";
 pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
 pub const FLETCH_CACHE_INDEX_SCHEMA: &str = "fletch.cache-index.v1";
+pub const FLETCH_CACHE_INDEX_DIFF_SCHEMA: &str = "fletch.cache-index-diff.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_QUIVER_SUMMARY_SCHEMA: &str = "fletch.quiver-summary.v1";
 pub const FLETCH_QUIVER_VERIFY_SCHEMA: &str = "fletch.quiver-verify.v1";
@@ -240,6 +241,30 @@ pub struct CacheIndexReport {
     pub unverified_count: usize,
     pub byte_count: u64,
     pub entries: Vec<CacheIndexEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheIndexDiffEntry {
+    pub cache_key: String,
+    pub dataset_id: String,
+    pub status: String,
+    pub base_sha256: Option<String>,
+    pub candidate_sha256: Option<String>,
+    pub base_verified: Option<bool>,
+    pub candidate_verified: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheIndexDiffReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub base_cache_root: String,
+    pub candidate_cache_root: String,
+    pub added_count: usize,
+    pub removed_count: usize,
+    pub changed_count: usize,
+    pub unchanged_count: usize,
+    pub changes: Vec<CacheIndexDiffEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1703,6 +1728,92 @@ pub fn slice_cache_index_report(
         unverified_count: entries.len().saturating_sub(verified_count),
         byte_count: entries.iter().map(|entry| entry.bytes).sum(),
         entries,
+    }
+}
+
+pub fn cache_index_diff(
+    base: &CacheIndexReport,
+    candidate: &CacheIndexReport,
+) -> CacheIndexDiffReport {
+    let base_by_key = base
+        .entries
+        .iter()
+        .map(|entry| (entry.cache_key.clone(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_by_key = candidate
+        .entries
+        .iter()
+        .map(|entry| (entry.cache_key.clone(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let keys = base_by_key
+        .keys()
+        .chain(candidate_by_key.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let mut added_count = 0;
+    let mut removed_count = 0;
+    let mut changed_count = 0;
+    let mut unchanged_count = 0;
+    let mut changes = Vec::new();
+    for key in keys {
+        match (base_by_key.get(&key), candidate_by_key.get(&key)) {
+            (None, Some(candidate_entry)) => {
+                added_count += 1;
+                changes.push(CacheIndexDiffEntry {
+                    cache_key: key,
+                    dataset_id: candidate_entry.dataset_id.clone(),
+                    status: "added".to_string(),
+                    base_sha256: None,
+                    candidate_sha256: Some(candidate_entry.sha256.clone()),
+                    base_verified: None,
+                    candidate_verified: Some(candidate_entry.verified),
+                });
+            }
+            (Some(base_entry), None) => {
+                removed_count += 1;
+                changes.push(CacheIndexDiffEntry {
+                    cache_key: key,
+                    dataset_id: base_entry.dataset_id.clone(),
+                    status: "removed".to_string(),
+                    base_sha256: Some(base_entry.sha256.clone()),
+                    candidate_sha256: None,
+                    base_verified: Some(base_entry.verified),
+                    candidate_verified: None,
+                });
+            }
+            (Some(base_entry), Some(candidate_entry))
+                if base_entry.sha256 != candidate_entry.sha256
+                    || base_entry.relative_path != candidate_entry.relative_path
+                    || base_entry.bytes != candidate_entry.bytes
+                    || base_entry.verified != candidate_entry.verified =>
+            {
+                changed_count += 1;
+                changes.push(CacheIndexDiffEntry {
+                    cache_key: key,
+                    dataset_id: candidate_entry.dataset_id.clone(),
+                    status: "changed".to_string(),
+                    base_sha256: Some(base_entry.sha256.clone()),
+                    candidate_sha256: Some(candidate_entry.sha256.clone()),
+                    base_verified: Some(base_entry.verified),
+                    candidate_verified: Some(candidate_entry.verified),
+                });
+            }
+            (Some(_), Some(_)) => {
+                unchanged_count += 1;
+            }
+            (None, None) => {}
+        }
+    }
+    CacheIndexDiffReport {
+        schema_version: FLETCH_CACHE_INDEX_DIFF_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        base_cache_root: base.cache_root.clone(),
+        candidate_cache_root: candidate.cache_root.clone(),
+        added_count,
+        removed_count,
+        changed_count,
+        unchanged_count,
+        changes,
     }
 }
 
@@ -4431,6 +4542,126 @@ mod tests {
         );
         assert_eq!(key_slice.entry_count, 1);
         assert_eq!(key_slice.entries[0].dataset_id, "test:a");
+    }
+
+    #[test]
+    fn cache_index_diff_reports_added_removed_and_changed_rows() {
+        let base = CacheIndexReport {
+            schema_version: FLETCH_CACHE_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "base".to_string(),
+            entry_count: 3,
+            verified_count: 3,
+            unverified_count: 0,
+            byte_count: 60,
+            entries: vec![
+                CacheIndexEntry {
+                    dataset_id: "test:removed".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            .to_string(),
+                    sha256:
+                        "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                            .to_string(),
+                    relative_path: "objects/a".to_string(),
+                    bytes: 10,
+                    verified: true,
+                },
+                CacheIndexEntry {
+                    dataset_id: "test:changed".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                            .to_string(),
+                    sha256:
+                        "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                            .to_string(),
+                    relative_path: "objects/b".to_string(),
+                    bytes: 20,
+                    verified: true,
+                },
+                CacheIndexEntry {
+                    dataset_id: "test:same".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                            .to_string(),
+                    sha256:
+                        "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+                            .to_string(),
+                    relative_path: "objects/c".to_string(),
+                    bytes: 30,
+                    verified: true,
+                },
+            ],
+        };
+        let candidate = CacheIndexReport {
+            cache_root: "candidate".to_string(),
+            entries: vec![
+                CacheIndexEntry {
+                    dataset_id: "test:changed".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                            .to_string(),
+                    sha256:
+                        "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+                            .to_string(),
+                    relative_path: "objects/b".to_string(),
+                    bytes: 21,
+                    verified: true,
+                },
+                CacheIndexEntry {
+                    dataset_id: "test:same".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                            .to_string(),
+                    sha256:
+                        "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+                            .to_string(),
+                    relative_path: "objects/c".to_string(),
+                    bytes: 30,
+                    verified: true,
+                },
+                CacheIndexEntry {
+                    dataset_id: "test:added".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                            .to_string(),
+                    sha256:
+                        "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+                            .to_string(),
+                    relative_path: "objects/d".to_string(),
+                    bytes: 40,
+                    verified: true,
+                },
+            ],
+            ..base.clone()
+        };
+
+        let diff = cache_index_diff(&base, &candidate);
+
+        assert_eq!(diff.schema_version, FLETCH_CACHE_INDEX_DIFF_SCHEMA);
+        assert_eq!(diff.added_count, 1);
+        assert_eq!(diff.removed_count, 1);
+        assert_eq!(diff.changed_count, 1);
+        assert_eq!(diff.unchanged_count, 1);
+        assert_eq!(diff.changes.len(), 3);
+        assert!(diff
+            .changes
+            .iter()
+            .any(|entry| entry.status == "added" && entry.dataset_id == "test:added"));
+        assert!(diff
+            .changes
+            .iter()
+            .any(|entry| entry.status == "removed" && entry.dataset_id == "test:removed"));
+        assert!(diff
+            .changes
+            .iter()
+            .any(|entry| entry.status == "changed" && entry.dataset_id == "test:changed"));
     }
 
     #[test]
