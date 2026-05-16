@@ -4,6 +4,10 @@
 
 **Series:** [Tools & Infrastructure](https://github.com/giodl73-repo/giodl73-repo/blob/main/series/tools-infrastructure.md).
 
+**Review roles:** This repo uses
+[ROLES](https://github.com/giodl73-repo/ROLES), the `.roles` convention for
+repository-local review panels.
+
 FLETCH is a shared Rust fetch/cache layer for projects that need reproducible
 data acquisition without each product reinventing download, cache, bundle,
 manifest, verification, and offline behavior.
