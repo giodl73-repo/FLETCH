@@ -1666,6 +1666,46 @@ pub fn cache_index_from_manifest(manifest: &CacheManifest) -> CacheIndexReport {
     }
 }
 
+pub fn slice_cache_index_report(
+    index: &CacheIndexReport,
+    dataset_id: Option<&str>,
+    cache_key: Option<&str>,
+    verified: Option<bool>,
+    offset: usize,
+    limit: Option<usize>,
+) -> CacheIndexReport {
+    let entries = index
+        .entries
+        .iter()
+        .filter(|entry| match dataset_id {
+            Some(dataset_id) => entry.dataset_id == dataset_id,
+            None => true,
+        })
+        .filter(|entry| match cache_key {
+            Some(cache_key) => entry.cache_key == cache_key,
+            None => true,
+        })
+        .filter(|entry| match verified {
+            Some(verified) => entry.verified == verified,
+            None => true,
+        })
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    let verified_count = entries.iter().filter(|entry| entry.verified).count();
+    CacheIndexReport {
+        schema_version: index.schema_version.clone(),
+        generated_by: index.generated_by.clone(),
+        cache_root: index.cache_root.clone(),
+        entry_count: entries.len(),
+        verified_count,
+        unverified_count: entries.len().saturating_sub(verified_count),
+        byte_count: entries.iter().map(|entry| entry.bytes).sum(),
+        entries,
+    }
+}
+
 pub fn inspect_cache_manifest(
     manifest: &CacheManifest,
     freshness: &FreshnessPolicy,
@@ -4315,6 +4355,82 @@ mod tests {
         assert_eq!(index.byte_count, 42);
         assert_eq!(index.entries[0].dataset_id, "test:dataset");
         assert_eq!(index.entries[0].version.as_deref(), Some("v1"));
+    }
+
+    #[test]
+    fn cache_index_slice_filters_lookup_rows() {
+        let index = CacheIndexReport {
+            schema_version: FLETCH_CACHE_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            entry_count: 3,
+            verified_count: 2,
+            unverified_count: 1,
+            byte_count: 60,
+            entries: vec![
+                CacheIndexEntry {
+                    dataset_id: "test:a".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            .to_string(),
+                    sha256:
+                        "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                            .to_string(),
+                    relative_path: "objects/a".to_string(),
+                    bytes: 10,
+                    verified: true,
+                },
+                CacheIndexEntry {
+                    dataset_id: "test:b".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                            .to_string(),
+                    sha256:
+                        "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                            .to_string(),
+                    relative_path: "objects/b".to_string(),
+                    bytes: 20,
+                    verified: false,
+                },
+                CacheIndexEntry {
+                    dataset_id: "test:c".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                            .to_string(),
+                    sha256:
+                        "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+                            .to_string(),
+                    relative_path: "objects/c".to_string(),
+                    bytes: 30,
+                    verified: true,
+                },
+            ],
+        };
+
+        let verified_slice = slice_cache_index_report(&index, None, None, Some(true), 1, Some(1));
+        assert_eq!(verified_slice.entry_count, 1);
+        assert_eq!(verified_slice.verified_count, 1);
+        assert_eq!(verified_slice.byte_count, 30);
+        assert_eq!(verified_slice.entries[0].dataset_id, "test:c");
+
+        let dataset_slice =
+            slice_cache_index_report(&index, Some("test:b"), None, None, 0, Some(10));
+        assert_eq!(dataset_slice.entry_count, 1);
+        assert_eq!(dataset_slice.unverified_count, 1);
+
+        let key_slice = slice_cache_index_report(
+            &index,
+            None,
+            Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            None,
+            0,
+            None,
+        );
+        assert_eq!(key_slice.entry_count, 1);
+        assert_eq!(key_slice.entries[0].dataset_id, "test:a");
     }
 
     #[test]

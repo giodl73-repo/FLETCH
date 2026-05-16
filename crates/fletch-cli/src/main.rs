@@ -10,13 +10,13 @@ use fletch_core::{
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
     proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
     quiver_merge_ready_report, slice_active_partition_set, slice_adapter_source_report,
-    slice_archive_expansion_preview, slice_crop_index_report, slice_local_url_map,
-    slice_partition_state, slice_proof_document_manifest, slice_quiver_merge_ready_report,
-    slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
-    tips_from_manifest, upsert_cache_manifest_entry, validate_registry, verify_cache_manifest,
-    verify_quiver_bundle, AdapterHandoffReport, AliasState, CacheEntry, CacheManifest,
-    CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState,
-    LocalUrlMap, PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary,
+    slice_archive_expansion_preview, slice_cache_index_report, slice_crop_index_report,
+    slice_local_url_map, slice_partition_state, slice_proof_document_manifest,
+    slice_quiver_merge_ready_report, slice_registry_validation_report, summarize_cache_manifest,
+    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry, validate_registry,
+    verify_cache_manifest, verify_quiver_bundle, AdapterHandoffReport, AliasState, CacheEntry,
+    CacheManifest, CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
+    LabelState, LocalUrlMap, PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary,
     RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
@@ -281,6 +281,21 @@ enum CacheCommands {
         /// Path to a fletch.cache-manifest.v1 JSON file.
         #[arg(long)]
         manifest: PathBuf,
+        /// Optional exact dataset id lookup.
+        #[arg(long)]
+        dataset_id: Option<String>,
+        /// Optional exact cache key lookup.
+        #[arg(long)]
+        cache_key: Option<String>,
+        /// Optional verified flag filter.
+        #[arg(long)]
+        verified: Option<bool>,
+        /// Number of index rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of index rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -846,9 +861,28 @@ fn main() -> Result<()> {
             write_fetch_manifest(&cache_root, outcome.entry, output)?;
         }
         Commands::Cache { command } => match command {
-            CacheCommands::Index { manifest, output } => {
+            CacheCommands::Index {
+                manifest,
+                dataset_id,
+                cache_key,
+                verified,
+                offset,
+                limit,
+                output,
+            } => {
                 let manifest = read_manifest(&manifest)?;
-                write_json(&cache_index_from_manifest(&manifest), output)?;
+                let index = cache_index_from_manifest(&manifest);
+                write_json(
+                    &slice_cache_index_report(
+                        &index,
+                        dataset_id.as_deref(),
+                        cache_key.as_deref(),
+                        verified,
+                        offset,
+                        limit,
+                    ),
+                    output,
+                )?;
             }
             CacheCommands::List { manifest, output } => {
                 let manifest = read_manifest(&manifest)?;

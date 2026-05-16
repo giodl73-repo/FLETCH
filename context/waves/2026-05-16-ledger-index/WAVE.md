@@ -18,6 +18,7 @@ source of truth.
 | Pulse | Title | Status | Outcome |
 |------:|-------|--------|---------|
 | 01 | Cache index report | done | Added `fletch.cache-index.v1` compact rows over manifest entries. |
+| 02 | Cache index lookup | done | Added product-neutral filters and bounded output for cache index rows. |
 
 ## Validation expectations
 
