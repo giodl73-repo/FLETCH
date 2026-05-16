@@ -23,6 +23,7 @@ pub const FLETCH_MERGE_PREVIEW_SCHEMA: &str = "fletch.merge-preview.v1";
 pub const FLETCH_ALIAS_SCHEMA: &str = "fletch.alias-state.v1";
 pub const FLETCH_LABEL_SCHEMA: &str = "fletch.label-state.v1";
 pub const FLETCH_ROLLBACK_PREVIEW_SCHEMA: &str = "fletch.rollback-preview.v1";
+pub const FLETCH_PARTITION_SCHEMA: &str = "fletch.partition-state.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -363,6 +364,30 @@ pub struct RollbackPreview {
     pub action_count: usize,
     pub noop_count: usize,
     pub actions: Vec<RollbackPreviewEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartitionRecord {
+    pub partition_id: String,
+    pub dataset_id: String,
+    pub group_id: Option<String>,
+    pub version: Option<String>,
+    pub source_url: String,
+    pub cache_key: String,
+    pub sha256: String,
+    pub bytes: u64,
+    pub relative_path: String,
+    pub verified: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartitionState {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub partition_count: usize,
+    pub group_id: Option<String>,
+    pub partitions: Vec<PartitionRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1133,6 +1158,36 @@ pub fn preview_rollback(alias_state: &AliasState, target: &LabelState) -> Rollba
         action_count: actions.len(),
         noop_count,
         actions,
+    }
+}
+
+pub fn partition_state_from_manifest(
+    manifest: &CacheManifest,
+    group_id: Option<String>,
+) -> PartitionState {
+    let partitions = manifest
+        .entries
+        .iter()
+        .map(|entry| PartitionRecord {
+            partition_id: entry.dataset_id.clone(),
+            dataset_id: entry.dataset_id.clone(),
+            group_id: group_id.clone(),
+            version: entry.version.clone(),
+            source_url: entry.source_url.clone(),
+            cache_key: entry.cache_key.clone(),
+            sha256: entry.sha256.clone(),
+            bytes: entry.bytes,
+            relative_path: entry.relative_path.clone(),
+            verified: entry.verified,
+        })
+        .collect::<Vec<_>>();
+    PartitionState {
+        schema_version: FLETCH_PARTITION_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        partition_count: partitions.len(),
+        group_id,
+        partitions,
     }
 }
 
@@ -3212,6 +3267,36 @@ mod tests {
         assert_eq!(preview.action_count, 1);
         assert_eq!(preview.noop_count, 0);
         assert_eq!(preview.actions[0].action, "restore-label-target");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn partition_state_reports_manifest_entries_without_domain_logic() {
+        let root = unique_temp_dir("partition-state");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"partition").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:partition:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+
+        let state = partition_state_from_manifest(&manifest, Some("test:group".to_string()));
+
+        assert_eq!(state.schema_version, FLETCH_PARTITION_SCHEMA);
+        assert_eq!(state.partition_count, 1);
+        assert_eq!(state.group_id.as_deref(), Some("test:group"));
+        assert_eq!(state.partitions[0].partition_id, "test:partition:001");
+        assert_eq!(state.partitions[0].dataset_id, "test:partition:001");
+        assert_eq!(state.partitions[0].group_id.as_deref(), Some("test:group"));
+        assert_eq!(state.partitions[0].bytes, 9);
+        assert!(state.partitions[0].verified);
 
         let _ = std::fs::remove_dir_all(root);
     }

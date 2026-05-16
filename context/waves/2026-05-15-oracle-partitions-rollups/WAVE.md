@@ -19,7 +19,7 @@ logic in FLETCH.
 
 | Pulse | Title | Status | Outcome |
 |------:|-------|--------|---------|
-| 01 | Partition state contract | pending | Emit durable partition rows from manifests or alias state without product semantics. |
+| 01 | Partition state contract | done | Added `fletch.partition-state.v1` manifest-derived partition rows without product semantics. |
 | 02 | Rollup edge preview | pending | Describe parent/child rollup relationships over partitions and cache keys. |
 | 03 | Invalidation and folding metadata | pending | Report stale, folded, and superseded partition metadata without mutating caches. |
 | 04 | Active partition set | pending | Produce query-facing active partition reports from aliases, labels, and rollups. |

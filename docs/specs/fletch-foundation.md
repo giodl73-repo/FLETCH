@@ -297,6 +297,13 @@ state and reports restore actions before mutation. A rollback preview says which
 aliases would move back to pinned label targets and which aliases are already at
 the target.
 
+`fletch.partition-state.v1` records durable partition rows from manifest
+evidence. Each row carries a product-neutral partition ID, dataset ID, optional
+group ID, cache key, hash, byte count, source URL, relative cache path, and
+verification state. FLETCH does not parse the business meaning of a partition;
+adapters decide whether IDs represent seasons, years, districts, tiles, dates,
+or any other domain concept.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.

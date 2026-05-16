@@ -4,8 +4,8 @@ use fletch_core::{
     alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
     export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
     graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
-    offline_cache_report, plan_cache_prune, preview_manifest_merge, preview_rollback,
-    publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
+    offline_cache_report, partition_state_from_manifest, plan_cache_prune, preview_manifest_merge,
+    preview_rollback, publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
     upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry, CacheManifest,
     FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, SourceKind,
 };
@@ -174,6 +174,27 @@ enum Commands {
     Merge {
         #[command(subcommand)]
         command: MergeCommands,
+    },
+    /// Emit partition and rollup state without mutating cache or active views.
+    Partition {
+        #[command(subcommand)]
+        command: PartitionCommands,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum PartitionCommands {
+    /// Emit fletch.partition-state.v1 rows from a cache manifest.
+    State {
+        /// Path to a fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Optional product-neutral group id assigned to every emitted row.
+        #[arg(long)]
+        group_id: Option<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
     },
 }
 
@@ -696,6 +717,16 @@ fn main() -> Result<()> {
                 let alias_state = read_alias_state(&alias_state)?;
                 let label_state = read_label_state(&label_state)?;
                 write_json(&preview_rollback(&alias_state, &label_state), output)?;
+            }
+        },
+        Commands::Partition { command } => match command {
+            PartitionCommands::State {
+                manifest,
+                group_id,
+                output,
+            } => {
+                let manifest = read_manifest(&manifest)?;
+                write_json(&partition_state_from_manifest(&manifest, group_id), output)?;
             }
         },
     }
