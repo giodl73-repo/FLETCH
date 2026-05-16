@@ -301,6 +301,10 @@ Describes intent to obtain a dataset:
 - `cache_policy`: freshness, offline, and resumable behavior.
 - `tags` and `metadata`: product-owned classification.
 
+Generic HTTP headers are part of the source identity. They are stored on the
+shaft, sent during HTTP acquisition, and included in deterministic cache keys so
+two requests to the same URL with different generic headers do not collide.
+
 Freshness policy is not a promise that every fetch is one-time:
 
 - `immutable`: reuse a verified cached object unless the caller forces a fetch.

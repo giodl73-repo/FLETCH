@@ -69,8 +69,8 @@ Initial consumers:
 ## Commands
 
 ```powershell
-cargo run -p fletch-cli -- plan --dataset-id nhl:season:1993 --url https://example.test/1993.json
-cargo run -p fletch-cli -- key --dataset-id route:tiles:demo --url https://example.test/tiles.zip
+cargo run -p fletch-cli -- plan --dataset-id nhl:season:1993 --url https://example.test/1993.json --header accept=application/json
+cargo run -p fletch-cli -- key --dataset-id route:tiles:demo --url https://example.test/tiles.zip --header accept=application/zip
 cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --max-bytes-per-second 250000 --timeout-ms 30000 --retry-attempts 2
 cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --trusted-manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- fetch --dataset-id nhl:schedule:today --url https://example.test/schedule.json --freshness always-check
@@ -86,8 +86,10 @@ cargo run -p fletch-cli -- publish from-manifest --manifest .fletch/cache/manife
 ```
 
 `fletch plan` emits `fletch.plan.v1`, a source plan that downstream products can
-check into configs or generate from their own CLI commands. `fletch key` emits
-the deterministic cache key for the logical dataset/source pair.
+check into configs or generate from their own CLI commands. Add repeatable
+`--header name=value` flags for generic HTTP shafts that need explicit request
+headers. `fletch key` emits the deterministic cache key for the logical
+dataset/source/header identity.
 
 `fletch fetch` acquires a HTTP/file shaft into the cache and emits a ledger
 manifest. Fetching is acquisition, not activation: it verifies and records a

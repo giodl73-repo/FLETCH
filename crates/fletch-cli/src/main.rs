@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
@@ -6,6 +6,7 @@ use fletch_core::{
     inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest, tips_from_manifest,
     CacheManifest, FetchOptions, FletchRegistry, FreshnessPolicy, SourceKind,
 };
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -30,6 +31,9 @@ enum Commands {
         /// Source kind for the shaft.
         #[arg(long, value_enum, default_value_t = CliSourceKind::Http)]
         source_kind: CliSourceKind,
+        /// Generic HTTP header as name=value. Repeat for multiple headers.
+        #[arg(long = "header")]
+        headers: Vec<String>,
         /// Freshness policy for this fletch.
         #[arg(long, value_enum, default_value_t = CliFreshness::Immutable)]
         freshness: CliFreshness,
@@ -48,6 +52,9 @@ enum Commands {
         /// Source URL.
         #[arg(long)]
         url: String,
+        /// Generic HTTP header as name=value. Repeat for multiple headers.
+        #[arg(long = "header")]
+        headers: Vec<String>,
     },
     /// Fetch a HTTP/file shaft into a cache root and emit a manifest.
     Fetch {
@@ -60,6 +67,9 @@ enum Commands {
         /// Source kind for the shaft.
         #[arg(long, value_enum, default_value_t = CliSourceKind::Http)]
         source_kind: CliSourceKind,
+        /// Generic HTTP header as name=value. Repeat for multiple headers.
+        #[arg(long = "header")]
+        headers: Vec<String>,
         /// Cache root. Defaults to .fletch/cache.
         #[arg(long, default_value = ".fletch/cache")]
         cache_root: PathBuf,
@@ -308,11 +318,13 @@ fn main() -> Result<()> {
             dataset_id,
             url,
             source_kind,
+            headers,
             freshness,
             max_age_days,
             output,
         } => {
             let mut plan = fetch_plan_with_kind(dataset_id, url, source_kind.into())?;
+            plan.source.headers = parse_headers(headers)?;
             plan.cache_policy.freshness = freshness_policy(freshness, max_age_days)?;
             let json = serde_json::to_string_pretty(&plan)?;
             if let Some(output) = output {
@@ -321,14 +333,20 @@ fn main() -> Result<()> {
                 println!("{json}");
             }
         }
-        Commands::Key { dataset_id, url } => {
-            let plan = fetch_plan(dataset_id, url)?;
+        Commands::Key {
+            dataset_id,
+            url,
+            headers,
+        } => {
+            let mut plan = fetch_plan(dataset_id, url)?;
+            plan.source.headers = parse_headers(headers)?;
             println!("{}", cache_key(&plan));
         }
         Commands::Fetch {
             dataset_id,
             url,
             source_kind,
+            headers,
             cache_root,
             expect_sha256,
             trusted_manifest,
@@ -342,6 +360,7 @@ fn main() -> Result<()> {
             output,
         } => {
             let mut plan = fetch_plan_with_kind(dataset_id, url, source_kind.into())?;
+            plan.source.headers = parse_headers(headers)?;
             plan.cache_policy.freshness = freshness_policy(freshness, max_age_days)?;
             let mut options = FetchOptions::new(&cache_root)
                 .with_force(force)
@@ -474,6 +493,21 @@ fn freshness_policy(freshness: CliFreshness, max_age_days: Option<u32>) -> Resul
             max_age_days.ok_or_else(|| anyhow::anyhow!("--max-age-days is required"))?,
         )),
     }
+}
+
+fn parse_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut parsed = BTreeMap::new();
+    for header in headers {
+        let Some((name, value)) = header.split_once('=') else {
+            bail!("header must be formatted as name=value: {header}");
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            bail!("header name must not be empty: {header}");
+        }
+        parsed.insert(name.to_string(), value.to_string());
+    }
+    Ok(parsed)
 }
 
 fn read_manifest(path: &PathBuf) -> Result<CacheManifest> {

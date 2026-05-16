@@ -668,6 +668,12 @@ pub fn cache_key(plan: &FetchPlan) -> String {
     hasher.update(source_kind_key(&plan.source.kind).as_bytes());
     hasher.update([0]);
     hasher.update(plan.source.url.as_bytes());
+    for (name, value) in &plan.source.headers {
+        hasher.update([0]);
+        hasher.update(name.to_ascii_lowercase().as_bytes());
+        hasher.update([0]);
+        hasher.update(value.as_bytes());
+    }
     format!("sha256:{:x}", hasher.finalize())
 }
 
@@ -1977,6 +1983,24 @@ mod tests {
     }
 
     #[test]
+    fn cache_key_includes_generic_source_headers() {
+        let mut plan = fetch_plan("test:http", "https://example.test/data.json").unwrap();
+        let original_key = cache_key(&plan);
+        plan.source
+            .headers
+            .insert("accept".to_string(), "application/json".to_string());
+        let header_key = cache_key(&plan);
+        let mut case_variant = fetch_plan("test:http", "https://example.test/data.json").unwrap();
+        case_variant
+            .source
+            .headers
+            .insert("Accept".to_string(), "application/json".to_string());
+
+        assert_ne!(header_key, original_key);
+        assert_eq!(header_key, cache_key(&case_variant));
+    }
+
+    #[test]
     fn fetch_plan_rejects_empty_inputs() {
         assert!(matches!(
             fetch_plan("", "https://example.test"),
@@ -2341,6 +2365,40 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("500"));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn http_fetch_sends_generic_source_headers() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+
+        let root = unique_temp_dir("http-headers");
+        let cache_root = root.join("cache");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/data.json", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0u8; 2048];
+            let bytes = stream.read(&mut buffer).unwrap();
+            let request = String::from_utf8_lossy(&buffer[..bytes]).to_lowercase();
+            assert!(request.contains("x-fletch-token: arrow"));
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\n{\"ok\":true}\n")
+                .unwrap();
+        });
+        let mut plan = fetch_plan("test:http-headers", url).unwrap();
+        plan.source
+            .headers
+            .insert("x-fletch-token".to_string(), "arrow".to_string());
+
+        let outcome =
+            fetch_to_cache(&plan, FetchOptions::new(&cache_root).with_timeout_ms(1_000)).unwrap();
+        server.join().unwrap();
+
+        assert_eq!(outcome.entry.bytes, 12);
+        assert!(outcome.entry.verified);
 
         let _ = std::fs::remove_dir_all(root);
     }

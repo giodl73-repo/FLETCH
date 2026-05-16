@@ -23,6 +23,7 @@ focused on product-neutral fetch/cache execution.
 | 03 | File shaft path hardening | done | Normalized common `file://` shaft paths and rejected empty local file shafts. |
 | 04 | Cache-hit ledger trust | done | Added trusted-manifest cache-hit verification with ledger metadata preservation. |
 | 05 | Offline stale diagnostics | done | Distinguished missing offline cache entries from stale or bypassed cached objects. |
+| 06 | Header-aware shafts | done | Added CLI header flags and included generic source headers in cache identity. |
 
 ## Validation expectations
 
