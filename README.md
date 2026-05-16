@@ -72,6 +72,7 @@ Initial consumers:
 cargo run -p fletch-cli -- plan --dataset-id nhl:season:1993 --url https://example.test/1993.json --header accept=application/json
 cargo run -p fletch-cli -- key --dataset-id route:tiles:demo --url https://example.test/tiles.zip --header accept=application/zip
 cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --max-bytes-per-second 250000 --timeout-ms 30000 --retry-attempts 2
+cargo run -p fletch-cli -- fetch-plan --plan fletch.plan.json --cache-root .fletch/cache
 cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --trusted-manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- fetch --dataset-id nhl:schedule:today --url https://example.test/schedule.json --freshness always-check
 cargo run -p fletch-cli -- cache status --manifest .fletch/cache/manifest.json --freshness max-age-days --max-age-days 1
@@ -92,10 +93,12 @@ headers. `fletch key` emits the deterministic cache key for the logical
 dataset/source/header identity.
 
 `fletch fetch` acquires a HTTP/file shaft into the cache and emits a ledger
-manifest. Fetching is acquisition, not activation: it verifies and records a
-candidate object, but it does not merge that object into a product's active data
-view. In the target model, `pull` is reserved for future fetch-plus-merge
-semantics rather than a plain fetch alias.
+manifest. `fletch fetch-plan` executes a saved `fletch.plan.v1` file with the
+same cache execution controls, preserving checked-in or generated plan details.
+Fetching is acquisition, not activation: it verifies and records a candidate
+object, but it does not merge that object into a product's active data view. In
+the target model, `pull` is reserved for future fetch-plus-merge semantics
+rather than a plain fetch alias.
 Use `--max-bytes-per-second` to respect bandwidth-sensitive environments.
 Use `--timeout-ms` and `--retry-attempts` to bound generic HTTP waits and retry
 transient generic fetch/read/write failures. Ledger entries include

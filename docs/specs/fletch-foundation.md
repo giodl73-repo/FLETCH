@@ -304,6 +304,9 @@ Describes intent to obtain a dataset:
 Generic HTTP headers are part of the source identity. They are stored on the
 shaft, sent during HTTP acquisition, and included in deterministic cache keys so
 two requests to the same URL with different generic headers do not collide.
+Saved `fletch.plan.v1` documents are executable by generic fetch tooling so
+adapters, CROP/PROOF generated files, or checked-in configs can hand FLETCH a
+complete acquisition intent without rebuilding it from flags.
 
 Freshness policy is not a promise that every fetch is one-time:
 

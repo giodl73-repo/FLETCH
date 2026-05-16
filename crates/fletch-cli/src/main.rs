@@ -4,7 +4,7 @@ use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
     fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
     inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest, tips_from_manifest,
-    CacheManifest, FetchOptions, FletchRegistry, FreshnessPolicy, SourceKind,
+    CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -100,6 +100,39 @@ enum Commands {
         /// Max age in days when --freshness max-age-days is used.
         #[arg(long)]
         max_age_days: Option<u32>,
+        /// Optional JSON manifest output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Fetch using a saved fletch.plan.v1 file.
+    FetchPlan {
+        /// Path to a fletch.plan.v1 JSON file.
+        #[arg(long)]
+        plan: PathBuf,
+        /// Cache root. Defaults to .fletch/cache.
+        #[arg(long, default_value = ".fletch/cache")]
+        cache_root: PathBuf,
+        /// Expected sha256, formatted as sha256:<64 lowercase hex chars>.
+        #[arg(long)]
+        expect_sha256: Option<String>,
+        /// Prior manifest whose matching ledger entry can verify cache hits.
+        #[arg(long)]
+        trusted_manifest: Option<PathBuf>,
+        /// Maximum transfer/write rate in bytes per second.
+        #[arg(long)]
+        max_bytes_per_second: Option<u64>,
+        /// Request timeout in milliseconds for generic HTTP fetches.
+        #[arg(long)]
+        timeout_ms: Option<u64>,
+        /// Retry attempts after the initial generic fetch attempt fails.
+        #[arg(long, default_value_t = 0)]
+        retry_attempts: u32,
+        /// Re-fetch even if the cache policy says the existing object is fresh.
+        #[arg(long)]
+        force: bool,
+        /// Do not fetch live data; return an error if no fresh cache hit exists.
+        #[arg(long)]
+        offline: bool,
         /// Optional JSON manifest output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -388,6 +421,45 @@ fn main() -> Result<()> {
                 println!("{json}");
             }
         }
+        Commands::FetchPlan {
+            plan,
+            cache_root,
+            expect_sha256,
+            trusted_manifest,
+            max_bytes_per_second,
+            timeout_ms,
+            retry_attempts,
+            force,
+            offline,
+            output,
+        } => {
+            let plan = read_plan(&plan)?;
+            let mut options = FetchOptions::new(&cache_root)
+                .with_force(force)
+                .with_offline(offline);
+            if let Some(expected) = expect_sha256 {
+                options = options.with_expected_sha256(expected);
+            }
+            if let Some(trusted_manifest) = trusted_manifest {
+                let trusted_manifest = read_manifest(&trusted_manifest)?;
+                options = options.with_trusted_manifest(&trusted_manifest);
+            }
+            if let Some(max_bytes_per_second) = max_bytes_per_second {
+                options = options.with_max_bytes_per_second(max_bytes_per_second);
+            }
+            if let Some(timeout_ms) = timeout_ms {
+                options = options.with_timeout_ms(timeout_ms);
+            }
+            options = options.with_retry_attempts(retry_attempts);
+            let outcome = fetch_to_cache(&plan, options)?;
+            let manifest = cache_manifest(cache_root.display().to_string(), vec![outcome.entry])?;
+            let json = serde_json::to_string_pretty(&manifest)?;
+            if let Some(output) = output {
+                fs::write(output, json)?;
+            } else {
+                println!("{json}");
+            }
+        }
         Commands::Cache { command } => match command {
             CacheCommands::List { manifest, output } => {
                 let manifest = read_manifest(&manifest)?;
@@ -511,6 +583,11 @@ fn parse_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
 }
 
 fn read_manifest(path: &PathBuf) -> Result<CacheManifest> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

@@ -24,6 +24,7 @@ focused on product-neutral fetch/cache execution.
 | 04 | Cache-hit ledger trust | done | Added trusted-manifest cache-hit verification with ledger metadata preservation. |
 | 05 | Offline stale diagnostics | done | Distinguished missing offline cache entries from stale or bypassed cached objects. |
 | 06 | Header-aware shafts | done | Added CLI header flags and included generic source headers in cache identity. |
+| 07 | Saved plan execution | done | Added `fetch-plan` so generated or checked-in `fletch.plan.v1` files can execute directly. |
 
 ## Validation expectations
 
