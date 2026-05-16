@@ -5,6 +5,252 @@
 Create a neutral fetch/cache substrate that BISECT, icelines, route, and other
 Rust repos can consume without depending on one another.
 
+## Product vocabulary
+
+FLETCH uses product-neutral nouns for shared fetch/cache mechanics:
+
+| Term | Contract role |
+|------|---------------|
+| **fletch** | Logical cache identity. Existing `dataset_id` values are fletch IDs until a dedicated registry schema lands. |
+| **shaft** | Concrete carrier or locator for a fletch: URL, file path, release asset, generated local artifact, or adapter-owned source handle. Existing `source` fields describe shafts. |
+| **flight** | Resolved execution plan over one or more fletches: fetch, skip, verify, refresh, expand, or activate. Existing `fletch.plan.v1` is the first single-fletch flight shape. |
+| **quiver** | Named group or portable bundle that satisfies multiple fletches. Future bundle contracts should use quiver terminology. |
+| **ledger** | Cache manifest and status record. Existing `fletch.cache-manifest.v1` is the first ledger shape. |
+| **tip** | Structured peek, sample, summary, or index for a shaft/fletch. Tips help tools inspect data without fully loading product semantics. |
+| **partition** | Durable slice of a fletch family, usually scoped by date, range, geography, game, source, or version. |
+| **rollup** | Logical aggregate over partitions, used for folded queries and grouped activation. |
+| **alias** | Mutable front door such as `current`, `today`, `latest`, or `preferred` that points to a fletch, partition, rollup, or active view. |
+
+Use `source` when referring to provenance or authority. Use `shaft` when
+referring to the concrete URL, path, release asset, generated output, or adapter
+handle FLETCH resolves.
+
+Fletches form a graph:
+
+- **requires**: one fletch needs another before it can be used.
+- **expands-to**: fetching one fletch discovers or materializes additional
+  fletches.
+- **satisfied-by**: one shaft or quiver can populate many fletches.
+- **activates**: verified fletches light up product-owned capabilities.
+- **contains**: one fletch physically contains another, such as a ZIP member or
+  release asset.
+- **derived-from**: one fletch is generated, normalized, filtered, or indexed
+  from another.
+- **supersedes**: one fletch replaces an older version while preserving lineage.
+- **mirrors**: two shafts or fletches are equivalent source alternatives.
+- **cites**: one fletch uses another as evidence or documentation.
+- **documents**: a generated PROOF/CROP/Markdown/backend artifact describes a
+  fletch, shaft, quiver, flight, or ledger view.
+- **points-to**: an alias points to the active fletch, partition, rollup, or
+  view.
+- **rolls-up-to**: a partition contributes to a larger date, month, season,
+  geography, decade, or product-defined aggregate.
+- **folds-over**: a queryable rollup or adapter view reads a partition set as one
+  logical dataset.
+
+FLETCH records the graph and state transitions; products keep domain semantics
+in their own adapters.
+
+## CROP graph contract
+
+CROP works best when FLETCH exposes data state as a graph instead of only as a
+flat manifest. FLETCH graph exports should use stable typed nodes and edges:
+
+| Node kind | Meaning |
+|-----------|---------|
+| `fletch` | Logical cache/data unit. |
+| `shaft` | Concrete source option for one or more fletches. |
+| `quiver` | Group or portable bundle satisfying multiple fletches. |
+| `flight` | Planned or executed fetch/cache operation. |
+| `ledger-entry` | Observed cached artifact state. |
+| `document` | Generated or handwritten status/spec artifact. |
+| `partition` | Durable slice of a fletch family. |
+| `rollup` | Logical aggregate over partitions. |
+| `alias` | Mutable front door pointer. |
+
+| Edge kind | Meaning |
+|-----------|---------|
+| `requires` | Fletch dependency. |
+| `expands-to` | Fetching one fletch discovers or creates another. |
+| `satisfied-by` | Shaft or quiver can satisfy a fletch. |
+| `contains` | Container fletch/quiver includes another fletch. |
+| `derived-from` | Fletch was transformed, normalized, indexed, or generated from another. |
+| `supersedes` | Newer fletch replaces an older one. |
+| `mirrors` | Alternative shafts/fletches represent equivalent data. |
+| `cites` | Fletch uses another as evidence. |
+| `documents` | Document/status artifact describes a graph node. |
+| `points-to` | Alias points at its active target. |
+| `rolls-up-to` | Partition contributes to a larger aggregate. |
+| `folds-over` | Query/view evaluates over a partition set. |
+
+`fletch.graph.v1` is the named export contract for this graph. The initial
+implementation exports cache-manifest state as fletch, shaft, and ledger-entry
+nodes with `satisfied-by` and `documents` edges. Consumers can add adapter-owned
+domain edges, such as `expands-to` from an index to discovered fletches or
+`rolls-up-to` from dated partitions to yearly rollups, without moving domain
+logic into `fletch-core`.
+
+## Data format model
+
+FLETCH's default data model is **opaque verified bytes**:
+
+- `media_type`: defaults to `application/octet-stream` when unknown.
+- `encoding`: optional text encoding, e.g. `utf-8`.
+- `compression`: optional compression, e.g. `gzip`, `zip`, `zstd`.
+- `container`: optional container shape, e.g. `zip`, `tar`, `sqlite`, `directory`.
+- `schema`: optional schema label or URI, e.g. `nhl.stats.summary.v1`.
+- `record_shape`: optional adapter-owned hint, e.g. `json-array`, `csv-table`,
+  `geojson-feature-collection`, `shapefile-layer`.
+- `preferred_local`: optional preferred cached representation when a shaft can
+  be transformed, e.g. raw ZIP plus extracted CSV fletches.
+
+Registries can declare one or more acceptable format options for a fletch.
+Flights choose a satisfiable option based on local cache state, offline mode,
+available quivers, and adapter capabilities. FLETCH records the chosen format in
+the ledger; adapters interpret the data.
+
+## Tip model
+
+A tip is the lightweight inspection surface at the end of a shaft/fletch. It is
+structured preview/index metadata, not a replacement for the cached artifact:
+
+- `kind`: preview kind, e.g. `csv-header`, `json-fields`, `zip-index`,
+  `sqlite-tables`, `schema-summary`, `sample-rows`, `proof-status`.
+- `summary`: short human-readable preview.
+- `fields`: optional field names, columns, table names, archive members, or
+  schema keys.
+- `sample_ref`: optional relative path or byte range for a stored sample.
+- `generated_from`: fletch or shaft ID used to produce the tip.
+- `truncated`: whether the tip is a partial preview.
+
+Tips give CROP, PROOF, CLIs, and adapters a cheap way to decide what data is
+inside a shaft before doing full domain-specific parsing.
+
+## Partition, rollup, and alias model
+
+FLETCH should distinguish durable data identity from mutable front-door names:
+
+- **partition fletches** are durable slices such as
+  `nhl:boxscore:game:2025020001`,
+  `nhl:schedule:date:2026-05-15`,
+  `census:2020:state:WA:tracts`, or `route:nbi:2024:state:CA`.
+- **rollups** group partitions for product queries, such as
+  `nhl:boxscore:month:2025-10`, `nhl:season:20252026`,
+  `route:nbi:2024:national`, or `census:2020:nationwide`.
+- **aliases** are mutable pointers such as `nhl:schedule:today`,
+  `nhl:season:current`, `route:geodata:base`, or
+  `bisect:census:active-2020`.
+
+Merge/activation should update aliases, active partition sets, labels, and
+rollups; it should not rewrite historical partition identity. This lets products
+fault in missing detail while retaining rollback and lineage.
+
+For `icelines-query`, FLETCH should provide the active partition set and graph
+metadata, not compute hockey stats. A query such as current-season leaders can
+resolve `nhl:season:current`, follow active boxscore/stat/realtime/MoneyPuck
+partition edges, fault in missing partitions when policy allows, and fold over
+the resulting set inside ICELINES' query engine.
+
+Example graph:
+
+```text
+alias: nhl:season:current
+  points-to -> nhl:season:20252026
+
+partition: nhl:boxscore:game:2025020001
+  rolls-up-to -> nhl:boxscore:date:2025-10-07
+  rolls-up-to -> nhl:boxscore:month:2025-10
+  rolls-up-to -> nhl:boxscore:season:20252026
+
+rollup: nhl:player-stats:season:20252026:regular
+  derived-from -> nhl:boxscore:season:20252026
+  folds-over   -> active nhl:boxscore:game:* partition set
+```
+
+BISECT/apportionment can use the same pattern for Census/election partitions:
+
+```text
+alias: bisect:census:active-2020
+  points-to -> census:2020:nationwide
+
+partition: census:2020:state:WA:tracts
+  rolls-up-to -> census:2020:division:pacific
+  rolls-up-to -> census:2020:nationwide
+
+partition: election:2024:state:WA:precincts
+  cites       -> census:2020:state:WA:tracts
+  rolls-up-to -> election:2024:nationwide
+```
+
+ROUTE can use dated infrastructure partitions and stable aliases:
+
+```text
+alias: route:nbi:current
+  points-to -> route:nbi:2024:national
+
+partition: route:nbi:2024:state:CA
+  derived-from -> route:nbi:2024:archive
+  rolls-up-to  -> route:nbi:2024:national
+
+rollup: route:geodata:base
+  folds-over -> active route:nbi:* and route:hpms:* partition sets
+```
+
+Quivers are not partitions. A quiver is a portable package that may contain
+partitions, rollups, aliases, tips, graph edges, and ledger entries so an offline
+environment can satisfy or stage a set of fletches. Quiver import must stage by
+default; a separate merge/activate transaction makes imported data active.
+
+## Merge, labels, and rollback
+
+FLETCH merge is Git-inspired but not text merging. It promotes verified
+candidates into an active ledger/view through an auditable transaction:
+
+- `fetch`: acquire and verify candidate fletches. No active state change.
+- `merge`: update active aliases, partition sets, labels, rollups, and views.
+- `pull`: future shorthand for fetch plus merge when policy allows; it should
+  not be a plain fetch alias.
+- `label`: name a ledger state, active partition set, or quiver import.
+- `pin`: lock a view to a label, revision, or partition set.
+- `rollback`: restore an active view to a prior label or revision.
+
+Merge policies:
+
+| Policy | Meaning |
+|--------|---------|
+| `additive` | Add new active fletches without replacing existing ones. |
+| `supersede` | Replace the active target while preserving `supersedes` lineage. |
+| `replace-set` | Atomically replace a coherent active partition set or quiver. |
+| `overlay` | Prefer staged/local/update fletches over bundled/base fletches. |
+| `no-op` | Candidate already matches active hash/state. |
+| `conflict` | FLETCH cannot safely choose without policy or user resolution. |
+
+Conflict groups should support labeled alternatives so repeated conflicts can be
+resolved in bulk:
+
+```text
+conflict-group: nhl:schedule:season:20252026
+  A = official NHL API
+  B = release quiver
+  C = local correction
+
+resolution:
+  choose A for all schedule conflicts in season 20252026
+  choose C for game 2025020001
+```
+
+Every merge transaction should record its target view, policy, candidate inputs,
+activated fletches, superseded fletches, alias updates, conflicts, optional
+label, and rollback target.
+
+`fletch.merge.v1` is the future named contract for these transactions. It should
+make candidate inputs, chosen policy, conflict groups, alias updates, activated
+partition sets, labels, and rollback targets machine-readable.
+
+Rollups should record enough invalidation/folding metadata for adapters to know
+when a rollup is stale and which partitions it folds over. FLETCH owns the
+lineage and freshness metadata; product query engines own the math.
+
 ## Core contracts
 
 ### `fletch.plan.v1`
@@ -17,11 +263,41 @@ Describes intent to obtain a dataset:
 - `cache_policy`: freshness, offline, and resumable behavior.
 - `tags` and `metadata`: product-owned classification.
 
+Freshness policy is not a promise that every fetch is one-time:
+
+- `immutable`: reuse a verified cached object unless the caller forces a fetch.
+- `max-age-days`: reuse a verified cached object until it ages past the limit.
+- `always-check`: treat the shaft as mutable and fetch/check on each execution.
+- `offline`: if live fetches are disabled, report missing/stale fletches instead
+  of assuming the last cached value is acceptable.
+
+Fetch/merge semantics are deliberately separate. A fetch may acquire, verify,
+and record a candidate cache object, but it must not silently merge that object
+into a product's active data view. Future `pull` is reserved for fetch plus
+merge when policy allows. Merge, activation, or "make current" decisions belong
+to later ledger/quiver operations or product adapters, where stale data,
+replacement policy, and feature activation can be reviewed explicitly.
+
+Future flight resolution should support multiple fletches and emit:
+
+- requested fletch IDs,
+- dependency and expansion edges,
+- data-link edges such as contains, derived-from, supersedes, mirrors, and cites,
+- acceptable and chosen data format options,
+- shafts that will be fetched or reused,
+- verified cache hits that will be skipped,
+- stale or missing fletches,
+- quivers that can satisfy requested fletches,
+- activation outcomes owned by adapters,
+- tips that preview or index relevant data without replacing the artifact.
+
 ### `fletch.cache-manifest.v1`
 
 Records cached artifacts:
 
 - source URL and logical dataset id,
+- data format used,
+- links to related fletches,
 - deterministic cache key,
 - relative cache path,
 - content hash,
@@ -29,21 +305,93 @@ Records cached artifacts:
 - fetched timestamp,
 - verification status.
 
+Ledger entries should remain safe to publish through CROP/PROOF. They should
+include enough provenance for local status pages without requiring generated
+Markdown to become the source of truth.
+
+Initial cache operations are manifest-led:
+
+- `cache list`: display ledger entries without touching cached objects.
+- `cache verify`: hash cached objects and compare them with ledger hash and byte
+  count.
+- `cache status`: report verified, missing, hash-mismatch, fresh, or stale state
+  using a caller-provided freshness policy.
+- `cache prune`: plan deletion candidates under the cache object tree that are
+  not referenced by the manifest. The initial contract is plan-only; destructive
+  deletion requires a later explicit execution command.
+
+### `fletch.graph.v1`
+
+Future graph export contract for typed fletch, shaft, quiver, flight,
+ledger-entry, partition, rollup, alias, and document nodes plus the edge kinds
+defined above.
+
+### `fletch.merge.v1`
+
+Future transaction contract for staged candidate inputs, active-view updates,
+labels, pins, rollback targets, policy choices, and conflict-group resolution.
+
+### `fletch.quiver.v1`
+
+Portable package contract for member fletches, cache objects, and a `quiver.json`
+manifest. The initial implementation is a directory quiver:
+
+```text
+quiver-root/
+  quiver.json
+  objects/sha256/<cache-key>
+```
+
+`quiver.json` records `schema_version`, `generated_by`, `quiver_id`, and copied
+ledger entries. Export requires every referenced object to verify against the
+source ledger. Import copies objects into
+`cache/staged/quivers/<safe-quiver-id>/`, verifies the staged objects, and emits
+a staged `fletch.cache-manifest.v1`; merge/activate is explicit and separate.
+Future quivers can add tips, graph edges, partitions, rollups, aliases, and
+compressed archive packaging while preserving stage-first import.
+
+## Trust and safety requirements
+
+- Never activate a fletch from an unverified hash when a hash is expected.
+- Write to temporary paths and promote only after a complete fetch/write.
+- Normalize archive extraction paths so quiver import cannot write outside the
+  intended cache root.
+- Preserve the distinction between remote shafts, local file shafts, generated
+  artifact shafts, and adapter-owned shafts.
+- Offline mode must report verified, stale, missing, and unverifiable fletches
+  explicitly.
+- Dry-run flights must show planned network, disk, quiver, and activation work
+  without mutating cache state.
+
+## Publishing surfaces
+
+FLETCH ledgers and registry data should be shaped so local tools can publish
+status without owning fetch behavior:
+
+- CROP indexes ledgers, quivers, and cache docs as corpus/status metadata.
+- MDPATH provides stable local references to generated specs and status rows.
+- PROOF can render registry, flight, quiver, and ledger views as Markdown, HTML,
+  dashboard, or other backend output.
+
 ## Initial CLI
 
 ```powershell
 fletch plan --dataset-id nhl:season:1993 --url https://example.test/1993.json
 fletch key  --dataset-id route:tiles:demo --url https://example.test/tiles.zip
+fletch cache status --manifest .fletch/cache/manifest.json
 ```
 
 ## Onboarding targets
 
 | Repo | Initial FLETCH fit |
 |------|--------------------|
-| BISECT/apportionment | Census/geography/election source plans and cache manifests. |
-| icelines | 38-season NHL source plans, profile/favorite cache bundles, offline mode. |
-| route | Geodata/routing source plans, bundleable local caches, on-demand pulls. |
-| CROP | Index and status over FLETCH manifests and cache docs. |
+| BISECT/apportionment | Census/geography/election fletches, large shafts, and verified ledgers. |
+| icelines | NHL season/game/profile/favorite fletches, on-demand expansion, quivers, offline mode. |
+| route | Geodata/routing fletches, archive shafts, bundleable local caches, on-demand fetches. |
+| CROP | Index and status over FLETCH ledgers, quivers, and cache docs. |
+
+See [`consumer-adapter-scout.md`](consumer-adapter-scout.md) for the initial
+adapter migration matrix and mock-client proving path.
 
 ## Later extraction
 

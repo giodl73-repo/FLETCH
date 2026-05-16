@@ -11,15 +11,28 @@ Fetching, caching, bundling, verification, and offline data access are shared
 infrastructure. The first FLETCH wave proves the common contract before any
 domain adapter migrates.
 
+## Vocabulary
+
+- **Fletch**: logical fetch/cache unit.
+- **Shaft**: concrete carrier or locator for a fletch.
+- **Flight**: resolved execution plan over one or more fletches.
+- **Quiver**: named group or portable bundle of fletches.
+- **Ledger**: manifest/status record for cached fletches.
+- **Tip**: lightweight preview, sample, summary, or index for a shaft/fletch.
+
+The foundation should evolve toward graph-shaped fletch relationships:
+dependencies, expansion, bundle satisfaction, and activation, while keeping all
+product meaning in adapters.
+
 ## Pulse table
 
 | Pulse | Title | Status | Outcome |
 |------:|-------|--------|---------|
 | 01 | Workspace foundation | done | Added workspace, core plan/manifest contracts, CLI plan/key commands, specs, and wave scaffolding. |
-| 02 | Cache execution | pending | Add HTTP/file fetch execution with temp-file promotion and checksum verification. |
-| 03 | Cache operations | pending | Add cache listing, verification, stale/fresh status, and prune planning. |
-| 04 | Bundle format | pending | Add export/import cache bundle contract. |
-| 05 | Consumer adapters scout | pending | Inventory BISECT, icelines, and route migration candidates. |
+| 02 | Cache execution | done | Added HTTP/file fetch execution with temp-file promotion, SHA-256 ledger entries, optional checksum verification, bandwidth limits, and `fletch fetch`. |
+| 03 | Cache operations | done | Added manifest-led cache list, verify, status, and prune-plan operations with CLI commands. |
+| 04 | Quiver format | done | Added `fletch.quiver.v1` directory export/import, stage-first verification, CLI commands, and mock-client offline bootstrap. |
+| 05 | Consumer adapters scout | done | Documented initial ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and PROOF migration slices. |
 
 ## Success criteria
 

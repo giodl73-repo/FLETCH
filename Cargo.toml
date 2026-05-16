@@ -2,6 +2,7 @@
 members = [
     "crates/fletch-core",
     "crates/fletch-cli",
+    "crates/fletch-mock-client",
 ]
 resolver = "2"
 
@@ -19,3 +20,4 @@ serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
 toml = "0.8"
+reqwest = { version = "0.12", features = ["blocking"] }

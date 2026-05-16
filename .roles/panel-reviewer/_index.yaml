@@ -1,0 +1,41 @@
+# FLETCH Local Reviewer Index
+# Infrastructure reviewers for fetch/cache, provenance, and generated docs.
+
+reviewers:
+
+  F-I1:
+    name: Distributed Cache Reviewer
+    slug: distributed-cache-reviewer
+    category: cache-systems
+    expertise: [cache-identity, freshness, atomic-writes, content-addressing, manifests]
+
+  F-I2:
+    name: Reproducibility Reviewer
+    slug: reproducibility-reviewer
+    category: reproducibility
+    expertise: [provenance, deterministic-runs, audit-ledgers, hashes, offline-mode]
+
+  F-I3:
+    name: Data Integration Reviewer
+    slug: data-integration-reviewer
+    category: data-integration
+    expertise: [source-registries, adapters, schema-boundaries, generated-artifacts]
+
+  F-I4:
+    name: Offline Packaging Reviewer
+    slug: offline-packaging-reviewer
+    category: packaging
+    expertise: [bundles, quivers, import-export, bootstrap, release-assets]
+
+  F-I5:
+    name: Security and Trust Reviewer
+    slug: security-trust-reviewer
+    category: security
+    expertise: [checksums, archive-safety, path-safety, transport-risk, untrusted-input]
+
+  F-I6:
+    name: Documentation Pipeline Reviewer
+    slug: documentation-pipeline-reviewer
+    category: documentation-pipeline
+    expertise: [proof, crop, mdpath, generated-markdown, status-pages]
+
