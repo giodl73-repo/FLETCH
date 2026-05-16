@@ -11,6 +11,7 @@ use thiserror::Error;
 pub const FLETCH_PLAN_SCHEMA: &str = "fletch.plan.v1";
 pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
 pub const FLETCH_CACHE_INDEX_SCHEMA: &str = "fletch.cache-index.v1";
+pub const FLETCH_CACHE_INDEX_GATE_SCHEMA: &str = "fletch.cache-index-gate.v1";
 pub const FLETCH_CACHE_INDEX_DIFF_SCHEMA: &str = "fletch.cache-index-diff.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_QUIVER_SUMMARY_SCHEMA: &str = "fletch.quiver-summary.v1";
@@ -257,6 +258,49 @@ pub struct CacheIndexReport {
     pub unverified_count: usize,
     pub byte_count: u64,
     pub entries: Vec<CacheIndexEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheIndexGatePolicy {
+    #[serde(default)]
+    pub expected_dataset_ids: Vec<String>,
+    #[serde(default = "default_true")]
+    pub require_verified: bool,
+    #[serde(default = "default_true")]
+    pub allow_missing_expected: bool,
+}
+
+impl Default for CacheIndexGatePolicy {
+    fn default() -> Self {
+        Self {
+            expected_dataset_ids: Vec::new(),
+            require_verified: true,
+            allow_missing_expected: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheIndexGateFailure {
+    pub dataset_id: Option<String>,
+    pub cache_key: Option<String>,
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheIndexGateReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub entry_count: usize,
+    pub expected_count: usize,
+    pub matched_expected_count: usize,
+    pub missing_expected_count: usize,
+    pub unexpected_count: usize,
+    pub unverified_count: usize,
+    pub passed: bool,
+    pub failures: Vec<CacheIndexGateFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1767,6 +1811,84 @@ pub fn cache_index_from_manifest(manifest: &CacheManifest) -> CacheIndexReport {
         unverified_count: entries.len().saturating_sub(verified_count),
         byte_count: entries.iter().map(|entry| entry.bytes).sum(),
         entries,
+    }
+}
+
+pub fn cache_index_gate_report(
+    index: &CacheIndexReport,
+    policy: &CacheIndexGatePolicy,
+) -> CacheIndexGateReport {
+    let expected = policy
+        .expected_dataset_ids
+        .iter()
+        .map(|id| id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut matched_expected = BTreeSet::new();
+    let mut failures = Vec::new();
+
+    for entry in &index.entries {
+        if expected.is_empty() || expected.contains(entry.dataset_id.as_str()) {
+            if !expected.is_empty() {
+                matched_expected.insert(entry.dataset_id.as_str());
+            }
+        } else {
+            failures.push(CacheIndexGateFailure {
+                dataset_id: Some(entry.dataset_id.clone()),
+                cache_key: Some(entry.cache_key.clone()),
+                code: "unexpected-entry".to_string(),
+                message: format!(
+                    "cache entry {} is not present in the expected dataset set",
+                    entry.dataset_id
+                ),
+            });
+        }
+
+        if policy.require_verified && !entry.verified {
+            failures.push(CacheIndexGateFailure {
+                dataset_id: Some(entry.dataset_id.clone()),
+                cache_key: Some(entry.cache_key.clone()),
+                code: "unverified-entry".to_string(),
+                message: format!("cache entry {} is not verified", entry.dataset_id),
+            });
+        }
+    }
+
+    if !policy.allow_missing_expected {
+        for dataset_id in &expected {
+            if !matched_expected.contains(dataset_id) {
+                failures.push(CacheIndexGateFailure {
+                    dataset_id: Some((*dataset_id).to_string()),
+                    cache_key: None,
+                    code: "missing-expected-entry".to_string(),
+                    message: format!(
+                        "expected dataset {dataset_id} is missing from the cache index"
+                    ),
+                });
+            }
+        }
+    }
+
+    let unexpected_count = failures
+        .iter()
+        .filter(|failure| failure.code == "unexpected-entry")
+        .count();
+    let unverified_count = failures
+        .iter()
+        .filter(|failure| failure.code == "unverified-entry")
+        .count();
+
+    CacheIndexGateReport {
+        schema_version: FLETCH_CACHE_INDEX_GATE_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: index.cache_root.clone(),
+        entry_count: index.entry_count,
+        expected_count: expected.len(),
+        matched_expected_count: matched_expected.len(),
+        missing_expected_count: expected.len().saturating_sub(matched_expected.len()),
+        unexpected_count,
+        unverified_count,
+        passed: failures.is_empty(),
+        failures,
     }
 }
 
@@ -4050,6 +4172,10 @@ fn default_fetch_attempts() -> u32 {
     1
 }
 
+fn default_true() -> bool {
+    true
+}
+
 fn cache_path(cache_root: &Path, relative_path: &str) -> PathBuf {
     relative_path
         .split('/')
@@ -4634,6 +4760,102 @@ mod tests {
         assert_eq!(index.byte_count, 42);
         assert_eq!(index.entries[0].dataset_id, "test:dataset");
         assert_eq!(index.entries[0].version.as_deref(), Some("v1"));
+    }
+
+    #[test]
+    fn cache_index_gate_report_enforces_consumer_expected_set_without_domain_logic() {
+        let index = CacheIndexReport {
+            schema_version: FLETCH_CACHE_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            entry_count: 2,
+            verified_count: 1,
+            unverified_count: 1,
+            byte_count: 30,
+            entries: vec![
+                CacheIndexEntry {
+                    dataset_id: "route.manifest.tiger-primary-roads".to_string(),
+                    version: Some("2023".to_string()),
+                    cache_key:
+                        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            .to_string(),
+                    sha256:
+                        "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                            .to_string(),
+                    relative_path: "objects/a".to_string(),
+                    bytes: 10,
+                    verified: true,
+                },
+                CacheIndexEntry {
+                    dataset_id: "route.unregistered.source".to_string(),
+                    version: None,
+                    cache_key:
+                        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                            .to_string(),
+                    sha256:
+                        "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                            .to_string(),
+                    relative_path: "objects/b".to_string(),
+                    bytes: 20,
+                    verified: false,
+                },
+            ],
+        };
+        let policy = CacheIndexGatePolicy {
+            expected_dataset_ids: vec![
+                "route.manifest.tiger-primary-roads".to_string(),
+                "route.manifest.census-gazetteer-counties".to_string(),
+            ],
+            require_verified: true,
+            allow_missing_expected: true,
+        };
+
+        let report = cache_index_gate_report(&index, &policy);
+
+        assert_eq!(report.schema_version, FLETCH_CACHE_INDEX_GATE_SCHEMA);
+        assert!(!report.passed);
+        assert_eq!(report.expected_count, 2);
+        assert_eq!(report.matched_expected_count, 1);
+        assert_eq!(report.missing_expected_count, 1);
+        assert_eq!(report.unexpected_count, 1);
+        assert_eq!(report.unverified_count, 1);
+        assert!(report
+            .failures
+            .iter()
+            .any(|failure| failure.code == "unexpected-entry"));
+        assert!(report
+            .failures
+            .iter()
+            .any(|failure| failure.code == "unverified-entry"));
+        assert!(!report
+            .failures
+            .iter()
+            .any(|failure| failure.code == "missing-expected-entry"));
+    }
+
+    #[test]
+    fn cache_index_gate_report_can_require_complete_bootstrap_sets() {
+        let index = CacheIndexReport {
+            schema_version: FLETCH_CACHE_INDEX_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: "cache".to_string(),
+            entry_count: 0,
+            verified_count: 0,
+            unverified_count: 0,
+            byte_count: 0,
+            entries: Vec::new(),
+        };
+        let policy = CacheIndexGatePolicy {
+            expected_dataset_ids: vec!["icelines.bootstrap.roster".to_string()],
+            require_verified: true,
+            allow_missing_expected: false,
+        };
+
+        let report = cache_index_gate_report(&index, &policy);
+
+        assert!(!report.passed);
+        assert_eq!(report.missing_expected_count, 1);
+        assert_eq!(report.failures[0].code, "missing-expected-entry");
     }
 
     #[test]

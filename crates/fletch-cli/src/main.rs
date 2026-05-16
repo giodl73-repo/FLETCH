@@ -2,21 +2,22 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     active_partition_set, adapter_handoff_report, adapter_sources_from_registry,
-    alias_state_from_manifest, cache_index_diff, cache_index_from_manifest, cache_key, cache_list,
-    cache_manifest, crop_index_from_manifest, dry_run_flight, export_quiver, fetch_plan,
-    fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_quiver,
-    graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
-    local_url_map, offline_cache_report, partition_invalidation_report,
-    partition_state_from_manifest, plan_cache_prune, preview_archive_expansion,
-    preview_manifest_merge, preview_rollback, preview_rollup_edges, proof_document_manifest,
-    publish_report_from_manifest, publisher_bundle_report, quiver_merge_ready_report,
-    read_cache_manifest_json, slice_active_partition_set, slice_adapter_source_report,
-    slice_archive_expansion_preview, slice_cache_index_report, slice_crop_index_report,
-    slice_local_url_map, slice_partition_state, slice_proof_document_manifest,
-    slice_quiver_merge_ready_report, slice_registry_validation_report, summarize_cache_manifest,
-    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entries, validate_registry,
-    verify_cache_manifest, verify_quiver_bundle, write_cache_manifest_json, AdapterHandoffReport,
-    AliasState, CacheEntry, CacheIndexReport, CacheManifest, CropIndexReport, FetchOptions,
+    alias_state_from_manifest, cache_index_diff, cache_index_from_manifest,
+    cache_index_gate_report, cache_key, cache_list, cache_manifest, crop_index_from_manifest,
+    dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
+    graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
+    inspect_cache_manifest, label_state_from_aliases, local_url_map, offline_cache_report,
+    partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
+    preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
+    proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
+    quiver_merge_ready_report, read_cache_manifest_json, slice_active_partition_set,
+    slice_adapter_source_report, slice_archive_expansion_preview, slice_cache_index_report,
+    slice_crop_index_report, slice_local_url_map, slice_partition_state,
+    slice_proof_document_manifest, slice_quiver_merge_ready_report,
+    slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
+    tips_from_manifest, upsert_cache_manifest_entries, validate_registry, verify_cache_manifest,
+    verify_quiver_bundle, write_cache_manifest_json, AdapterHandoffReport, AliasState, CacheEntry,
+    CacheIndexGatePolicy, CacheIndexReport, CacheManifest, CropIndexReport, FetchOptions,
     FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap, PartitionState,
     ProofDocumentManifest, QuiverManifest, QuiverSummary, RollupPreview, SourceKind,
 };
@@ -297,6 +298,27 @@ enum CacheCommands {
         /// Maximum number of index rows to output.
         #[arg(long)]
         limit: Option<usize>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Gate a cache index against product-supplied expected dataset ids.
+    IndexGate {
+        /// Path to a fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Expected dataset id. Repeat for ROUTE/BISECT/ICELINES-owned sets.
+        #[arg(long = "expected-dataset-id")]
+        expected_dataset_ids: Vec<String>,
+        /// Fail if an expected dataset id is absent from the index.
+        #[arg(long)]
+        require_all_expected: bool,
+        /// Allow unverified entries to pass the gate.
+        #[arg(long)]
+        allow_unverified: bool,
+        /// Exit non-zero when the generated gate report does not pass.
+        #[arg(long)]
+        gate: bool,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -896,6 +918,30 @@ fn main() -> Result<()> {
                     ),
                     output,
                 )?;
+            }
+            CacheCommands::IndexGate {
+                manifest,
+                expected_dataset_ids,
+                require_all_expected,
+                allow_unverified,
+                gate,
+                output,
+            } => {
+                let manifest = read_manifest(&manifest)?;
+                let index = cache_index_from_manifest(&manifest);
+                let report = cache_index_gate_report(
+                    &index,
+                    &CacheIndexGatePolicy {
+                        expected_dataset_ids,
+                        require_verified: !allow_unverified,
+                        allow_missing_expected: !require_all_expected,
+                    },
+                );
+                let passed = report.passed;
+                write_json(&report, output)?;
+                if gate && !passed {
+                    bail!("cache index gate failed");
+                }
             }
             CacheCommands::IndexDiff {
                 base_index,

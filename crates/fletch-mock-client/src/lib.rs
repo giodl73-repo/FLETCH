@@ -1,12 +1,14 @@
 use anyhow::Result;
 use fletch_core::{
-    cache_manifest, dry_run_flight, export_quiver, fetch_plan_with_kind, fetch_to_cache,
-    fletch_registry, graph_from_manifest_with_node_kinds, graph_from_registry, import_quiver,
+    cache_index_from_manifest, cache_index_gate_report, cache_manifest, dry_run_flight,
+    export_quiver, fetch_plan_with_kind, fetch_to_cache, fletch_registry,
+    graph_from_manifest_with_node_kinds, graph_from_registry, import_quiver,
     inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest,
     read_cache_manifest_json, tips_from_manifest, upsert_cache_manifest_entries,
-    write_cache_manifest_json, CacheFreshnessStatus, CacheManifest, CacheObjectStatus, DataFormat,
-    FetchOptions, FletchDefinition, FletchGraph, FletchRegistry, FreshnessPolicy, GraphEdgeKind,
-    GraphNodeKind, GraphNodeKindHints, PrunePlan, RegistryEdge, SourceKind, SourceSpec,
+    write_cache_manifest_json, CacheFreshnessStatus, CacheIndexGatePolicy, CacheManifest,
+    CacheObjectStatus, DataFormat, FetchOptions, FletchDefinition, FletchGraph, FletchRegistry,
+    FreshnessPolicy, GraphEdgeKind, GraphNodeKind, GraphNodeKindHints, PrunePlan, RegistryEdge,
+    SourceKind, SourceSpec,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -22,6 +24,8 @@ pub struct MockClientReport {
     pub fetched_fletches: Vec<String>,
     pub verified_count: usize,
     pub fresh_count: usize,
+    pub cache_index_gate_passed: bool,
+    pub cache_index_expected_count: usize,
     pub prune_count: usize,
     pub quiver_path: String,
     pub staged_quiver_root: String,
@@ -125,6 +129,19 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     std::fs::write(&orphan_path, b"orphaned trick-arrow object")?;
 
     let statuses = inspect_cache_manifest(&manifest, &FreshnessPolicy::Immutable)?;
+    let cache_index = cache_index_from_manifest(&manifest);
+    let cache_index_gate = cache_index_gate_report(
+        &cache_index,
+        &CacheIndexGatePolicy {
+            expected_dataset_ids: registry
+                .fletches
+                .iter()
+                .map(|definition| definition.id.clone())
+                .collect(),
+            require_verified: true,
+            allow_missing_expected: false,
+        },
+    );
     let prune = plan_cache_prune(&manifest)?;
     let threat_query = query_threat_partitions(&manifest)?;
     let exported = export_quiver(
@@ -153,6 +170,7 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
         flight.steps.len(),
         fetched_fletches,
         &statuses,
+        &cache_index_gate,
         &prune,
         exported.path,
         imported.stage_root,
@@ -175,6 +193,7 @@ fn report(
     flight_step_count: usize,
     fetched_fletches: Vec<String>,
     statuses: &[fletch_core::CacheStatus],
+    cache_index_gate: &fletch_core::CacheIndexGateReport,
     prune: &PrunePlan,
     quiver_path: PathBuf,
     staged_quiver_root: PathBuf,
@@ -203,6 +222,8 @@ fn report(
             .iter()
             .filter(|status| status.freshness_status == CacheFreshnessStatus::Fresh)
             .count(),
+        cache_index_gate_passed: cache_index_gate.passed,
+        cache_index_expected_count: cache_index_gate.expected_count,
         prune_count: prune.prune_count,
         quiver_path: quiver_path.display().to_string(),
         staged_quiver_root: staged_quiver_root.display().to_string(),

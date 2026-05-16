@@ -95,6 +95,7 @@ cargo run -p fletch-cli -- fetch-plan --plan fletch.plan.json --cache-root .flet
 cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --trusted-manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- fetch --dataset-id nhl:schedule:today --url https://example.test/schedule.json --freshness always-check
 cargo run -p fletch-cli -- cache status --manifest .fletch/cache/manifest.json --freshness max-age-days --max-age-days 1
+cargo run -p fletch-cli -- cache index-gate --manifest .fletch/cache/manifest.json --expected-dataset-id route.manifest.tiger-primary-roads --gate
 cargo run -p fletch-cli -- cache prune --manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- quiver export --manifest .fletch/cache/manifest.json --quiver-id demo:pack --output-dir .fletch/quivers/demo
 cargo run -p fletch-cli -- quiver import --quiver-dir .fletch/quivers/demo --cache-root .fletch/cache
@@ -183,6 +184,12 @@ entry shape, and derived reports. A typical consumer flow is:
 This pattern is now used by ICELINES, BISECT, and ROUTE for cache-index
 evidence and supports CROP/PROOF publisher inputs without making FLETCH
 responsible for domain activation.
+
+`fletch cache index-gate` is the product-neutral health gate for that contract:
+consumers supply their own expected dataset IDs, choose whether all expected
+entries are required for the current bootstrap/group/on-demand flow, and decide
+whether unverified entries are allowed. FLETCH reports unexpected, missing, and
+unverified rows without knowing product semantics.
 
 Publisher commands are read-only derived views. `fletch publish crop-index`,
 `fletch publish proof-docs`, and `fletch publish local-url-map` accept
