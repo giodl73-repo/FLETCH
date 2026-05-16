@@ -13,6 +13,7 @@ pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_QUIVER_SUMMARY_SCHEMA: &str = "fletch.quiver-summary.v1";
 pub const FLETCH_QUIVER_VERIFY_SCHEMA: &str = "fletch.quiver-verify.v1";
+pub const FLETCH_QUIVER_MERGE_READY_SCHEMA: &str = "fletch.quiver-merge-ready.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
@@ -498,6 +499,28 @@ pub struct QuiverVerifyReport {
     pub missing_count: usize,
     pub hash_mismatch_count: usize,
     pub entries: Vec<CacheStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuiverMergeCandidate {
+    pub dataset_id: String,
+    pub candidate_alias_id: Option<String>,
+    pub cache_key: String,
+    pub sha256: String,
+    pub relative_path: String,
+    pub verified: bool,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuiverMergeReadyReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub quiver_id: String,
+    pub candidate_count: usize,
+    pub ready_count: usize,
+    pub blocked_count: usize,
+    pub candidates: Vec<QuiverMergeCandidate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1734,6 +1757,42 @@ pub fn graph_from_quiver(quiver: &QuiverManifest) -> FletchGraph {
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         nodes,
         edges,
+    }
+}
+
+pub fn quiver_merge_ready_report(
+    quiver: &QuiverManifest,
+    candidate_alias_id: Option<String>,
+) -> QuiverMergeReadyReport {
+    let candidates = quiver
+        .entries
+        .iter()
+        .map(|entry| QuiverMergeCandidate {
+            dataset_id: entry.dataset_id.clone(),
+            candidate_alias_id: candidate_alias_id.clone(),
+            cache_key: entry.cache_key.clone(),
+            sha256: entry.sha256.clone(),
+            relative_path: entry.relative_path.clone(),
+            verified: entry.verified,
+            status: if entry.verified {
+                "ready".to_string()
+            } else {
+                "blocked-unverified".to_string()
+            },
+        })
+        .collect::<Vec<_>>();
+    let ready_count = candidates
+        .iter()
+        .filter(|candidate| candidate.verified)
+        .count();
+    QuiverMergeReadyReport {
+        schema_version: FLETCH_QUIVER_MERGE_READY_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        quiver_id: quiver.quiver_id.clone(),
+        candidate_count: candidates.len(),
+        ready_count,
+        blocked_count: candidates.len().saturating_sub(ready_count),
+        candidates,
     }
 }
 
@@ -3941,6 +4000,44 @@ mod tests {
             .iter()
             .any(|edge| edge.kind == GraphEdgeKind::Contains
                 && edge.label.as_deref() == Some("contains-member")));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn quiver_merge_ready_report_marks_unverified_candidates_blocked() {
+        let root = unique_temp_dir("quiver-merge-ready");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"quiver").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:quiver:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let mut unverified = outcome.entry.clone();
+        unverified.dataset_id = "test:quiver:blocked".to_string();
+        unverified.verified = false;
+        let quiver = QuiverManifest {
+            schema_version: FLETCH_QUIVER_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            quiver_id: "test:quiver".to_string(),
+            entries: vec![outcome.entry, unverified],
+        };
+
+        let report = quiver_merge_ready_report(&quiver, Some("current".to_string()));
+
+        assert_eq!(report.schema_version, FLETCH_QUIVER_MERGE_READY_SCHEMA);
+        assert_eq!(report.candidate_count, 2);
+        assert_eq!(report.ready_count, 1);
+        assert_eq!(report.blocked_count, 1);
+        assert_eq!(
+            report.candidates[0].candidate_alias_id.as_deref(),
+            Some("current")
+        );
+        assert_eq!(report.candidates[1].status, "blocked-unverified");
 
         let _ = std::fs::remove_dir_all(root);
     }

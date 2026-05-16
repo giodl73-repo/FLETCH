@@ -244,6 +244,11 @@ fletches, and member ledger entries. `contains` edges connect the quiver to its
 members so CROP and PROOF can index portable bundles without reading cache
 objects.
 
+`fletch.quiver-merge-ready.v1` describes quiver members as candidate merge or
+alias inputs. Verified members are marked `ready`; unverified members are
+reported as blocked data so consumers can preview promotion without activating
+or trusting incomplete bundle contents.
+
 ## Merge, labels, and rollback
 
 FLETCH merge is Git-inspired but not text merging. It promotes verified

@@ -7,10 +7,10 @@ use fletch_core::{
     inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_manifest_merge, preview_rollback, preview_rollup_edges, publish_report_from_manifest,
-    summarize_cache_manifest, summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry,
-    verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry, CacheManifest,
-    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
-    QuiverManifest, RollupPreview, SourceKind,
+    quiver_merge_ready_report, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
+    upsert_cache_manifest_entry, verify_cache_manifest, verify_quiver_bundle, AliasState,
+    CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
+    LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -384,6 +384,18 @@ enum QuiverCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Describe quiver members as merge/alias candidates without activating them.
+    MergeReady {
+        /// Path to a fletch.quiver.v1 JSON file.
+        #[arg(long)]
+        quiver: PathBuf,
+        /// Optional alias id to propose for every candidate row.
+        #[arg(long)]
+        alias_id: Option<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -719,6 +731,14 @@ fn main() -> Result<()> {
             QuiverCommands::Graph { quiver, output } => {
                 let quiver = read_quiver_manifest(&quiver)?;
                 write_json(&graph_from_quiver(&quiver), output)?;
+            }
+            QuiverCommands::MergeReady {
+                quiver,
+                alias_id,
+                output,
+            } => {
+                let quiver = read_quiver_manifest(&quiver)?;
+                write_json(&quiver_merge_ready_report(&quiver, alias_id), output)?;
             }
         },
         Commands::Graph { command } => match command {
