@@ -21,7 +21,7 @@ use fletch_core::{
     FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap, PartitionState,
     ProofDocumentManifest, QuiverManifest, QuiverSummary, RollupPreview, SourceKind,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -307,6 +307,9 @@ enum CacheCommands {
         /// Path to a fletch.cache-manifest.v1 JSON file.
         #[arg(long)]
         manifest: PathBuf,
+        /// FLETCH registry whose HTTP/file fletch IDs should be expected dataset IDs.
+        #[arg(long = "expected-registry", value_name = "FILE")]
+        expected_registries: Vec<PathBuf>,
         /// Expected dataset id. Repeat for ROUTE/BISECT/ICELINES-owned sets.
         #[arg(long = "expected-dataset-id")]
         expected_dataset_ids: Vec<String>,
@@ -921,6 +924,7 @@ fn main() -> Result<()> {
             }
             CacheCommands::IndexGate {
                 manifest,
+                expected_registries,
                 expected_dataset_ids,
                 require_all_expected,
                 allow_unverified,
@@ -929,6 +933,8 @@ fn main() -> Result<()> {
             } => {
                 let manifest = read_manifest(&manifest)?;
                 let index = cache_index_from_manifest(&manifest);
+                let expected_dataset_ids =
+                    expected_dataset_ids_from_inputs(expected_dataset_ids, expected_registries)?;
                 let report = cache_index_gate_report(
                     &index,
                     &CacheIndexGatePolicy {
@@ -1362,6 +1368,29 @@ fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
 fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
+}
+
+fn expected_dataset_ids_from_inputs(
+    explicit_ids: Vec<String>,
+    registry_paths: Vec<PathBuf>,
+) -> Result<Vec<String>> {
+    let mut expected = explicit_ids.into_iter().collect::<BTreeSet<_>>();
+    for registry_path in registry_paths {
+        let registry = read_registry(&registry_path)?;
+        expected.extend(
+            registry
+                .fletches
+                .into_iter()
+                .filter(|definition| {
+                    definition
+                        .shafts
+                        .iter()
+                        .any(|shaft| matches!(shaft.kind, SourceKind::Http | SourceKind::File))
+                })
+                .map(|definition| definition.id),
+        );
+    }
+    Ok(expected.into_iter().collect())
 }
 
 fn read_crop_index(path: &PathBuf) -> Result<CropIndexReport> {

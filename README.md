@@ -95,7 +95,7 @@ cargo run -p fletch-cli -- fetch-plan --plan fletch.plan.json --cache-root .flet
 cargo run -p fletch-cli -- fetch --dataset-id route:tiles:demo --url https://example.test/tiles.zip --trusted-manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- fetch --dataset-id nhl:schedule:today --url https://example.test/schedule.json --freshness always-check
 cargo run -p fletch-cli -- cache status --manifest .fletch/cache/manifest.json --freshness max-age-days --max-age-days 1
-cargo run -p fletch-cli -- cache index-gate --manifest .fletch/cache/manifest.json --expected-dataset-id route.manifest.tiger-primary-roads --gate
+cargo run -p fletch-cli -- cache index-gate --manifest .fletch/cache/manifest.json --expected-registry fletch.registry.json --gate
 cargo run -p fletch-cli -- cache prune --manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- quiver export --manifest .fletch/cache/manifest.json --quiver-id demo:pack --output-dir .fletch/quivers/demo
 cargo run -p fletch-cli -- quiver import --quiver-dir .fletch/quivers/demo --cache-root .fletch/cache
@@ -189,7 +189,10 @@ responsible for domain activation.
 consumers supply their own expected dataset IDs, choose whether all expected
 entries are required for the current bootstrap/group/on-demand flow, and decide
 whether unverified entries are allowed. FLETCH reports unexpected, missing, and
-unverified rows without knowing product semantics.
+unverified rows without knowing product semantics. Expected IDs can be listed
+directly with repeated `--expected-dataset-id` flags or derived from generic
+HTTP/file fletches in one or more `fletch.registry.v1` files with
+`--expected-registry`.
 
 Publisher commands are read-only derived views. `fletch publish crop-index`,
 `fletch publish proof-docs`, and `fletch publish local-url-map` accept

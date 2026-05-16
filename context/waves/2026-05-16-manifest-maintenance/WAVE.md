@@ -20,6 +20,8 @@ ledgers without reimplementing FLETCH merge rules.
 | 01 | Batch manifest upsert | done | Added `upsert_cache_manifest_entries` for validated multi-entry manifest merges. |
 | 02 | Manifest file helpers | done | Added reusable cache manifest JSON read/write helpers without turning FLETCH into a manifest daemon. |
 | 03 | Consumer smoke docs | done | Documented manifest-first consumer patterns with cache index/report handoffs. |
+| 04 | Cache index gate contract | done | Added product-neutral `fletch.cache-index-gate.v1` reports and CLI gating over consumer-supplied expected IDs. |
+| 05 | Registry-backed index gate | done | Let `fletch cache index-gate` derive expected IDs from `fletch.registry.v1` files. |
 
 ## Validation expectations
 
