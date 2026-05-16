@@ -44,6 +44,9 @@ Before this wave can close or hand off to Red Arrow, run the `.roles` review:
 Blocking findings become additional Arsenal pulses. Non-blocking findings must be
 documented as deferred risks or next-wave inputs.
 
+Status: complete in `ROLES_REVIEW.md`; no blocking findings. Deferred findings
+feed the Red Arrow merge/aliases wave.
+
 ## Non-goals
 
 - FLETCH does not interpret domain datasets or product-specific stale semantics.
