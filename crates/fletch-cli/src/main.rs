@@ -5,14 +5,14 @@ use fletch_core::{
     alias_state_from_manifest, cache_key, cache_list, cache_manifest, crop_index_from_manifest,
     dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
     graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
-    inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
+    inspect_cache_manifest, label_state_from_aliases, local_url_map, offline_cache_report,
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
     proof_document_manifest, publish_report_from_manifest, quiver_merge_ready_report,
     summarize_cache_manifest, summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry,
     validate_registry, verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry,
     CacheManifest, CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
-    LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
+    LabelState, PartitionState, ProofDocumentManifest, QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -543,6 +543,18 @@ enum PublishCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Generate stable local URLs from a PROOF document manifest.
+    LocalUrlMap {
+        /// Path to a fletch.proof-docs.v1 JSON file.
+        #[arg(long)]
+        proof_docs: PathBuf,
+        /// Local base path or URL prefix for generated documents.
+        #[arg(long, default_value = "fletch")]
+        base_path: String,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -902,6 +914,14 @@ fn main() -> Result<()> {
                 let crop_index = read_crop_index(&crop_index)?;
                 write_json(&proof_document_manifest(&crop_index), output)?;
             }
+            PublishCommands::LocalUrlMap {
+                proof_docs,
+                base_path,
+                output,
+            } => {
+                let proof_docs = read_proof_docs(&proof_docs)?;
+                write_json(&local_url_map(&proof_docs, base_path), output)?;
+            }
         },
         Commands::Merge { command } => match command {
             MergeCommands::Preview {
@@ -1056,6 +1076,11 @@ fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
 }
 
 fn read_crop_index(path: &PathBuf) -> Result<CropIndexReport> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_proof_docs(path: &PathBuf) -> Result<ProofDocumentManifest> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

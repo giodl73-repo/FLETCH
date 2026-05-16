@@ -140,6 +140,10 @@ can link back to the machine contract that remains authoritative.
 derived from CROP index rows. PROOF backends can render Markdown, HTML, or other
 views from this manifest while linking back to authoritative machine contracts.
 
+`fletch.local-url-map.v1` maps PROOF document IDs and anchors to stable local
+paths or URL prefixes. It is a navigation layer for generated views; source
+schemas still point back to the authoritative FLETCH contracts.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:

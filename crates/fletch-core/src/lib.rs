@@ -25,6 +25,7 @@ pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 pub const FLETCH_CROP_INDEX_SCHEMA: &str = "fletch.crop-index.v1";
 pub const FLETCH_PROOF_DOCS_SCHEMA: &str = "fletch.proof-docs.v1";
+pub const FLETCH_LOCAL_URL_MAP_SCHEMA: &str = "fletch.local-url-map.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
@@ -843,6 +844,23 @@ pub struct ProofDocumentManifest {
     pub documents: Vec<ProofDocumentAnchor>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalUrlEntry {
+    pub document_id: String,
+    pub source_schema: String,
+    pub local_url: String,
+    pub anchor: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalUrlMap {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub base_path: String,
+    pub url_count: usize,
+    pub urls: Vec<LocalUrlEntry>,
+}
+
 pub fn fletch_registry(
     registry_id: impl Into<String>,
     fletches: Vec<FletchDefinition>,
@@ -1239,6 +1257,35 @@ pub fn proof_document_manifest(index: &CropIndexReport) -> ProofDocumentManifest
         source_schema: index.schema_version.clone(),
         document_count: documents.len(),
         documents,
+    }
+}
+
+pub fn local_url_map(docs: &ProofDocumentManifest, base_path: impl Into<String>) -> LocalUrlMap {
+    let base_path = base_path.into();
+    let base = base_path.trim_end_matches('/').to_string();
+    let urls = docs
+        .documents
+        .iter()
+        .map(|doc| {
+            let local_url = if base.is_empty() {
+                doc.anchor.clone()
+            } else {
+                format!("{base}/{}{}", safe_path_label(&doc.document_id), doc.anchor)
+            };
+            LocalUrlEntry {
+                document_id: doc.document_id.clone(),
+                source_schema: doc.source_schema.clone(),
+                local_url,
+                anchor: doc.anchor.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+    LocalUrlMap {
+        schema_version: FLETCH_LOCAL_URL_MAP_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        base_path,
+        url_count: urls.len(),
+        urls,
     }
 }
 
@@ -4940,6 +4987,31 @@ mod tests {
         assert_eq!(docs.document_count, 1);
         assert_eq!(docs.documents[0].source_schema, FLETCH_VERIFY_SCHEMA);
         assert!(docs.documents[0].anchor.starts_with("#cache-status-"));
+    }
+
+    #[test]
+    fn local_url_map_links_proof_docs_to_stable_paths() {
+        let docs = ProofDocumentManifest {
+            schema_version: FLETCH_PROOF_DOCS_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            source_schema: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+            document_count: 1,
+            documents: vec![ProofDocumentAnchor {
+                document_id: "cache-status:test:fletch".to_string(),
+                title: "test".to_string(),
+                source_schema: FLETCH_VERIFY_SCHEMA.to_string(),
+                anchor: "#cache-status-test-fletch".to_string(),
+            }],
+        };
+
+        let urls = local_url_map(&docs, "docs/fletch");
+
+        assert_eq!(urls.schema_version, FLETCH_LOCAL_URL_MAP_SCHEMA);
+        assert_eq!(urls.url_count, 1);
+        assert_eq!(urls.urls[0].source_schema, FLETCH_VERIFY_SCHEMA);
+        assert!(urls.urls[0]
+            .local_url
+            .starts_with("docs/fletch/cache-status_test_fletch"));
     }
 
     fn unique_temp_dir(label: &str) -> PathBuf {
