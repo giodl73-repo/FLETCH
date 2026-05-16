@@ -81,8 +81,10 @@ Downstream migration status:
   bootstrap and enrichment quiver handoff candidates, and `icelines fetch
   fletch-cache-index --gate` maps ICELINES' FLETCH cache manifest to compact
   cache-index evidence. ICELINES uses FLETCH's shared manifest read/write and
-  batch upsert helpers for that ledger, while keeping NHL parsing, snapshots,
-  sealing, active pointers, and hockey-domain validation.
+  batch upsert helpers for that ledger, and reuses FLETCH's shared cache-index
+  gate after mapping dynamic child cachelines back to registered ICELINES
+  parent sources. ICELINES keeps NHL parsing, snapshots, sealing, active
+  pointers, and hockey-domain validation.
 - CROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
