@@ -67,9 +67,10 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
    single-object roster/MoneyPuck source bytes are acquired through FLETCH, and
    `fetch fletch-partitions --gate` maps leaders/player/compare, goalies,
    roster bios, MoneyPuck, career, and windowed game-line queries to partition
-   and rollup IDs. ICELINES keeps NHL API pagination, dynamic source expansion,
-   parsing, snapshots, sealing, active pointers, freshness, locks, and
-   hockey-domain validation.
+   and rollup IDs. `fetch fletch-quivers --gate` groups those partitions into
+   query bootstrap and enrichment quiver handoff candidates. ICELINES keeps NHL
+   API pagination, dynamic source expansion, parsing, snapshots, sealing, active
+   pointers, freshness, locks, and hockey-domain validation.
 4. CROP: index `fletch.cache-manifest.v1`, `fletch.quiver.v1`, `fletch.graph.v1`,
    tips, and publish reports as evidence.
 5. MDPATH/PROOF: attach stable references and rendered views to FLETCH outputs
@@ -81,4 +82,4 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 |---|---|---|
 | ROUTE | Generic source orchestration and source handoff/gate reporting. | Route scoring, geospatial semantics, user-facing outputs. |
 | BISECT | Generic HTTP source-byte acquisition under `data/.fletch` plus handoff/gate reporting. | Release adjacency, archive extraction, derived CSVs, done markers, local manifest overrides, legal/redistricting claims. |
-| ICELINES | Handoff/gate reporting, roster and MoneyPuck source-byte acquisition, and query partition/rollup handoff reporting. | Paged NHL stats, ESPN transaction windows, player landing batches, schedule/gamecenter expansion, snapshots, parsing, sealing, active pointers, and hockey semantics. |
+| ICELINES | Handoff/gate reporting, roster and MoneyPuck source-byte acquisition, query partition/rollup handoff reporting, and query quiver handoff reporting. | Paged NHL stats, ESPN transaction windows, player landing batches, schedule/gamecenter expansion, snapshots, parsing, sealing, active pointers, and hockey semantics. |

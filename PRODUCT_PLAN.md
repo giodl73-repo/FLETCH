@@ -135,7 +135,8 @@ keeps a plain technical contract:
    Initial downstream migrations are complete for ROUTE generic source
    orchestration, BISECT generic HTTP acquisition, and ICELINES stable
    roster/MoneyPuck source-byte acquisition plus query partition/rollup handoff
-   reporting. Product semantics remain in each consumer.
+   reporting and query quiver handoff reporting. Product semantics remain in
+   each consumer.
 9. **Overwatch - Publishers**: make FLETCH ledgers easy for CROP to index and
    for PROOF to render as local Markdown/status/backend views. Mock client:
    publish villain-file status, threat query summaries, tips, and quiver
