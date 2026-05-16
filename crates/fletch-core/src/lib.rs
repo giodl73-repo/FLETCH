@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
@@ -291,6 +291,8 @@ pub struct FletchGraph {
     pub edges: Vec<GraphEdge>,
 }
 
+pub type GraphNodeKindHints = BTreeMap<String, GraphNodeKind>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DataFormat {
     pub media_type: Option<String>,
@@ -506,25 +508,31 @@ pub fn import_quiver(
 ) -> Result<QuiverImport, FletchError> {
     let quiver_root = quiver_root.as_ref();
     let quiver_manifest = read_quiver_manifest(&quiver_root.join("quiver.json"))?;
+    cache_manifest(
+        quiver_root.display().to_string(),
+        quiver_manifest.entries.clone(),
+    )?;
+    verify_quiver_source(quiver_root, &quiver_manifest)?;
     let stage_root = cache_root
         .as_ref()
         .join("staged")
         .join("quivers")
         .join(safe_path_label(&quiver_manifest.quiver_id));
-    std::fs::create_dir_all(&stage_root).map_err(|source| FletchError::WriteCache {
-        path: stage_root.display().to_string(),
+    let temp_stage_root = temp_path_for(&stage_root);
+    std::fs::create_dir_all(&temp_stage_root).map_err(|source| FletchError::WriteCache {
+        path: temp_stage_root.display().to_string(),
         source,
     })?;
 
     for entry in &quiver_manifest.entries {
         let relative_path = normalize_relative_cache_path(&entry.relative_path)?;
         let source = cache_path(quiver_root, &relative_path);
-        let destination = cache_path(&stage_root, &relative_path);
+        let destination = cache_path(&temp_stage_root, &relative_path);
         copy_file(&source, &destination)?;
     }
 
     let staged_manifest = cache_manifest(
-        stage_root.display().to_string(),
+        temp_stage_root.display().to_string(),
         quiver_manifest.entries.clone(),
     )?;
     let statuses = inspect_cache_manifest(&staged_manifest, &FreshnessPolicy::Immutable)?;
@@ -536,6 +544,11 @@ pub fn import_quiver(
             });
         }
     }
+    promote_directory(&temp_stage_root, &stage_root)?;
+    let staged_manifest = cache_manifest(
+        stage_root.display().to_string(),
+        quiver_manifest.entries.clone(),
+    )?;
 
     Ok(QuiverImport {
         quiver_manifest,
@@ -545,11 +558,20 @@ pub fn import_quiver(
 }
 
 pub fn graph_from_manifest(manifest: &CacheManifest) -> FletchGraph {
-    graph_from_manifest_with_extra(manifest, Vec::new(), Vec::new())
+    graph_from_manifest_with_node_kinds(manifest, &BTreeMap::new(), Vec::new(), Vec::new())
 }
 
 pub fn graph_from_manifest_with_extra(
     manifest: &CacheManifest,
+    extra_nodes: Vec<GraphNode>,
+    extra_edges: Vec<GraphEdge>,
+) -> FletchGraph {
+    graph_from_manifest_with_node_kinds(manifest, &BTreeMap::new(), extra_nodes, extra_edges)
+}
+
+pub fn graph_from_manifest_with_node_kinds(
+    manifest: &CacheManifest,
+    node_kind_hints: &GraphNodeKindHints,
     extra_nodes: Vec<GraphNode>,
     extra_edges: Vec<GraphEdge>,
 ) -> FletchGraph {
@@ -558,7 +580,11 @@ pub fn graph_from_manifest_with_extra(
     let mut seen_nodes = BTreeSet::new();
 
     for entry in &manifest.entries {
-        let fletch_id = graph_fletch_id(&entry.dataset_id);
+        let fletch_kind = node_kind_hints
+            .get(&entry.dataset_id)
+            .cloned()
+            .unwrap_or(GraphNodeKind::Fletch);
+        let fletch_id = graph_node_id(&fletch_kind, &entry.dataset_id);
         let shaft_id = graph_shaft_id(&entry.cache_key);
         let ledger_id = graph_ledger_id(&entry.cache_key);
 
@@ -572,7 +598,7 @@ pub fn graph_from_manifest_with_extra(
             &mut seen_nodes,
             GraphNode {
                 id: fletch_id.clone(),
-                kind: GraphNodeKind::Fletch,
+                kind: fletch_kind,
                 label: entry.dataset_id.clone(),
                 metadata: fletch_metadata,
             },
@@ -996,8 +1022,10 @@ fn cache_hit_outcome(
             relative_path,
             sha256,
             bytes,
-            fetched_at_ms: options.fetched_at_ms.unwrap_or(0),
-            verified: true,
+            fetched_at_ms: options
+                .fetched_at_ms
+                .unwrap_or(file_modified_ms(&destination)?),
+            verified: options.expected_sha256.is_some(),
         },
         path: destination,
     })
@@ -1085,7 +1113,33 @@ fn throttle_bandwidth(bytes: u64, max_bytes_per_second: Option<u64>, started: In
 
 fn promote_temp(temp_path: &Path, destination: &Path) -> Result<(), FletchError> {
     if destination.exists() {
-        std::fs::remove_file(destination).map_err(|source| FletchError::WriteCache {
+        let backup_path = temp_path_for(destination);
+        std::fs::rename(destination, &backup_path).map_err(|source| FletchError::WriteCache {
+            path: destination.display().to_string(),
+            source,
+        })?;
+        let result =
+            std::fs::rename(temp_path, destination).map_err(|source| FletchError::WriteCache {
+                path: destination.display().to_string(),
+                source,
+            });
+        if result.is_err() {
+            let _ = std::fs::rename(&backup_path, destination);
+            return result;
+        }
+        let _ = std::fs::remove_file(backup_path);
+        Ok(())
+    } else {
+        std::fs::rename(temp_path, destination).map_err(|source| FletchError::WriteCache {
+            path: destination.display().to_string(),
+            source,
+        })
+    }
+}
+
+fn promote_directory(temp_path: &Path, destination: &Path) -> Result<(), FletchError> {
+    if destination.exists() {
+        std::fs::remove_dir_all(destination).map_err(|source| FletchError::WriteCache {
             path: destination.display().to_string(),
             source,
         })?;
@@ -1129,9 +1183,22 @@ fn normalize_relative_cache_path(relative_path: &str) -> Result<String, FletchEr
             relative_path: relative_path.to_string(),
         });
     }
+    for component in path.components() {
+        match component {
+            Component::Normal(_) => {}
+            Component::CurDir
+            | Component::ParentDir
+            | Component::RootDir
+            | Component::Prefix(_) => {
+                return Err(FletchError::UnsafeCachePath {
+                    relative_path: relative_path.to_string(),
+                });
+            }
+        }
+    }
     let mut parts = Vec::new();
     for part in relative_path.split(['/', '\\']) {
-        if part.is_empty() || part == "." || part == ".." {
+        if part.is_empty() || part == "." || part == ".." || part.contains(':') {
             return Err(FletchError::UnsafeCachePath {
                 relative_path: relative_path.to_string(),
             });
@@ -1192,6 +1259,35 @@ fn collect_prune_candidates(
     Ok(())
 }
 
+fn verify_quiver_source(
+    quiver_root: &Path,
+    quiver_manifest: &QuiverManifest,
+) -> Result<(), FletchError> {
+    for entry in &quiver_manifest.entries {
+        let relative_path = normalize_relative_cache_path(&entry.relative_path)?;
+        let path = cache_path(quiver_root, &relative_path);
+        let mut file = File::open(&path).map_err(|source| FletchError::ReadSource {
+            path: path.display().to_string(),
+            source,
+        })?;
+        let (actual_sha256, actual_bytes) = hash_stream(&mut file, &path)?;
+        if actual_sha256 != entry.sha256 {
+            return Err(FletchError::ChecksumMismatch {
+                dataset_id: entry.dataset_id.clone(),
+                expected: entry.sha256.clone(),
+                actual: actual_sha256,
+            });
+        }
+        if actual_bytes != entry.bytes {
+            return Err(FletchError::CacheObjectUnverified {
+                dataset_id: entry.dataset_id.clone(),
+                status: CacheObjectStatus::HashMismatch,
+            });
+        }
+    }
+    Ok(())
+}
+
 fn read_quiver_manifest(path: &Path) -> Result<QuiverManifest, FletchError> {
     let json = std::fs::read_to_string(path).map_err(|source| FletchError::ReadSource {
         path: path.display().to_string(),
@@ -1246,10 +1342,6 @@ fn push_graph_node(nodes: &mut Vec<GraphNode>, seen_nodes: &mut BTreeSet<String>
     if seen_nodes.insert(node.id.clone()) {
         nodes.push(node);
     }
-}
-
-fn graph_fletch_id(dataset_id: &str) -> String {
-    format!("fletch:{dataset_id}")
 }
 
 fn graph_shaft_id(cache_key: &str) -> String {
@@ -1317,6 +1409,20 @@ fn temp_path_for(destination: &Path) -> PathBuf {
 
 fn now_ms() -> Result<u64, FletchError> {
     let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| FletchError::ClockBeforeEpoch)?;
+    Ok(duration.as_millis() as u64)
+}
+
+fn file_modified_ms(path: &Path) -> Result<u64, FletchError> {
+    let modified = path
+        .metadata()
+        .and_then(|metadata| metadata.modified())
+        .map_err(|source| FletchError::ReadSource {
+            path: path.display().to_string(),
+            source,
+        })?;
+    let duration = modified
         .duration_since(UNIX_EPOCH)
         .map_err(|_| FletchError::ClockBeforeEpoch)?;
     Ok(duration.as_millis() as u64)
@@ -1397,6 +1503,35 @@ mod tests {
                 .file_name()
                 .to_string_lossy()
                 .contains(".tmp")));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cache_hit_preserves_timestamp_and_marks_untrusted_without_expected_hash() {
+        let root = unique_temp_dir("cache-hit-provenance");
+        let source = root.join("source.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, br#"{"ok":true}"#).unwrap();
+        let plan =
+            fetch_plan_with_kind("test:file", source.display().to_string(), SourceKind::File)
+                .unwrap();
+        let first = fetch_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root).with_fetched_at_ms(123),
+        )
+        .unwrap();
+
+        let hit_without_expected = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let hit_with_expected = fetch_to_cache(
+            &plan,
+            FetchOptions::new(&cache_root).with_expected_sha256(first.entry.sha256.clone()),
+        )
+        .unwrap();
+
+        assert_ne!(hit_without_expected.entry.fetched_at_ms, 0);
+        assert!(!hit_without_expected.entry.verified);
+        assert!(hit_with_expected.entry.verified);
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -1549,6 +1684,41 @@ mod tests {
     }
 
     #[test]
+    fn quiver_import_rejects_tampered_objects_before_final_stage() {
+        let root = unique_temp_dir("quiver-tamper");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        let quiver_root = root.join("quiver");
+        let import_cache_root = root.join("import-cache");
+        std::fs::write(&source, b"hello quiver").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:quiver",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest = cache_manifest(
+            cache_root.display().to_string(),
+            vec![outcome.entry.clone()],
+        )
+        .unwrap();
+        export_quiver(&manifest, "test:quiver-pack", &quiver_root).unwrap();
+        std::fs::write(quiver_root.join(&outcome.entry.relative_path), b"tampered").unwrap();
+
+        let result = import_quiver(&quiver_root, &import_cache_root);
+
+        assert!(matches!(result, Err(FletchError::ChecksumMismatch { .. })));
+        assert!(!import_cache_root
+            .join("staged")
+            .join("quivers")
+            .join("test_quiver-pack")
+            .exists());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn graph_from_manifest_exports_fletch_shaft_and_ledger_nodes() {
         let root = unique_temp_dir("graph");
         let source = root.join("source.txt");
@@ -1578,6 +1748,37 @@ mod tests {
             .edges
             .iter()
             .any(|edge| edge.kind == GraphEdgeKind::Documents));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn graph_from_manifest_uses_registry_node_kind_hints() {
+        let root = unique_temp_dir("graph-hints");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"hello graph").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:partition:2026",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let manifest =
+            cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
+        let mut hints = GraphNodeKindHints::new();
+        hints.insert("test:partition:2026".to_string(), GraphNodeKind::Partition);
+
+        let graph = graph_from_manifest_with_node_kinds(&manifest, &hints, Vec::new(), Vec::new());
+
+        assert!(graph.nodes.iter().any(|node| {
+            node.id == "partition:test:partition:2026" && node.kind == GraphNodeKind::Partition
+        }));
+        assert!(!graph
+            .nodes
+            .iter()
+            .any(|node| node.id == "fletch:test:partition:2026"));
 
         let _ = std::fs::remove_dir_all(root);
     }

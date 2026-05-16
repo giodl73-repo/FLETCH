@@ -48,8 +48,9 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 6. **Black Canary / Registry graph**: next, the mock should emit graph edges from
    the villain index to casefiles and threat partitions.
 7. **Red Arrow / Merge**: next, the mock should stage aliases like
-   `justice-league:threats:current-year` and conflict examples for competing
-   threat partitions.
+   `justice-league:threats:current-year`, preview conflicts for competing threat
+   partitions, merge safe groups first, and leave unresolved groups visible for a
+   later client decision.
 8. **Overwatch / Publishers**: later, the mock should publish local status,
    threat query summaries, tips, and quiver contents through CROP/PROOF-shaped
    views.

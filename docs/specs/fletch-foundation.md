@@ -90,6 +90,11 @@ domain edges, such as `expands-to` from an index to discovered fletches or
 `rolls-up-to` from dated partitions to yearly rollups, without moving domain
 logic into `fletch-core`.
 
+Manifest graph export can accept registry node-kind hints so a cached partition
+or rollup keeps the same graph identity it had in `fletch.registry.v1`. Ledger
+edges then document the declared partition or rollup node instead of creating a
+second generic fletch node.
+
 `fletch.registry.v1` is the first registry definition contract. It declares
 fletches before execution with:
 
@@ -217,6 +222,8 @@ Quivers are not partitions. A quiver is a portable package that may contain
 partitions, rollups, aliases, tips, graph edges, and ledger entries so an offline
 environment can satisfy or stage a set of fletches. Quiver import must stage by
 default; a separate merge/activate transaction makes imported data active.
+Import verifies quiver bytes against `quiver.json` before copying and promotes
+from a temporary stage so failed imports do not look activated or complete.
 
 ## Merge, labels, and rollback
 
@@ -256,13 +263,22 @@ resolution:
   choose C for game 2025020001
 ```
 
+Merge should also support a preview mode that computes the transaction plan
+without activation. A preview returns the candidate inputs, policy decision,
+would-activate/would-supersede sets, alias or partition-set updates, rollback
+target, and conflict groups as data. Clients can show the preview, resolve one
+conflict group, merge a safe subset, then re-preview the remaining staged
+changes. This keeps large imports, expanding cachelines, and quiver installs
+usable in stages instead of forcing an all-or-nothing decision.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.
 
 `fletch.merge.v1` is the future named contract for these transactions. It should
 make candidate inputs, chosen policy, conflict groups, alias updates, activated
-partition sets, labels, and rollback targets machine-readable.
+partition sets, labels, rollback targets, and preview-only decisions
+machine-readable.
 
 Rollups should record enough invalidation/folding metadata for adapters to know
 when a rollup is stale and which partitions it folds over. FLETCH owns the

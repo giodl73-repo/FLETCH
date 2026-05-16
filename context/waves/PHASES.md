@@ -20,9 +20,10 @@ FLETCH work is organized into Arrow-family phases, then small waves and pulses.
    client verifies all villain-file objects and proves prune planning with an
    orphaned trick-arrow object.
 5. **Red Arrow - Merge and aliases**: `fletch.merge.v1`, active views, labels,
-   pins, rollback, conflict groups, and future `pull` as fetch plus merge. Mock
-   client adds staged aliases such as `justice-league:threats:current-year` and
-   conflict examples for competing threat files.
+   pins, rollback, merge previews, conflict groups, and future `pull` as fetch
+   plus merge. Mock client adds staged aliases such as
+   `justice-league:threats:current-year`, conflict previews for competing threat
+   files, and staged safe-group merge examples.
 6. **Oracle - Partitions and rollups**: durable partitions, rollup edges,
    invalidation/folding metadata, and query-facing active partition sets. Mock
    client adds dated threat partitions, year rollups, and when/where/how threat

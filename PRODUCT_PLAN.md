@@ -88,6 +88,10 @@ products interpret the domain meaning.
   updates aliases, active views, and rollups through an auditable transaction.
 - **Conflict grouping**: equivalent conflicts can be labeled as choices, e.g.
   A/B/C sources, then resolved in bulk with explicit overrides for exceptions.
+- **Merge preview**: clients can ask FLETCH what a merge would activate,
+  supersede, label, or conflict with before any active view changes. That lets a
+  consumer merge safe groups first, resolve conflicts in stages, and re-preview
+  the remaining candidates.
 
 ## Phases
 
@@ -111,11 +115,11 @@ keeps a plain technical contract:
    Mock client: verify all cached villain files and prove prune planning with an
    orphaned trick-arrow object.
 5. **Red Arrow - Merge and aliases**: `fletch.merge.v1`, active views, labels,
-   pins, rollbacks, conflict groups, and pointer updates for
+   pins, rollbacks, merge previews, conflict groups, and pointer updates for
    current/latest/preferred fletches. Future `pull` belongs here as fetch plus
    merge, not as a fetch alias. Mock client: add staged aliases such as
-   `justice-league:threats:current-year` and conflict examples for competing
-   threat files.
+   `justice-league:threats:current-year`, preview conflicts for competing threat
+   files, and then merge safe threat groups in stages.
 6. **Oracle - Partitions and rollups**: partition declarations, rollup edges,
    invalidation/folding metadata, and query folding metadata for analytical
    consumers such as `icelines-query`. Mock client: add dated threat partitions,

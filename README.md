@@ -99,14 +99,16 @@ Status adds freshness evaluation, and prune emits a deletion plan for
 unreferenced cache objects without deleting them.
 
 `fletch quiver export` writes a `fletch.quiver.v1` directory with `quiver.json`
-and referenced cache objects. `fletch quiver import` verifies that directory and
-copies it into `cache/staged/quivers/<quiver-id>/`; import is stage-first and
-does not activate aliases, partitions, or product views.
+and referenced cache objects. `fletch quiver import` verifies bundled bytes,
+copies through a temporary stage, then promotes into
+`cache/staged/quivers/<quiver-id>/`; import is stage-first and does not activate
+aliases, partitions, or product views.
 
 `fletch graph export` emits `fletch.graph.v1` nodes and edges from a cache
 manifest. The core graph includes fletch, shaft, and ledger-entry nodes plus
-`satisfied-by` and `documents` edges. Product adapters can add domain edges such
-as `expands-to` or `rolls-up-to` outside `fletch-core`.
+`satisfied-by` and `documents` edges. Product adapters can add domain edges and
+registry node-kind hints, such as `partition` plus `rolls-up-to`, outside
+`fletch-core`.
 
 `fletch registry graph` reads `fletch.registry.v1` definitions and emits graph
 JSON for declared fletches, shafts, partitions, rollups, format metadata, and

@@ -1,10 +1,11 @@
 use anyhow::Result;
 use fletch_core::{
     cache_manifest, export_quiver, fetch_plan_with_kind, fetch_to_cache, fletch_registry,
-    graph_from_manifest_with_extra, graph_from_registry, import_quiver, inspect_cache_manifest,
-    plan_cache_prune, CacheFreshnessStatus, CacheManifest, CacheObjectStatus, DataFormat,
-    FetchOptions, FletchDefinition, FletchGraph, FletchRegistry, FreshnessPolicy, GraphEdgeKind,
-    GraphNodeKind, PrunePlan, RegistryEdge, SourceKind, SourceSpec,
+    graph_from_manifest_with_node_kinds, graph_from_registry, import_quiver,
+    inspect_cache_manifest, plan_cache_prune, CacheFreshnessStatus, CacheManifest,
+    CacheObjectStatus, DataFormat, FetchOptions, FletchDefinition, FletchGraph, FletchRegistry,
+    FreshnessPolicy, GraphEdgeKind, GraphNodeKind, GraphNodeKindHints, PrunePlan, RegistryEdge,
+    SourceKind, SourceSpec,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -183,7 +184,20 @@ fn report(
 
 fn villain_files_graph(manifest: &CacheManifest, registry: &FletchRegistry) -> FletchGraph {
     let registry_graph = graph_from_registry(registry);
-    graph_from_manifest_with_extra(manifest, registry_graph.nodes, registry_graph.edges)
+    graph_from_manifest_with_node_kinds(
+        manifest,
+        &registry_node_kind_hints(registry),
+        registry_graph.nodes,
+        registry_graph.edges,
+    )
+}
+
+fn registry_node_kind_hints(registry: &FletchRegistry) -> GraphNodeKindHints {
+    registry
+        .fletches
+        .iter()
+        .map(|definition| (definition.id.clone(), definition.node_kind.clone()))
+        .collect()
 }
 
 fn villain_files_registry(source_root: &Path) -> FletchRegistry {
@@ -402,7 +416,7 @@ mod tests {
         assert!(Path::new(&report.quiver_path).exists());
         assert!(Path::new(&report.staged_quiver_root).exists());
         assert!(Path::new(&report.graph_path).exists());
-        assert_eq!(report.graph_node_count, 20);
+        assert_eq!(report.graph_node_count, 18);
         assert_eq!(report.graph_edge_count, 17);
         assert_eq!(
             report
