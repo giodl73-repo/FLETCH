@@ -14,7 +14,7 @@ use fletch_core::{
     slice_cache_index_report, slice_crop_index_report, slice_local_url_map, slice_partition_state,
     slice_proof_document_manifest, slice_quiver_merge_ready_report,
     slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
-    tips_from_manifest, upsert_cache_manifest_entry, validate_registry, verify_cache_manifest,
+    tips_from_manifest, upsert_cache_manifest_entries, validate_registry, verify_cache_manifest,
     verify_quiver_bundle, AdapterHandoffReport, AliasState, CacheEntry, CacheIndexReport,
     CacheManifest, CropIndexReport, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy,
     LabelState, LocalUrlMap, PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary,
@@ -1389,7 +1389,7 @@ fn write_fetch_manifest(
                 cache_root
             );
         }
-        upsert_cache_manifest_entry(manifest, entry)?
+        upsert_cache_manifest_entries(manifest, [entry])?
     } else {
         cache_manifest(cache_root, vec![entry])?
     };

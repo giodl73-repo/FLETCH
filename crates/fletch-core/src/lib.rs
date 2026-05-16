@@ -1660,6 +1660,17 @@ pub fn upsert_cache_manifest_entry(
     cache_manifest(manifest.cache_root, entries)
 }
 
+pub fn upsert_cache_manifest_entries(
+    manifest: CacheManifest,
+    entries: impl IntoIterator<Item = CacheEntry>,
+) -> Result<CacheManifest, FletchError> {
+    let mut merged = cache_manifest(manifest.cache_root, manifest.entries)?;
+    for entry in entries {
+        merged = upsert_cache_manifest_entry(merged, entry)?;
+    }
+    Ok(merged)
+}
+
 pub fn cache_list(manifest: &CacheManifest) -> &[CacheEntry] {
     &manifest.entries
 }
@@ -4435,6 +4446,52 @@ mod tests {
         assert_eq!(upserted.entries[1], entry_b);
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cache_manifest_batch_upsert_replaces_and_appends_entries() {
+        let entry_a = CacheEntry {
+            dataset_id: "test:a".to_string(),
+            version: None,
+            source_url: "file://a.json".to_string(),
+            cache_key: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            relative_path: "objects/sha256/aa".to_string(),
+            sha256: "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                .to_string(),
+            bytes: 10,
+            fetched_at_ms: 1,
+            verified: true,
+            fetch_attempts: 1,
+            retry_count: 0,
+            last_retryable_error: None,
+        };
+        let mut replacement_a = entry_a.clone();
+        replacement_a.bytes = 20;
+        replacement_a.fetched_at_ms = 2;
+        let entry_b = CacheEntry {
+            dataset_id: "test:b".to_string(),
+            version: None,
+            source_url: "file://b.json".to_string(),
+            cache_key: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                .to_string(),
+            relative_path: "objects/sha256/bb".to_string(),
+            sha256: "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                .to_string(),
+            bytes: 30,
+            fetched_at_ms: 3,
+            verified: true,
+            fetch_attempts: 1,
+            retry_count: 0,
+            last_retryable_error: None,
+        };
+        let manifest = cache_manifest("cache", vec![entry_a]).unwrap();
+
+        let upserted =
+            upsert_cache_manifest_entries(manifest, vec![replacement_a.clone(), entry_b.clone()])
+                .unwrap();
+
+        assert_eq!(upserted.entries, vec![replacement_a, entry_b]);
     }
 
     #[test]
