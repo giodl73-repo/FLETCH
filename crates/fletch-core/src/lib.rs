@@ -22,6 +22,7 @@ pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
 pub const FLETCH_MERGE_PREVIEW_SCHEMA: &str = "fletch.merge-preview.v1";
 pub const FLETCH_ALIAS_SCHEMA: &str = "fletch.alias-state.v1";
 pub const FLETCH_LABEL_SCHEMA: &str = "fletch.label-state.v1";
+pub const FLETCH_ROLLBACK_PREVIEW_SCHEMA: &str = "fletch.rollback-preview.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -344,6 +345,24 @@ pub struct LabelState {
     pub generated_by: String,
     pub cache_root: String,
     pub labels: Vec<LabelRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollbackPreviewEntry {
+    pub alias_id: String,
+    pub current_cache_key: Option<String>,
+    pub target_cache_key: String,
+    pub action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollbackPreview {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub action_count: usize,
+    pub noop_count: usize,
+    pub actions: Vec<RollbackPreviewEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1080,6 +1099,40 @@ pub fn label_state_from_aliases(
                 pinned,
             })
             .collect(),
+    }
+}
+
+pub fn preview_rollback(alias_state: &AliasState, target: &LabelState) -> RollbackPreview {
+    let current_by_alias = alias_state
+        .aliases
+        .iter()
+        .map(|alias| (alias.alias_id.clone(), alias))
+        .collect::<BTreeMap<_, _>>();
+    let mut actions = Vec::new();
+    let mut noop_count = 0;
+    for label in &target.labels {
+        let current = current_by_alias.get(&label.alias_id);
+        if current
+            .map(|alias| alias.cache_key.as_str())
+            .is_some_and(|cache_key| cache_key == label.cache_key)
+        {
+            noop_count += 1;
+            continue;
+        }
+        actions.push(RollbackPreviewEntry {
+            alias_id: label.alias_id.clone(),
+            current_cache_key: current.map(|alias| alias.cache_key.clone()),
+            target_cache_key: label.cache_key.clone(),
+            action: "restore-label-target".to_string(),
+        });
+    }
+    RollbackPreview {
+        schema_version: FLETCH_ROLLBACK_PREVIEW_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: alias_state.cache_root.clone(),
+        action_count: actions.len(),
+        noop_count,
+        actions,
     }
 }
 
@@ -3115,6 +3168,50 @@ mod tests {
         assert_eq!(labels.labels[0].label_id, "release-1");
         assert_eq!(labels.labels[0].alias_id, "current");
         assert!(labels.labels[0].pinned);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rollback_preview_reports_restore_actions() {
+        let root = unique_temp_dir("rollback-preview");
+        let cache_root = root.join("cache");
+        let old_source = root.join("old.txt");
+        let new_source = root.join("new.txt");
+        std::fs::write(&old_source, b"old").unwrap();
+        std::fs::write(&new_source, b"new").unwrap();
+        let old_plan = fetch_plan_with_kind(
+            "test:active",
+            old_source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let new_plan = fetch_plan_with_kind(
+            "test:active",
+            new_source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let old_entry = fetch_to_cache(&old_plan, FetchOptions::new(&cache_root))
+            .unwrap()
+            .entry;
+        let new_entry = fetch_to_cache(&new_plan, FetchOptions::new(&cache_root))
+            .unwrap()
+            .entry;
+        let old_manifest =
+            cache_manifest(cache_root.display().to_string(), vec![old_entry]).unwrap();
+        let new_manifest =
+            cache_manifest(cache_root.display().to_string(), vec![new_entry]).unwrap();
+        let old_alias = alias_state_from_manifest(&old_manifest, "current", "test:active").unwrap();
+        let new_alias = alias_state_from_manifest(&new_manifest, "current", "test:active").unwrap();
+        let label = label_state_from_aliases(&old_alias, "before-update", true);
+
+        let preview = preview_rollback(&new_alias, &label);
+
+        assert_eq!(preview.schema_version, FLETCH_ROLLBACK_PREVIEW_SCHEMA);
+        assert_eq!(preview.action_count, 1);
+        assert_eq!(preview.noop_count, 0);
+        assert_eq!(preview.actions[0].action, "restore-label-target");
 
         let _ = std::fs::remove_dir_all(root);
     }

@@ -21,7 +21,7 @@ preview, alias, label, and rollback contracts.
 | 01 | Merge preview conflicts | done | Added non-destructive manifest merge previews with conflict detection. |
 | 02 | Active alias contract | done | Added `fletch.alias-state.v1` aliases pointing at manifest entries without moving bytes. |
 | 03 | Labels and pins | done | Added `fletch.label-state.v1` labels and pin metadata over alias state. |
-| 04 | Rollback preview | pending | Preview reverting active aliases or labels before mutation. |
+| 04 | Rollback preview | done | Added `fletch.rollback-preview.v1` to preview alias restoration to label targets. |
 
 ## Validation expectations
 

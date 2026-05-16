@@ -292,6 +292,11 @@ alias target set for repeatable references, and `pinned: true` marks that the
 label should continue pointing at the recorded cache keys until explicitly
 changed by a later merge/rollback operation.
 
+`fletch.rollback-preview.v1` compares current alias state with a target label
+state and reports restore actions before mutation. A rollback preview says which
+aliases would move back to pinned label targets and which aliases are already at
+the target.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.

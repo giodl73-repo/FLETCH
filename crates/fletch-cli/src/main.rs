@@ -4,10 +4,10 @@ use fletch_core::{
     alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
     export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
     graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
-    offline_cache_report, plan_cache_prune, preview_manifest_merge, publish_report_from_manifest,
-    summarize_cache_manifest, tips_from_manifest, upsert_cache_manifest_entry,
-    verify_cache_manifest, AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan,
-    FletchRegistry, FreshnessPolicy, SourceKind,
+    offline_cache_report, plan_cache_prune, preview_manifest_merge, preview_rollback,
+    publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
+    upsert_cache_manifest_entry, verify_cache_manifest, AliasState, CacheEntry, CacheManifest,
+    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -404,6 +404,18 @@ enum MergeCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Preview restoring aliases to a prior label state without mutation.
+    RollbackPreview {
+        /// Current fletch.alias-state.v1 JSON file.
+        #[arg(long)]
+        alias_state: PathBuf,
+        /// Target fletch.label-state.v1 JSON file.
+        #[arg(long)]
+        label_state: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -676,6 +688,15 @@ fn main() -> Result<()> {
                     output,
                 )?;
             }
+            MergeCommands::RollbackPreview {
+                alias_state,
+                label_state,
+                output,
+            } => {
+                let alias_state = read_alias_state(&alias_state)?;
+                let label_state = read_label_state(&label_state)?;
+                write_json(&preview_rollback(&alias_state, &label_state), output)?;
+            }
         },
     }
     Ok(())
@@ -722,6 +743,11 @@ fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
 }
 
 fn read_alias_state(path: &PathBuf) -> Result<AliasState> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_label_state(path: &PathBuf) -> Result<LabelState> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }
