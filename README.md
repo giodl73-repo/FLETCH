@@ -65,7 +65,7 @@ Downstream migration status:
   scoring, geospatial interpretation, and product outputs. ROUTE maintains a
   ROUTE-owned FLETCH cache manifest for manifest downloads and exposes
   `route fletch-cache-index --gate` evidence using FLETCH's shared manifest
-  read/write and batch upsert helpers.
+  read/write, batch upsert, and cache-index gate helpers.
 - BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
   validation. `bisect fletch-cache-index --gate` maps BISECT's FLETCH cache
