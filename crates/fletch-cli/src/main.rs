@@ -1,17 +1,17 @@
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
-    active_partition_set, adapter_sources_from_registry, alias_state_from_manifest, cache_key,
-    cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind,
-    fetch_to_cache, graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
-    inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
-    partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
-    preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
-    publish_report_from_manifest, quiver_merge_ready_report, summarize_cache_manifest,
-    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry, validate_registry,
-    verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry, CacheManifest,
-    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
-    QuiverManifest, RollupPreview, SourceKind,
+    active_partition_set, adapter_handoff_report, adapter_sources_from_registry,
+    alias_state_from_manifest, cache_key, cache_list, cache_manifest, dry_run_flight,
+    export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest,
+    graph_from_quiver, graph_from_registry, import_quiver, inspect_cache_manifest,
+    label_state_from_aliases, offline_cache_report, partition_invalidation_report,
+    partition_state_from_manifest, plan_cache_prune, preview_archive_expansion,
+    preview_manifest_merge, preview_rollback, preview_rollup_edges, publish_report_from_manifest,
+    quiver_merge_ready_report, summarize_cache_manifest, summarize_quiver, tips_from_manifest,
+    upsert_cache_manifest_entry, validate_registry, verify_cache_manifest, verify_quiver_bundle,
+    AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
+    FreshnessPolicy, LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -465,6 +465,18 @@ enum RegistryCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Summarize adapter-owned registry, graph, and flight handoff inputs.
+    Handoff {
+        /// Path to a fletch.registry.v1 JSON file.
+        #[arg(long)]
+        file: PathBuf,
+        /// Fletch id to resolve in the handoff flight. Repeat for multiple roots.
+        #[arg(long = "fletch-id")]
+        fletch_ids: Vec<String>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -809,6 +821,14 @@ fn main() -> Result<()> {
                     &preview_archive_expansion(&registry, archive_fletch_id),
                     output,
                 )?;
+            }
+            RegistryCommands::Handoff {
+                file,
+                fletch_ids,
+                output,
+            } => {
+                let registry = read_registry(&file)?;
+                write_json(&adapter_handoff_report(&registry, &fletch_ids), output)?;
             }
         },
         Commands::Tip { command } => match command {

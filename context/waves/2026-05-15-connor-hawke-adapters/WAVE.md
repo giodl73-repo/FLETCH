@@ -21,7 +21,7 @@ registry validation, archive expansion, and fetch planning.
 | 01 | Adapter source report | done | Added `fletch.adapter-sources.v1` source rows from registries without interpreting adapter semantics. |
 | 02 | Registry validation report | done | Added `fletch.registry-validation.v1` missing-shaft, duplicate-ID, and adapter-source findings. |
 | 03 | Archive expansion preview | done | Added `fletch.archive-expansion-preview.v1` over registry `expands-to` edges without extraction. |
-| 04 | Adapter handoff report | pending | Summarize adapter-owned registry, graph, and flight inputs for downstream tools. |
+| 04 | Adapter handoff report | done | Added `fletch.adapter-handoff.v1` summary over registry validation, sources, graph, and flight inputs. |
 
 ## Validation expectations
 

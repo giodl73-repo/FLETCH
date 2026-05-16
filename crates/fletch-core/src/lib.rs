@@ -19,6 +19,7 @@ pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
 pub const FLETCH_ADAPTER_SOURCES_SCHEMA: &str = "fletch.adapter-sources.v1";
 pub const FLETCH_REGISTRY_VALIDATION_SCHEMA: &str = "fletch.registry-validation.v1";
 pub const FLETCH_ARCHIVE_EXPANSION_SCHEMA: &str = "fletch.archive-expansion-preview.v1";
+pub const FLETCH_ADAPTER_HANDOFF_SCHEMA: &str = "fletch.adapter-handoff.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
@@ -702,6 +703,21 @@ pub struct ArchiveExpansionPreview {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdapterHandoffReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub registry_id: String,
+    pub registry_valid: bool,
+    pub fletch_count: usize,
+    pub source_count: usize,
+    pub adapter_source_count: usize,
+    pub graph_node_count: usize,
+    pub graph_edge_count: usize,
+    pub flight_step_count: usize,
+    pub validation_finding_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlightStepAction {
     WouldFetch,
@@ -910,6 +926,29 @@ pub fn preview_archive_expansion(
             .filter(|child| !child.present_in_registry)
             .count(),
         children,
+    }
+}
+
+pub fn adapter_handoff_report(
+    registry: &FletchRegistry,
+    requested: &[String],
+) -> AdapterHandoffReport {
+    let validation = validate_registry(registry);
+    let sources = adapter_sources_from_registry(registry);
+    let graph = graph_from_registry(registry);
+    let flight = dry_run_flight(registry, requested);
+    AdapterHandoffReport {
+        schema_version: FLETCH_ADAPTER_HANDOFF_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        registry_id: registry.registry_id.clone(),
+        registry_valid: validation.valid,
+        fletch_count: registry.fletches.len(),
+        source_count: sources.source_count,
+        adapter_source_count: sources.adapter_source_count,
+        graph_node_count: graph.nodes.len(),
+        graph_edge_count: graph.edges.len(),
+        flight_step_count: flight.steps.len(),
+        validation_finding_count: validation.finding_count,
     }
 }
 
@@ -4322,6 +4361,37 @@ mod tests {
         assert_eq!(preview.missing_child_count, 1);
         assert!(preview.children[0].present_in_registry);
         assert!(!preview.children[1].present_in_registry);
+    }
+
+    #[test]
+    fn adapter_handoff_report_summarizes_registry_graph_and_flight() {
+        let registry = fletch_registry(
+            "test:registry",
+            vec![FletchDefinition {
+                id: "test:fletch".to_string(),
+                node_kind: GraphNodeKind::Fletch,
+                shafts: vec![SourceSpec {
+                    kind: SourceKind::Adapter,
+                    url: "adapter://test/source".to_string(),
+                    headers: BTreeMap::new(),
+                }],
+                edges: Vec::new(),
+                format: None,
+                tags: Vec::new(),
+                metadata: BTreeMap::new(),
+            }],
+        );
+
+        let report = adapter_handoff_report(&registry, &["test:fletch".to_string()]);
+
+        assert_eq!(report.schema_version, FLETCH_ADAPTER_HANDOFF_SCHEMA);
+        assert_eq!(report.registry_id, "test:registry");
+        assert!(report.registry_valid);
+        assert_eq!(report.fletch_count, 1);
+        assert_eq!(report.adapter_source_count, 1);
+        assert!(report.graph_node_count > 0);
+        assert_eq!(report.flight_step_count, 1);
+        assert_eq!(report.validation_finding_count, 0);
     }
 
     #[test]

@@ -127,6 +127,11 @@ archive/source fletch and reports the child fletches it would produce. It does
 not extract archive contents; adapters own archive parsing and product-specific
 child discovery.
 
+`fletch.adapter-handoff.v1` summarizes adapter-produced registry inputs for
+downstream tooling: validation status, source counts, adapter source counts,
+graph size, and flight step counts. It is a compact handoff report; detailed
+registry, graph, and flight contracts remain the source of truth.
+
 ## Data format model
 
 FLETCH's default data model is **opaque verified bytes**:
