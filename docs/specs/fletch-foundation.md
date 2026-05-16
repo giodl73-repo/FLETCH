@@ -276,6 +276,12 @@ conflict group, merge a safe subset, then re-preview the remaining staged
 changes. This keeps large imports, expanding cachelines, and quiver installs
 usable in stages instead of forcing an all-or-nothing decision.
 
+The first preview contract is `fletch.merge-preview.v1`. It compares an active
+cache manifest with a candidate cache manifest and reports additions, unchanged
+entries, same-source replacements, and conflicts where the same logical dataset
+points at a different source. It does not mutate aliases, labels, cache objects,
+or product views.
+
 Every merge transaction should record its target view, policy, candidate inputs,
 activated fletches, superseded fletches, alias updates, conflicts, optional
 label, and rollback target.

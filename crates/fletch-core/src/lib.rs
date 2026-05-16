@@ -19,6 +19,7 @@ pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
 pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
+pub const FLETCH_MERGE_PREVIEW_SCHEMA: &str = "fletch.merge-preview.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -278,6 +279,32 @@ pub struct PrunePlan {
     pub prune_count: usize,
     pub prune_bytes: u64,
     pub candidates: Vec<PruneCandidate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergePreviewEntry {
+    pub dataset_id: String,
+    pub active_cache_key: Option<String>,
+    pub candidate_cache_key: String,
+    pub active_sha256: Option<String>,
+    pub candidate_sha256: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergePreview {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub active_cache_root: String,
+    pub candidate_cache_root: String,
+    pub addition_count: usize,
+    pub unchanged_count: usize,
+    pub replacement_count: usize,
+    pub conflict_count: usize,
+    pub additions: Vec<MergePreviewEntry>,
+    pub unchanged: Vec<MergePreviewEntry>,
+    pub replacements: Vec<MergePreviewEntry>,
+    pub conflicts: Vec<MergePreviewEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -909,6 +936,74 @@ pub fn plan_cache_prune(manifest: &CacheManifest) -> Result<PrunePlan, FletchErr
         prune_bytes,
         candidates,
     })
+}
+
+pub fn preview_manifest_merge(active: &CacheManifest, candidate: &CacheManifest) -> MergePreview {
+    let active_by_dataset = active
+        .entries
+        .iter()
+        .map(|entry| (entry.dataset_id.clone(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let mut additions = Vec::new();
+    let mut unchanged = Vec::new();
+    let mut replacements = Vec::new();
+    let mut conflicts = Vec::new();
+
+    for candidate_entry in &candidate.entries {
+        let Some(active_entry) = active_by_dataset.get(&candidate_entry.dataset_id) else {
+            additions.push(merge_preview_entry(None, candidate_entry, "new-dataset-id"));
+            continue;
+        };
+        if active_entry.cache_key == candidate_entry.cache_key {
+            unchanged.push(merge_preview_entry(
+                Some(active_entry),
+                candidate_entry,
+                "same-cache-key",
+            ));
+        } else if active_entry.source_url == candidate_entry.source_url {
+            replacements.push(merge_preview_entry(
+                Some(active_entry),
+                candidate_entry,
+                "same-source-refresh",
+            ));
+        } else {
+            conflicts.push(merge_preview_entry(
+                Some(active_entry),
+                candidate_entry,
+                "same-dataset-different-source",
+            ));
+        }
+    }
+
+    MergePreview {
+        schema_version: FLETCH_MERGE_PREVIEW_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        active_cache_root: active.cache_root.clone(),
+        candidate_cache_root: candidate.cache_root.clone(),
+        addition_count: additions.len(),
+        unchanged_count: unchanged.len(),
+        replacement_count: replacements.len(),
+        conflict_count: conflicts.len(),
+        additions,
+        unchanged,
+        replacements,
+        conflicts,
+    }
+}
+
+fn merge_preview_entry(
+    active: Option<&CacheEntry>,
+    candidate: &CacheEntry,
+    reason: &str,
+) -> MergePreviewEntry {
+    MergePreviewEntry {
+        dataset_id: candidate.dataset_id.clone(),
+        active_cache_key: active.map(|entry| entry.cache_key.clone()),
+        candidate_cache_key: candidate.cache_key.clone(),
+        active_sha256: active.map(|entry| entry.sha256.clone()),
+        candidate_sha256: candidate.sha256.clone(),
+        reason: reason.to_string(),
+    }
 }
 
 pub fn export_quiver(
@@ -2795,6 +2890,78 @@ mod tests {
         assert_eq!(prune.candidates[0].relative_path, "objects/sha256/orphan");
         assert_eq!(prune.candidates[0].reason, "unreferenced-cache-object");
         assert!(orphan.exists());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn merge_preview_reports_additions_replacements_and_conflicts() {
+        let root = unique_temp_dir("merge-preview");
+        let cache_root = root.join("cache");
+        let active_source = root.join("active.txt");
+        let refresh_source = root.join("refresh.txt");
+        let conflict_source = root.join("conflict.txt");
+        let addition_source = root.join("addition.txt");
+        std::fs::write(&active_source, b"active").unwrap();
+        std::fs::write(&refresh_source, b"refresh").unwrap();
+        std::fs::write(&conflict_source, b"conflict").unwrap();
+        std::fs::write(&addition_source, b"addition").unwrap();
+        let active_plan = fetch_plan_with_kind(
+            "test:merge",
+            active_source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let refresh_plan = fetch_plan_with_kind(
+            "test:merge",
+            active_source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let conflict_plan = fetch_plan_with_kind(
+            "test:merge",
+            conflict_source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let addition_plan = fetch_plan_with_kind(
+            "test:addition",
+            addition_source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let active_entry = fetch_to_cache(&active_plan, FetchOptions::new(&cache_root))
+            .unwrap()
+            .entry;
+        let mut refresh_entry = fetch_to_cache(&refresh_plan, FetchOptions::new(&cache_root))
+            .unwrap()
+            .entry;
+        refresh_entry.cache_key =
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        refresh_entry.sha256 =
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111".to_string();
+        let conflict_entry = fetch_to_cache(&conflict_plan, FetchOptions::new(&cache_root))
+            .unwrap()
+            .entry;
+        let addition_entry = fetch_to_cache(&addition_plan, FetchOptions::new(&cache_root))
+            .unwrap()
+            .entry;
+        let active =
+            cache_manifest(cache_root.display().to_string(), vec![active_entry.clone()]).unwrap();
+        let candidate = cache_manifest(
+            cache_root.display().to_string(),
+            vec![active_entry, refresh_entry, conflict_entry, addition_entry],
+        )
+        .unwrap();
+
+        let preview = preview_manifest_merge(&active, &candidate);
+
+        assert_eq!(preview.schema_version, FLETCH_MERGE_PREVIEW_SCHEMA);
+        assert_eq!(preview.unchanged_count, 1);
+        assert_eq!(preview.replacement_count, 1);
+        assert_eq!(preview.conflict_count, 1);
+        assert_eq!(preview.addition_count, 1);
+        assert_eq!(preview.conflicts[0].reason, "same-dataset-different-source");
 
         let _ = std::fs::remove_dir_all(root);
     }

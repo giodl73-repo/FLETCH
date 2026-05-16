@@ -3,10 +3,10 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
     fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
-    inspect_cache_manifest, offline_cache_report, plan_cache_prune, publish_report_from_manifest,
-    summarize_cache_manifest, tips_from_manifest, upsert_cache_manifest_entry,
-    verify_cache_manifest, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
-    FreshnessPolicy, SourceKind,
+    inspect_cache_manifest, offline_cache_report, plan_cache_prune, preview_manifest_merge,
+    publish_report_from_manifest, summarize_cache_manifest, tips_from_manifest,
+    upsert_cache_manifest_entry, verify_cache_manifest, CacheEntry, CacheManifest, FetchOptions,
+    FetchPlan, FletchRegistry, FreshnessPolicy, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -168,6 +168,11 @@ enum Commands {
     Publish {
         #[command(subcommand)]
         command: PublishCommands,
+    },
+    /// Preview merge/activation decisions without mutating active state.
+    Merge {
+        #[command(subcommand)]
+        command: MergeCommands,
     },
 }
 
@@ -348,6 +353,22 @@ enum PublishCommands {
         /// Maximum bytes to sample from each cached object for tips.
         #[arg(long, default_value_t = 4096)]
         max_tip_bytes: usize,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum MergeCommands {
+    /// Preview candidate ledger changes against an active ledger.
+    Preview {
+        /// Current active fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        active: PathBuf,
+        /// Candidate fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        candidate: PathBuf,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -588,6 +609,17 @@ fn main() -> Result<()> {
                     &publish_report_from_manifest(&manifest, &freshness, max_tip_bytes)?,
                     output,
                 )?;
+            }
+        },
+        Commands::Merge { command } => match command {
+            MergeCommands::Preview {
+                active,
+                candidate,
+                output,
+            } => {
+                let active = read_manifest(&active)?;
+                let candidate = read_manifest(&candidate)?;
+                write_json(&preview_manifest_merge(&active, &candidate), output)?;
             }
         },
     }

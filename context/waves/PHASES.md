@@ -52,7 +52,7 @@ in the next wave plan.
 
 ## Active wave
 
-- `2026-05-15-arsenal-cache-operations`
+- `2026-05-15-red-arrow-merge-aliases`
 
 ## Protocol
 
