@@ -714,6 +714,22 @@ pub fn cache_manifest(
     })
 }
 
+pub fn upsert_cache_manifest_entry(
+    manifest: CacheManifest,
+    entry: CacheEntry,
+) -> Result<CacheManifest, FletchError> {
+    let mut entries = manifest.entries;
+    if let Some(existing) = entries
+        .iter_mut()
+        .find(|existing| existing.cache_key == entry.cache_key)
+    {
+        *existing = entry;
+    } else {
+        entries.push(entry);
+    }
+    cache_manifest(manifest.cache_root, entries)
+}
+
 pub fn cache_list(manifest: &CacheManifest) -> &[CacheEntry] {
     &manifest.entries
 }
@@ -2073,6 +2089,51 @@ mod tests {
             cache_manifest(".fletch/cache", vec![entry]),
             Err(FletchError::InvalidSha256 { .. })
         ));
+    }
+
+    #[test]
+    fn cache_manifest_upsert_replaces_matching_cache_key() {
+        let root = unique_temp_dir("manifest-upsert");
+        let source_a = root.join("a.json");
+        let source_b = root.join("b.json");
+        let cache_root = root.join("cache");
+        std::fs::write(&source_a, br#"{"a":1}"#).unwrap();
+        std::fs::write(&source_b, br#"{"b":2}"#).unwrap();
+        let plan_a =
+            fetch_plan_with_kind("test:a", source_a.display().to_string(), SourceKind::File)
+                .unwrap();
+        let plan_b =
+            fetch_plan_with_kind("test:b", source_b.display().to_string(), SourceKind::File)
+                .unwrap();
+        let first_a = fetch_to_cache(
+            &plan_a,
+            FetchOptions::new(&cache_root).with_fetched_at_ms(100),
+        )
+        .unwrap();
+        let entry_b = fetch_to_cache(&plan_b, FetchOptions::new(&cache_root))
+            .unwrap()
+            .entry;
+        let second_a = fetch_to_cache(
+            &plan_a,
+            FetchOptions::new(&cache_root)
+                .with_fetched_at_ms(200)
+                .with_expected_sha256(first_a.entry.sha256.clone()),
+        )
+        .unwrap();
+        let manifest = cache_manifest(
+            cache_root.display().to_string(),
+            vec![first_a.entry, entry_b.clone()],
+        )
+        .unwrap();
+
+        let upserted = upsert_cache_manifest_entry(manifest, second_a.entry).unwrap();
+
+        assert_eq!(upserted.entries.len(), 2);
+        assert_eq!(upserted.entries[0].dataset_id, "test:a");
+        assert_eq!(upserted.entries[0].fetched_at_ms, 200);
+        assert_eq!(upserted.entries[1], entry_b);
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

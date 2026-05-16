@@ -4,7 +4,8 @@ use fletch_core::{
     cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver, fetch_plan,
     fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_registry, import_quiver,
     inspect_cache_manifest, plan_cache_prune, publish_report_from_manifest, tips_from_manifest,
-    CacheManifest, FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, SourceKind,
+    upsert_cache_manifest_entry, CacheEntry, CacheManifest, FetchOptions, FetchPlan,
+    FletchRegistry, FreshnessPolicy, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -413,13 +414,7 @@ fn main() -> Result<()> {
             }
             options = options.with_retry_attempts(retry_attempts);
             let outcome = fetch_to_cache(&plan, options)?;
-            let manifest = cache_manifest(cache_root.display().to_string(), vec![outcome.entry])?;
-            let json = serde_json::to_string_pretty(&manifest)?;
-            if let Some(output) = output {
-                fs::write(output, json)?;
-            } else {
-                println!("{json}");
-            }
+            write_fetch_manifest(&cache_root, outcome.entry, output)?;
         }
         Commands::FetchPlan {
             plan,
@@ -452,13 +447,7 @@ fn main() -> Result<()> {
             }
             options = options.with_retry_attempts(retry_attempts);
             let outcome = fetch_to_cache(&plan, options)?;
-            let manifest = cache_manifest(cache_root.display().to_string(), vec![outcome.entry])?;
-            let json = serde_json::to_string_pretty(&manifest)?;
-            if let Some(output) = output {
-                fs::write(output, json)?;
-            } else {
-                println!("{json}");
-            }
+            write_fetch_manifest(&cache_root, outcome.entry, output)?;
         }
         Commands::Cache { command } => match command {
             CacheCommands::List { manifest, output } => {
@@ -595,6 +584,28 @@ fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
 fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
+}
+
+fn write_fetch_manifest(
+    cache_root: &PathBuf,
+    entry: CacheEntry,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let cache_root = cache_root.display().to_string();
+    let manifest = if let Some(output) = output.as_ref().filter(|path| path.exists()) {
+        let manifest = read_manifest(output)?;
+        if manifest.cache_root != cache_root {
+            bail!(
+                "output manifest cache root {} does not match requested cache root {}",
+                manifest.cache_root,
+                cache_root
+            );
+        }
+        upsert_cache_manifest_entry(manifest, entry)?
+    } else {
+        cache_manifest(cache_root, vec![entry])?
+    };
+    write_json(&manifest, output)
 }
 
 fn write_json<T: serde::Serialize + ?Sized>(value: &T, output: Option<PathBuf>) -> Result<()> {

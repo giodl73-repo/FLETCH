@@ -389,6 +389,11 @@ Trusted cache-hit execution can reuse a matching ledger entry's fetched
 timestamp and retry metadata, but only after verifying the current object against
 that ledger entry.
 
+Fetch execution can append to an existing output ledger by upserting the emitted
+entry by deterministic cache key. This lets repeated generic fetches build one
+publishable manifest while preserving unrelated entries and replacing only the
+same shaft identity.
+
 Ledger entries should remain safe to publish through CROP/PROOF. They should
 include enough provenance for local status pages without requiring generated
 Markdown to become the source of truth.

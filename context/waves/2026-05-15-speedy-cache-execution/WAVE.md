@@ -26,6 +26,7 @@ focused on product-neutral fetch/cache execution.
 | 06 | Header-aware shafts | done | Added CLI header flags and included generic source headers in cache identity. |
 | 07 | Saved plan execution | done | Added `fetch-plan` so generated or checked-in `fletch.plan.v1` files can execute directly. |
 | 08 | Saved plan validation | done | Validated plan schema and required identity fields before cache lookup or live fetch. |
+| 09 | Ledger output upsert | done | Upserted fetch output entries into existing manifests instead of overwriting ledgers. |
 
 ## Validation expectations
 
