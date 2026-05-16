@@ -66,9 +66,9 @@ Downstream migration status:
 - BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
   validation.
-- ICELINES: roster, MoneyPuck, and paged NHL stats report acquisition moved to
-  FLETCH, with `icelines fetch fletch-sources --gate` documenting source
-  handoff and `icelines fetch fletch-partitions --gate` mapping
+- ICELINES: roster, MoneyPuck, paged NHL stats report, and Gamecenter batch
+  acquisition moved to FLETCH, with `icelines fetch fletch-sources --gate`
+  documenting source handoff and `icelines fetch fletch-partitions --gate` mapping
   leaders/player/compare, goalies, roster bios, MoneyPuck, career, and windowed
   game-line query surfaces to partition/rollup IDs.
   `icelines fetch fletch-quivers --gate` groups those partitions into query
@@ -111,6 +111,10 @@ not accidentally touch live sources.
 for HTTP endpoints with `data` arrays and `total` counts; products such as
 ICELINES can use it while retaining their own parsing, locks, snapshot writes,
 and activation rules.
+For source sets that a product has already expanded, `fletch-core` exposes a
+product-neutral batch acquisition primitive over multiple fetch plans. The
+consumer still owns the expansion semantics, but FLETCH owns the repeated
+HTTP/file cache acquisition, verification, and manifest-ready entries.
 When `--output` points to an existing manifest, fetch commands upsert the new
 entry by cache key and preserve the rest of the ledger instead of replacing it
 with a single-entry manifest.

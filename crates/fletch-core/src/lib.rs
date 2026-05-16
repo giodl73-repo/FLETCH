@@ -93,6 +93,8 @@ pub enum FletchError {
     InvalidTimeout,
     #[error("[FETCH] invalid paged JSON response from {url}: {detail}")]
     InvalidPagedJson { url: String, detail: String },
+    #[error("[FETCH] invalid batch fetch options: {detail}")]
+    InvalidBatchOptions { detail: String },
     #[error("[TIP] max bytes must be greater than zero")]
     InvalidTipByteLimit,
     #[error("[OFFLINE] cache entry {dataset_id} is missing and live fetches are disabled")]
@@ -2554,6 +2556,22 @@ pub struct PagedJsonFetchOutcome {
     pub row_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchFetchOutcome {
+    pub outcomes: Vec<FetchOutcome>,
+    pub fetched_count: usize,
+    pub cache_hit_count: usize,
+    pub failure_count: usize,
+    pub failures: Vec<BatchFetchFailure>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchFetchFailure {
+    pub dataset_id: String,
+    pub source_url: String,
+    pub error: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FetchAttemptStatus {
     pub attempts: u32,
@@ -2743,6 +2761,65 @@ pub fn fetch_paged_json_to_cache(
         },
         page_count: paged.page_count,
         row_count: paged.row_count,
+    })
+}
+
+pub fn fetch_batch_to_cache(
+    plans: &[FetchPlan],
+    options: FetchOptions,
+) -> Result<BatchFetchOutcome, FletchError> {
+    let outcome = fetch_batch_to_cache_best_effort(plans, options)?;
+    if let Some(failure) = outcome.failures.first() {
+        return Err(FletchError::InvalidBatchOptions {
+            detail: format!(
+                "batch fetch failed for {} ({}): {}",
+                failure.dataset_id, failure.source_url, failure.error
+            ),
+        });
+    }
+    Ok(outcome)
+}
+
+pub fn fetch_batch_to_cache_best_effort(
+    plans: &[FetchPlan],
+    options: FetchOptions,
+) -> Result<BatchFetchOutcome, FletchError> {
+    if options.expected_sha256.is_some() {
+        return Err(FletchError::InvalidBatchOptions {
+            detail:
+                "per-batch expected_sha256 is ambiguous; use individual fetches for pinned hashes"
+                    .to_string(),
+        });
+    }
+
+    let mut outcomes = Vec::with_capacity(plans.len());
+    let mut fetched_count = 0usize;
+    let mut cache_hit_count = 0usize;
+    let mut failures = Vec::new();
+    for plan in plans {
+        match fetch_to_cache(plan, options.clone()) {
+            Ok(outcome) => {
+                if outcome.attempt_status.attempts == 0 {
+                    cache_hit_count += 1;
+                } else {
+                    fetched_count += 1;
+                }
+                outcomes.push(outcome);
+            }
+            Err(error) => failures.push(BatchFetchFailure {
+                dataset_id: plan.dataset_id.clone(),
+                source_url: plan.source.url.clone(),
+                error: error.to_string(),
+            }),
+        }
+    }
+
+    Ok(BatchFetchOutcome {
+        outcomes,
+        fetched_count,
+        cache_hit_count,
+        failure_count: failures.len(),
+        failures,
     })
 }
 
@@ -4348,6 +4425,90 @@ mod tests {
         server.join().unwrap();
 
         assert!(matches!(error, FletchError::InvalidPagedJson { .. }));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn batch_fetch_acquires_multiple_http_cache_entries() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+
+        let root = unique_temp_dir("batch-http");
+        let cache_root = root.join("cache");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buffer = [0u8; 2048];
+                let bytes = stream.read(&mut buffer).unwrap();
+                let request = String::from_utf8_lossy(&buffer[..bytes]);
+                let body = if request.contains("GET /one ") {
+                    br#"{"name":"one"}"#.as_slice()
+                } else {
+                    br#"{"name":"two"}"#.as_slice()
+                };
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+                    body.len()
+                )
+                .unwrap();
+                stream.write_all(body).unwrap();
+            }
+        });
+        let plans = vec![
+            fetch_plan("test:batch:one", format!("{base_url}/one")).unwrap(),
+            fetch_plan("test:batch:two", format!("{base_url}/two")).unwrap(),
+        ];
+
+        let outcome = fetch_batch_to_cache(
+            &plans,
+            FetchOptions::new(&cache_root)
+                .with_timeout_ms(1_000)
+                .with_retry_attempts(1),
+        )
+        .unwrap();
+        server.join().unwrap();
+
+        assert_eq!(outcome.outcomes.len(), 2);
+        assert_eq!(outcome.fetched_count, 2);
+        assert_eq!(outcome.cache_hit_count, 0);
+        let manifest = CacheManifest {
+            schema_version: FLETCH_MANIFEST_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            cache_root: cache_root.display().to_string(),
+            entries: outcome
+                .outcomes
+                .iter()
+                .map(|outcome| outcome.entry.clone())
+                .collect(),
+        };
+        assert_eq!(
+            inspect_cache_manifest(&manifest, &FreshnessPolicy::Immutable)
+                .unwrap()
+                .iter()
+                .filter(|entry| entry.object_status == CacheObjectStatus::Verified)
+                .count(),
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn batch_fetch_rejects_single_expected_checksum() {
+        let root = unique_temp_dir("batch-http-checksum");
+        let plans = vec![fetch_plan("test:batch:one", "https://example.test/one").unwrap()];
+
+        let error = fetch_batch_to_cache(
+            &plans,
+            FetchOptions::new(root.join("cache")).with_expected_sha256("sha256:abc"),
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, FletchError::InvalidBatchOptions { .. }));
 
         let _ = std::fs::remove_dir_all(root);
     }
