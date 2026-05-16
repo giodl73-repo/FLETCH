@@ -65,7 +65,9 @@ Downstream migration status:
   scoring, geospatial interpretation, and product outputs.
 - BISECT: Census/TIGER/PL/EIA/LODES/ACS generic HTTP acquisition moved to
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
-  validation.
+  validation. `bisect fletch-cache-index --gate` maps BISECT's FLETCH cache
+  manifest to compact evidence using FLETCH's shared manifest read/write and
+  batch upsert helpers.
 - ICELINES: roster, MoneyPuck, paged NHL stats report, Gamecenter batch,
   player landing batch, and ESPN transaction window acquisition moved to FLETCH, with
   `icelines fetch fletch-sources --gate` documenting source handoff and
@@ -175,8 +177,8 @@ entry shape, and derived reports. A typical consumer flow is:
 5. Feed the manifest to read-only reports such as cache index, status, verify,
    graph, publisher, partition, or quiver handoff reports.
 
-This pattern is now used by ICELINES for cache-index evidence and supports
-BISECT/ROUTE data ledgers plus CROP/PROOF publisher inputs without making
+This pattern is now used by ICELINES and BISECT for cache-index evidence and
+supports ROUTE data ledgers plus CROP/PROOF publisher inputs without making
 FLETCH responsible for domain activation.
 
 Publisher commands are read-only derived views. `fletch publish crop-index`,
