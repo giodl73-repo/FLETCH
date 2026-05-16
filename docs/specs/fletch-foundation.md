@@ -411,9 +411,11 @@ Initial cache operations are manifest-led:
 - `cache offline-report`: emit `fletch.cache-offline.v1`, a no-live readiness
   report that counts fresh verified entries, missing entries, stale entries, and
   blocked entries using a caller-provided freshness policy.
-- `cache prune`: plan deletion candidates under the cache object tree that are
-  not referenced by the manifest. The initial contract is plan-only; destructive
-  deletion requires a later explicit execution command.
+- `cache prune`: emit `fletch.cache-prune.v1`, a non-destructive plan for
+  deletion candidates under the cache object tree that are not referenced by the
+  manifest. Plans include object root, keep/prune counts and bytes, candidate
+  reasons, and `destructive: false`; deletion requires a later explicit
+  execution command.
 
 ### `fletch.graph.v1`
 

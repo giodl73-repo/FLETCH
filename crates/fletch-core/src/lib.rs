@@ -18,6 +18,7 @@ pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
 pub const FLETCH_OFFLINE_SCHEMA: &str = "fletch.cache-offline.v1";
+pub const FLETCH_PRUNE_SCHEMA: &str = "fletch.cache-prune.v1";
 
 #[derive(Debug, Error)]
 pub enum FletchError {
@@ -262,12 +263,18 @@ pub struct PruneCandidate {
     pub relative_path: String,
     pub absolute_path: String,
     pub bytes: u64,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrunePlan {
+    pub schema_version: String,
+    pub generated_by: String,
     pub cache_root: String,
+    pub object_root: String,
+    pub destructive: bool,
     pub keep_count: usize,
+    pub keep_bytes: u64,
     pub prune_count: usize,
     pub prune_bytes: u64,
     pub candidates: Vec<PruneCandidate>,
@@ -888,10 +895,16 @@ pub fn plan_cache_prune(manifest: &CacheManifest) -> Result<PrunePlan, FletchErr
     }
     candidates.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     let prune_bytes = candidates.iter().map(|candidate| candidate.bytes).sum();
+    let keep_bytes = manifest.entries.iter().map(|entry| entry.bytes).sum();
 
     Ok(PrunePlan {
+        schema_version: FLETCH_PRUNE_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         cache_root: manifest.cache_root.clone(),
+        object_root: object_root.display().to_string(),
+        destructive: false,
         keep_count: referenced.len(),
+        keep_bytes,
         prune_count: candidates.len(),
         prune_bytes,
         candidates,
@@ -1884,6 +1897,7 @@ fn collect_prune_candidates(
             relative_path,
             absolute_path: path.display().to_string(),
             bytes: metadata.len(),
+            reason: "unreferenced-cache-object".to_string(),
         });
     }
     Ok(())
@@ -2772,10 +2786,14 @@ mod tests {
 
         let prune = plan_cache_prune(&manifest).unwrap();
 
+        assert_eq!(prune.schema_version, FLETCH_PRUNE_SCHEMA);
+        assert_eq!(prune.destructive, false);
         assert_eq!(prune.keep_count, 1);
+        assert_eq!(prune.keep_bytes, 5);
         assert_eq!(prune.prune_count, 1);
         assert_eq!(prune.prune_bytes, 6);
         assert_eq!(prune.candidates[0].relative_path, "objects/sha256/orphan");
+        assert_eq!(prune.candidates[0].reason, "unreferenced-cache-object");
         assert!(orphan.exists());
 
         let _ = std::fs::remove_dir_all(root);

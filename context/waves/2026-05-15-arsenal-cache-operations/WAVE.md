@@ -21,7 +21,7 @@ and plan cleanup without product-specific semantics or hidden mutation.
 | 01 | Cache summary report | done | Added aggregate cache health counts and byte totals over manifest status. |
 | 02 | Verify report contract | done | Promoted cache verification into `fletch.cache-verify.v1` with summary and status rows. |
 | 03 | Offline report command | done | Added `fletch.cache-offline.v1` readiness reports for no-live bootstrap flows. |
-| 04 | Prune safety expansion | pending | Add richer prune-plan safety fields before any destructive delete command exists. |
+| 04 | Prune safety expansion | done | Added `fletch.cache-prune.v1` safety metadata while keeping prune non-destructive. |
 
 ## Validation expectations
 
