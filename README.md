@@ -67,9 +67,11 @@ Downstream migration status:
   FLETCH; BISECT keeps release adjacency, extraction, derived CSVs, and legal
   validation.
 - ICELINES: roster and MoneyPuck source-byte acquisition moved to FLETCH, with
-  `icelines fetch fletch-sources --gate` documenting paged and dynamic sources
-  that remain adapter-owned. ICELINES keeps NHL parsing, snapshots, sealing, and
-  hockey-domain validation.
+  `icelines fetch fletch-sources --gate` documenting source handoff and
+  `icelines fetch fletch-partitions --gate` mapping leaders/player/compare,
+  goalies, roster bios, MoneyPuck, career, and windowed game-line query surfaces
+  to partition/rollup IDs. ICELINES keeps NHL parsing, snapshots, sealing,
+  active pointers, and hockey-domain validation.
 - CROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
