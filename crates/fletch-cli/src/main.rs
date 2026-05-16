@@ -2,9 +2,9 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     active_partition_set, adapter_handoff_report, adapter_sources_from_registry,
-    alias_state_from_manifest, cache_key, cache_list, cache_manifest, crop_index_from_manifest,
-    dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
-    graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
+    alias_state_from_manifest, cache_index_from_manifest, cache_key, cache_list, cache_manifest,
+    crop_index_from_manifest, dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind,
+    fetch_to_cache, graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
     inspect_cache_manifest, label_state_from_aliases, local_url_map, offline_cache_report,
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
@@ -276,6 +276,15 @@ enum PartitionCommands {
 
 #[derive(Debug, Subcommand)]
 enum CacheCommands {
+    /// Emit a compact fletch.cache-index.v1 report from a cache manifest.
+    Index {
+        /// Path to a fletch.cache-manifest.v1 JSON file.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// List ledger entries from a cache manifest.
     List {
         /// Path to a fletch.cache-manifest.v1 JSON file.
@@ -837,6 +846,10 @@ fn main() -> Result<()> {
             write_fetch_manifest(&cache_root, outcome.entry, output)?;
         }
         Commands::Cache { command } => match command {
+            CacheCommands::Index { manifest, output } => {
+                let manifest = read_manifest(&manifest)?;
+                write_json(&cache_index_from_manifest(&manifest), output)?;
+            }
             CacheCommands::List { manifest, output } => {
                 let manifest = read_manifest(&manifest)?;
                 write_json(cache_list(&manifest), output)?;

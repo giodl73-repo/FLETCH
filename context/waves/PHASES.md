@@ -52,7 +52,7 @@ in the next wave plan.
 
 ## Active wave
 
-- `2026-05-16-report-scaling`
+- `2026-05-16-ledger-index`
 
 ## Protocol
 

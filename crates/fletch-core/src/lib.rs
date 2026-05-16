@@ -10,6 +10,7 @@ use thiserror::Error;
 
 pub const FLETCH_PLAN_SCHEMA: &str = "fletch.plan.v1";
 pub const FLETCH_MANIFEST_SCHEMA: &str = "fletch.cache-manifest.v1";
+pub const FLETCH_CACHE_INDEX_SCHEMA: &str = "fletch.cache-index.v1";
 pub const FLETCH_QUIVER_SCHEMA: &str = "fletch.quiver.v1";
 pub const FLETCH_QUIVER_SUMMARY_SCHEMA: &str = "fletch.quiver-summary.v1";
 pub const FLETCH_QUIVER_VERIFY_SCHEMA: &str = "fletch.quiver-verify.v1";
@@ -216,6 +217,29 @@ pub struct CacheManifest {
     pub generated_by: String,
     pub cache_root: String,
     pub entries: Vec<CacheEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheIndexEntry {
+    pub dataset_id: String,
+    pub version: Option<String>,
+    pub cache_key: String,
+    pub sha256: String,
+    pub relative_path: String,
+    pub bytes: u64,
+    pub verified: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheIndexReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub cache_root: String,
+    pub entry_count: usize,
+    pub verified_count: usize,
+    pub unverified_count: usize,
+    pub byte_count: u64,
+    pub entries: Vec<CacheIndexEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1613,6 +1637,33 @@ pub fn upsert_cache_manifest_entry(
 
 pub fn cache_list(manifest: &CacheManifest) -> &[CacheEntry] {
     &manifest.entries
+}
+
+pub fn cache_index_from_manifest(manifest: &CacheManifest) -> CacheIndexReport {
+    let entries = manifest
+        .entries
+        .iter()
+        .map(|entry| CacheIndexEntry {
+            dataset_id: entry.dataset_id.clone(),
+            version: entry.version.clone(),
+            cache_key: entry.cache_key.clone(),
+            sha256: entry.sha256.clone(),
+            relative_path: entry.relative_path.clone(),
+            bytes: entry.bytes,
+            verified: entry.verified,
+        })
+        .collect::<Vec<_>>();
+    let verified_count = entries.iter().filter(|entry| entry.verified).count();
+    CacheIndexReport {
+        schema_version: FLETCH_CACHE_INDEX_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        cache_root: manifest.cache_root.clone(),
+        entry_count: entries.len(),
+        verified_count,
+        unverified_count: entries.len().saturating_sub(verified_count),
+        byte_count: entries.iter().map(|entry| entry.bytes).sum(),
+        entries,
+    }
 }
 
 pub fn inspect_cache_manifest(
@@ -4233,6 +4284,37 @@ mod tests {
         assert_eq!(upserted.entries[1], entry_b);
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cache_index_from_manifest_emits_compact_ledger_rows() {
+        let entry = CacheEntry {
+            dataset_id: "test:dataset".to_string(),
+            version: Some("v1".to_string()),
+            source_url: "file://source.json".to_string(),
+            cache_key: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            relative_path: "objects/sha256/aa".to_string(),
+            sha256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                .to_string(),
+            bytes: 42,
+            fetched_at_ms: 1,
+            verified: true,
+            fetch_attempts: 1,
+            retry_count: 0,
+            last_retryable_error: None,
+        };
+        let manifest = cache_manifest("cache", vec![entry]).unwrap();
+
+        let index = cache_index_from_manifest(&manifest);
+
+        assert_eq!(index.schema_version, FLETCH_CACHE_INDEX_SCHEMA);
+        assert_eq!(index.entry_count, 1);
+        assert_eq!(index.verified_count, 1);
+        assert_eq!(index.unverified_count, 0);
+        assert_eq!(index.byte_count, 42);
+        assert_eq!(index.entries[0].dataset_id, "test:dataset");
+        assert_eq!(index.entries[0].version.as_deref(), Some("v1"));
     }
 
     #[test]

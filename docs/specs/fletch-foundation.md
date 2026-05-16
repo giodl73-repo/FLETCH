@@ -505,6 +505,11 @@ entry by deterministic cache key. This lets repeated generic fetches build one
 publishable manifest while preserving unrelated entries and replacing only the
 same shaft identity.
 
+`fletch.cache-index.v1` is a compact derived ledger index with dataset IDs,
+versions, cache keys, object hashes, relative paths, byte counts, and verified
+flags. It is optimized for large-ledger lookup, publisher inputs, and automation
+that does not need full source URLs or retry metadata.
+
 Ledger entries should remain safe to publish through CROP/PROOF. They should
 include enough provenance for local status pages without requiring generated
 Markdown to become the source of truth.
