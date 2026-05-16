@@ -21,7 +21,7 @@ publisher views without product-specific install logic.
 |------:|-------|--------|---------|
 | 01 | Quiver summary report | done | Added `fletch.quiver-summary.v1` bundle identity, byte, and verification totals. |
 | 02 | Quiver verify report | done | Added `fletch.quiver-verify.v1` per-member verification before import or merge. |
-| 03 | Quiver graph edges | pending | Expose quiver-to-member graph edges for CROP/PROOF indexing. |
+| 03 | Quiver graph edges | done | Added quiver-to-member `fletch.graph.v1` edges for CROP/PROOF indexing. |
 | 04 | Merge-ready bundle report | pending | Describe staged quiver members as candidate merge/alias inputs. |
 
 ## Validation expectations

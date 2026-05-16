@@ -3,13 +3,14 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     active_partition_set, alias_state_from_manifest, cache_key, cache_list, cache_manifest,
     dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
-    graph_from_manifest, graph_from_registry, import_quiver, inspect_cache_manifest,
-    label_state_from_aliases, offline_cache_report, partition_invalidation_report,
-    partition_state_from_manifest, plan_cache_prune, preview_manifest_merge, preview_rollback,
-    preview_rollup_edges, publish_report_from_manifest, summarize_cache_manifest, summarize_quiver,
-    tips_from_manifest, upsert_cache_manifest_entry, verify_cache_manifest, verify_quiver_bundle,
-    AliasState, CacheEntry, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
-    FreshnessPolicy, LabelState, PartitionState, QuiverManifest, RollupPreview, SourceKind,
+    graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
+    inspect_cache_manifest, label_state_from_aliases, offline_cache_report,
+    partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
+    preview_manifest_merge, preview_rollback, preview_rollup_edges, publish_report_from_manifest,
+    summarize_cache_manifest, summarize_quiver, tips_from_manifest, upsert_cache_manifest_entry,
+    verify_cache_manifest, verify_quiver_bundle, AliasState, CacheEntry, CacheManifest,
+    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, PartitionState,
+    QuiverManifest, RollupPreview, SourceKind,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -374,6 +375,15 @@ enum QuiverCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Export fletch.graph.v1 nodes and edges from a quiver manifest.
+    Graph {
+        /// Path to a fletch.quiver.v1 JSON file.
+        #[arg(long)]
+        quiver: PathBuf,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -705,6 +715,10 @@ fn main() -> Result<()> {
             }
             QuiverCommands::Verify { quiver_dir, output } => {
                 write_json(&verify_quiver_bundle(quiver_dir)?, output)?;
+            }
+            QuiverCommands::Graph { quiver, output } => {
+                let quiver = read_quiver_manifest(&quiver)?;
+                write_json(&graph_from_quiver(&quiver), output)?;
             }
         },
         Commands::Graph { command } => match command {

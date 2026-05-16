@@ -239,6 +239,11 @@ It treats the quiver directory as the cache root for bundled objects and reports
 verified, missing, and hash-mismatch members as data instead of promoting or
 activating any content.
 
+Quiver graph export emits `fletch.graph.v1` nodes for the quiver, member
+fletches, and member ledger entries. `contains` edges connect the quiver to its
+members so CROP and PROOF can index portable bundles without reading cache
+objects.
+
 ## Merge, labels, and rollback
 
 FLETCH merge is Git-inspired but not text merging. It promotes verified

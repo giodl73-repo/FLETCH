@@ -1659,6 +1659,84 @@ pub fn verify_quiver_bundle(
     })
 }
 
+pub fn graph_from_quiver(quiver: &QuiverManifest) -> FletchGraph {
+    let mut nodes = Vec::new();
+    let mut edges = Vec::new();
+    let mut seen_nodes = BTreeSet::new();
+    let quiver_id = graph_node_id(&GraphNodeKind::Quiver, &quiver.quiver_id);
+    let mut quiver_metadata = BTreeMap::new();
+    quiver_metadata.insert("schema_version".to_string(), quiver.schema_version.clone());
+    quiver_metadata.insert("entry_count".to_string(), quiver.entries.len().to_string());
+    push_graph_node(
+        &mut nodes,
+        &mut seen_nodes,
+        GraphNode {
+            id: quiver_id.clone(),
+            kind: GraphNodeKind::Quiver,
+            label: quiver.quiver_id.clone(),
+            metadata: quiver_metadata,
+        },
+    );
+
+    for entry in &quiver.entries {
+        let fletch_id = graph_node_id(&GraphNodeKind::Fletch, &entry.dataset_id);
+        let ledger_id = graph_ledger_id(&entry.cache_key);
+        let mut fletch_metadata = BTreeMap::new();
+        fletch_metadata.insert("cache_key".to_string(), entry.cache_key.clone());
+        if let Some(version) = &entry.version {
+            fletch_metadata.insert("version".to_string(), version.clone());
+        }
+        push_graph_node(
+            &mut nodes,
+            &mut seen_nodes,
+            GraphNode {
+                id: fletch_id.clone(),
+                kind: GraphNodeKind::Fletch,
+                label: entry.dataset_id.clone(),
+                metadata: fletch_metadata,
+            },
+        );
+
+        let mut ledger_metadata = BTreeMap::new();
+        ledger_metadata.insert("relative_path".to_string(), entry.relative_path.clone());
+        ledger_metadata.insert("sha256".to_string(), entry.sha256.clone());
+        ledger_metadata.insert("bytes".to_string(), entry.bytes.to_string());
+        ledger_metadata.insert("verified".to_string(), entry.verified.to_string());
+        push_graph_node(
+            &mut nodes,
+            &mut seen_nodes,
+            GraphNode {
+                id: ledger_id.clone(),
+                kind: GraphNodeKind::LedgerEntry,
+                label: entry.relative_path.clone(),
+                metadata: ledger_metadata,
+            },
+        );
+
+        edges.push(GraphEdge {
+            from: quiver_id.clone(),
+            to: fletch_id.clone(),
+            kind: GraphEdgeKind::Contains,
+            label: Some("contains-member".to_string()),
+            metadata: BTreeMap::new(),
+        });
+        edges.push(GraphEdge {
+            from: ledger_id,
+            to: fletch_id,
+            kind: GraphEdgeKind::Documents,
+            label: None,
+            metadata: BTreeMap::new(),
+        });
+    }
+
+    FletchGraph {
+        schema_version: FLETCH_GRAPH_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        nodes,
+        edges,
+    }
+}
+
 pub fn graph_from_manifest(manifest: &CacheManifest) -> FletchGraph {
     graph_from_manifest_with_node_kinds(manifest, &BTreeMap::new(), Vec::new(), Vec::new())
 }
@@ -3827,6 +3905,42 @@ mod tests {
         assert_eq!(report.verified_count, 0);
         assert_eq!(report.missing_count, 1);
         assert_eq!(report.entries[0].object_status, CacheObjectStatus::Missing);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn graph_from_quiver_exports_member_edges() {
+        let root = unique_temp_dir("quiver-graph");
+        let source = root.join("source.txt");
+        let cache_root = root.join("cache");
+        std::fs::write(&source, b"quiver").unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:quiver:001",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
+        let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
+        let quiver = QuiverManifest {
+            schema_version: FLETCH_QUIVER_SCHEMA.to_string(),
+            generated_by: "test".to_string(),
+            quiver_id: "test:quiver".to_string(),
+            entries: vec![outcome.entry],
+        };
+
+        let graph = graph_from_quiver(&quiver);
+
+        assert_eq!(graph.schema_version, FLETCH_GRAPH_SCHEMA);
+        assert!(graph
+            .nodes
+            .iter()
+            .any(|node| node.kind == GraphNodeKind::Quiver && node.label == "test:quiver"));
+        assert!(graph
+            .edges
+            .iter()
+            .any(|edge| edge.kind == GraphEdgeKind::Contains
+                && edge.label.as_deref() == Some("contains-member")));
 
         let _ = std::fs::remove_dir_all(root);
     }
