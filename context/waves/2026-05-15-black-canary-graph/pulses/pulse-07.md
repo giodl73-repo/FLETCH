@@ -38,6 +38,8 @@ without requiring a separate web app.
 - Added search result snippets so rows explain the matching ID, tag, metadata
   value, or source URL.
 - Added relevance scores and default relevance sorting for text searches.
+- Added built-in query presets for MIT textbooks, Knowledge Systems repo
+  registries, source-corpus packs, and STORM hazards.
 
 ## Validation
 

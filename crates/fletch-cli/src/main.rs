@@ -1795,6 +1795,7 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
             }),
         ),
         "/api/facets" => write_json_response(&mut stream, &registry_web_facets(index)),
+        "/api/presets" => write_json_response(&mut stream, &registry_web_presets()),
         "/api/search" => {
             let query = parse_query(query);
             let tags = query.get("tag").cloned().unwrap_or_default();
@@ -1969,6 +1970,47 @@ fn registry_web_facets(index: &RegistryIndexReport) -> serde_json::Value {
             .map(|(key, values)| (key, top_facets(values, 40)))
             .collect::<BTreeMap<_, _>>()
     })
+}
+
+fn registry_web_presets() -> serde_json::Value {
+    serde_json::json!([
+        {
+            "id": "mit-textbooks",
+            "label": "MIT textbooks",
+            "text": "MIT textbook",
+            "tag": "known-asset",
+            "metadata": "fetch_policy=metadata_only",
+            "sort": "relevance",
+            "direction": "desc"
+        },
+        {
+            "id": "repo-registries",
+            "label": "Knowledge repo registries",
+            "text": "",
+            "tag": "repo-registry",
+            "metadata": "fetch_policy=metadata_only",
+            "sort": "owner_repo",
+            "direction": "asc"
+        },
+        {
+            "id": "source-corpus",
+            "label": "Source corpus packs",
+            "text": "source corpus pack",
+            "tag": "",
+            "metadata": "",
+            "sort": "relevance",
+            "direction": "desc"
+        },
+        {
+            "id": "storm-hazards",
+            "label": "STORM hazards",
+            "text": "storm hazard",
+            "tag": "storm",
+            "metadata": "owner_repo=STORM",
+            "sort": "relevance",
+            "direction": "desc"
+        }
+    ])
 }
 
 fn increment_facet(counts: &mut BTreeMap<String, usize>, value: &str) {
@@ -2361,6 +2403,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     <div class="layout">
       <nav>
         <h2>Facets</h2>
+        <h3>Presets</h3>
+        <div id="presets" class="card meta">Loading presets...</div>
         <div id="facets" class="card meta">Loading facets...</div>
       </nav>
       <section>
@@ -2408,6 +2452,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const detail = document.querySelector('#detail');
     const count = document.querySelector('#result-count');
     const facets = document.querySelector('#facets');
+    const presets = document.querySelector('#presets');
     const prevPage = document.querySelector('#prev-page');
     const nextPage = document.querySelector('#next-page');
     const pageSize = document.querySelector('#page-size');
@@ -2495,6 +2540,22 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       return `<h3>${esc(title)}</h3>${chips || '<div class="meta">No values</div>'}`;
     }
 
+    function applyPreset(preset) {
+      document.querySelector('#text').value = preset.text || '';
+      document.querySelector('#tag').value = preset.tag || '';
+      document.querySelector('#metadata').value = preset.metadata || '';
+      sort.value = preset.sort || 'relevance';
+      direction.value = preset.direction || 'desc';
+      runSearch(undefined, 0);
+    }
+
+    function presetChips(items) {
+      return (items || []).map((preset, index) => {
+        window.registryWebPresets[index] = preset;
+        return `<span class="facet" onclick="applyPreset(window.registryWebPresets[${index}])">${esc(preset.label)}</span>`;
+      }).join('') || '<div class="meta">No presets</div>';
+    }
+
     function setControlFromQuery(params, key, selector) {
       const value = params.get(key);
       if (value !== null) {
@@ -2580,6 +2641,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         facetGroup('Fetch policy', 'fetch_policy', data.metadata.fetch_policy),
         facetGroup('Tags', 'tag', data.tags)
       ].join('');
+    });
+    window.registryWebPresets = [];
+    fetch('/api/presets').then(r => r.json()).then(data => {
+      presets.innerHTML = presetChips(data);
     });
     document.querySelector('#search').addEventListener('submit', event => runSearch(event, 0));
     prevPage.addEventListener('click', () => runSearch(undefined, currentOffset - Number(pageSize.value || '50')));

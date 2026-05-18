@@ -44,6 +44,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("Owner repo"));
     assert!(html.contains("Copy link"));
     assert!(html.contains("Relevance"));
+    assert!(html.contains("Loading presets"));
 
     let linked_html = http_get(
         address,
@@ -58,6 +59,10 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(facets.contains("\"owner_repo\""));
     assert!(facets.contains("\"STORM\""));
     assert!(facets.contains("\"storm\""));
+
+    let presets = http_get(address, "/api/presets")?;
+    assert!(presets.contains("\"mit-textbooks\""));
+    assert!(presets.contains("\"repo-registries\""));
 
     let search = http_get(address, "/api/search?text=storm%20seed&limit=10")?;
     assert!(search.contains("\"matched_row_count\": 1"));
