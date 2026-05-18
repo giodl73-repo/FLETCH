@@ -62,6 +62,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(search.contains("\"matched_row_count\": 1"));
     assert!(search.contains("\"storm.foundation.seed-storm\""));
     assert!(search.contains("\"weather\""));
+    assert!(search.contains("\"snippets\""));
+    assert!(search.contains("fletch_id: storm.foundation.seed-storm"));
 
     let paged = http_get(address, "/api/search?offset=1&limit=1")?;
     assert!(paged.contains("\"matched_row_count\": 2"));

@@ -1828,7 +1828,10 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                 sort.map(String::as_str),
                 direction.map(String::as_str),
             );
-            write_json_response(&mut stream, &report)
+            write_json_response(
+                &mut stream,
+                &registry_web_search_response(&report, text.as_deref())?,
+            )
         }
         "/api/row" => {
             let query = parse_query(query);
@@ -2062,6 +2065,80 @@ fn metadata_sort_order(
     }
 }
 
+fn registry_web_search_response(
+    report: &fletch_core::RegistrySearchReport,
+    text: Option<&str>,
+) -> Result<serde_json::Value> {
+    let mut value = serde_json::to_value(report)?;
+    if let serde_json::Value::Object(object) = &mut value {
+        object.insert(
+            "snippets".to_string(),
+            serde_json::Value::Array(
+                report
+                    .rows
+                    .iter()
+                    .map(|row| registry_web_row_snippet(row, text))
+                    .collect(),
+            ),
+        );
+    }
+    Ok(value)
+}
+
+fn registry_web_row_snippet(row: &RegistryIndexRow, text: Option<&str>) -> serde_json::Value {
+    let terms = text
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(|term| term.to_lowercase())
+        .collect::<Vec<_>>();
+    let fields = registry_web_snippet_fields(row);
+    let selected = fields
+        .iter()
+        .find(|(_, value)| registry_web_snippet_matches(value, &terms))
+        .or_else(|| fields.first());
+    let (field, value) = selected
+        .map(|(field, value)| (field.as_str(), value.as_str()))
+        .unwrap_or(("fletch_id", row.fletch_id.as_str()));
+    let matched_terms = terms
+        .iter()
+        .filter(|term| value.to_lowercase().contains(term.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "field": field,
+        "text": format!("{field}: {value}"),
+        "matched_terms": matched_terms
+    })
+}
+
+fn registry_web_snippet_fields(row: &RegistryIndexRow) -> Vec<(String, String)> {
+    let mut fields = vec![
+        ("fletch_id".to_string(), row.fletch_id.clone()),
+        ("registry_id".to_string(), row.registry_id.clone()),
+        ("node_kind".to_string(), format!("{:?}", row.node_kind)),
+    ];
+    fields.extend(row.tags.iter().map(|tag| ("tag".to_string(), tag.clone())));
+    fields.extend(
+        row.metadata
+            .iter()
+            .map(|(key, value)| (format!("metadata.{key}"), value.clone())),
+    );
+    fields.extend(
+        row.source_urls
+            .iter()
+            .map(|url| ("source_url".to_string(), url.clone())),
+    );
+    fields
+}
+
+fn registry_web_snippet_matches(value: &str, terms: &[String]) -> bool {
+    if terms.is_empty() {
+        return true;
+    }
+    let lower = value.to_lowercase();
+    terms.iter().any(|term| lower.contains(term))
+}
+
 fn load_registry_source_preview(
     row: &RegistryIndexRow,
     source_index: usize,
@@ -2189,7 +2266,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     .card { background: #111827; border: 1px solid #334155; border-radius: .75rem; padding: .8rem; margin-bottom: .6rem; }
     .row { cursor: pointer; }
     .row:hover { border-color: #60a5fa; }
-    .meta, .tags, .sources { color: #94a3b8; font-size: .9rem; overflow-wrap: anywhere; }
+    .meta, .tags, .sources, .snippet { color: #94a3b8; font-size: .9rem; overflow-wrap: anywhere; }
+    .snippet { color: #dbeafe; margin-top: .35rem; }
     .tag, .facet { display: inline-block; margin: .15rem; padding: .15rem .4rem; border-radius: 999px; background: #1e293b; color: #bfdbfe; }
     .facet { cursor: pointer; border: 1px solid #334155; }
     .facet:hover { border-color: #60a5fa; }
@@ -2271,11 +2349,12 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
-    function rowCard(row) {
+    function rowCard(row, snippet) {
       const div = document.createElement('div');
       div.className = 'card row';
       div.innerHTML = `<strong>${esc(row.fletch_id)}</strong>
         <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)}</div>
+        <div class="snippet">${esc(snippet?.text || row.fletch_id)}</div>
         <div class="tags">${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
         <div class="sources">${(row.source_urls || []).map(url => `<div>${esc(url)}</div>`).join('')}</div>`;
       div.addEventListener('click', () => showDetail(row));
@@ -2410,7 +2489,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       count.textContent = `${matchedRowCount} matches (${first}-${last} shown)`;
       prevPage.disabled = currentOffset === 0;
       nextPage.disabled = currentOffset + report.rows.length >= matchedRowCount;
-      results.replaceChildren(...report.rows.map(rowCard));
+      results.replaceChildren(...report.rows.map((row, index) => rowCard(row, report.snippets?.[index])));
       if (report.rows[0]) {
         showDetail(report.rows[0]);
       } else {

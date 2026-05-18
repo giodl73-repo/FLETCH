@@ -35,6 +35,8 @@ without requiring a separate web app.
   kind, or node kind.
 - Added shareable query URLs and browser history state for search, filters,
   sorting, page size, and offset.
+- Added search result snippets so rows explain the matching ID, tag, metadata
+  value, or source URL.
 
 ## Validation
 
