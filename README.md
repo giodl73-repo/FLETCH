@@ -256,10 +256,14 @@ fletch registry index --follow --file .fletch\registries\mundus-known-assets-see
 fletch registry web --index .fletch\indexes\mundus-all.json
 ```
 
-Click **Load preview** beside a source URL to fetch bounded source data. For
-followed GitHub registry rows, FLETCH preserves the remote registry base URL so
-relative source paths such as `fixtures\seed-storm.json` can be previewed from
-raw GitHub without requiring that repo to be cloned locally.
+The left facet rail summarizes high-value sections of the index: owner repo,
+domain, asset kind, fetch policy, and tags. Click a facet chip to filter into
+that section. Click **Load preview** beside a source URL to fetch bounded source
+data. Source previews include line-numbered sections, previous/next line
+navigation, and a compact JSON outline when the loaded data is JSON. For followed
+GitHub registry rows, FLETCH preserves the remote registry base URL so relative
+source paths such as `fixtures\seed-storm.json` can be previewed from raw GitHub
+without requiring that repo to be cloned locally.
 
 `fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
 The initial generic tipper samples bounded bytes and reports JSON fields, JSON

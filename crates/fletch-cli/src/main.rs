@@ -1719,6 +1719,7 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                 "row_count": index.row_count
             }),
         ),
+        "/api/facets" => write_json_response(&mut stream, &registry_web_facets(index)),
         "/api/search" => {
             let query = parse_query(query);
             let tags = query.get("tag").cloned().unwrap_or_default();
@@ -1768,6 +1769,16 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                 .and_then(|values| values.first())
                 .and_then(|value| value.parse::<usize>().ok())
                 .unwrap_or(0);
+            let line_start = query
+                .get("line_start")
+                .and_then(|values| values.first())
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(1);
+            let line_count = query
+                .get("line_count")
+                .and_then(|values| values.first())
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(80);
             let row = registry_id
                 .zip(fletch_id)
                 .and_then(|(registry_id, fletch_id)| {
@@ -1776,7 +1787,7 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
             if let Some(row) = row {
                 write_json_response(
                     &mut stream,
-                    &load_registry_source_preview(row, source_index)?,
+                    &load_registry_source_preview(row, source_index, line_start, line_count)?,
                 )
             } else {
                 write_http_response(&mut stream, "404 Not Found", "text/plain", "row not found")
@@ -1842,9 +1853,59 @@ fn find_registry_index_row<'a>(
         .find(|row| row.registry_id == registry_id && row.fletch_id == fletch_id)
 }
 
+fn registry_web_facets(index: &RegistryIndexReport) -> serde_json::Value {
+    let mut registries = BTreeMap::new();
+    let mut tags = BTreeMap::new();
+    let mut metadata = BTreeMap::from([
+        ("owner_repo".to_string(), BTreeMap::new()),
+        ("domain".to_string(), BTreeMap::new()),
+        ("asset_kind".to_string(), BTreeMap::new()),
+        ("fetch_policy".to_string(), BTreeMap::new()),
+    ]);
+    for row in &index.rows {
+        increment_facet(&mut registries, &row.registry_id);
+        for tag in &row.tags {
+            increment_facet(&mut tags, tag);
+        }
+        for (key, values) in &mut metadata {
+            if let Some(value) = row.metadata.get(key) {
+                increment_facet(values, value);
+            }
+        }
+    }
+    serde_json::json!({
+        "registries": top_facets(registries, 40),
+        "tags": top_facets(tags, 80),
+        "metadata": metadata
+            .into_iter()
+            .map(|(key, values)| (key, top_facets(values, 40)))
+            .collect::<BTreeMap<_, _>>()
+    })
+}
+
+fn increment_facet(counts: &mut BTreeMap<String, usize>, value: &str) {
+    *counts.entry(value.to_string()).or_insert(0) += 1;
+}
+
+fn top_facets(counts: BTreeMap<String, usize>, limit: usize) -> Vec<serde_json::Value> {
+    let mut values = counts.into_iter().collect::<Vec<_>>();
+    values.sort_by(|(left_value, left_count), (right_value, right_count)| {
+        right_count
+            .cmp(left_count)
+            .then_with(|| left_value.cmp(right_value))
+    });
+    values
+        .into_iter()
+        .take(limit)
+        .map(|(value, count)| serde_json::json!({ "value": value, "count": count }))
+        .collect()
+}
+
 fn load_registry_source_preview(
     row: &RegistryIndexRow,
     source_index: usize,
+    line_start: usize,
+    line_count: usize,
 ) -> Result<serde_json::Value> {
     let Some(source_url) = row.source_urls.get(source_index) else {
         bail!("source index {source_index} is out of range");
@@ -1866,6 +1927,16 @@ fn load_registry_source_preview(
     let truncated = bytes.len() > limit;
     let preview_bytes = &bytes[..bytes.len().min(limit)];
     let text = String::from_utf8_lossy(preview_bytes).into_owned();
+    let lines = text.lines().collect::<Vec<_>>();
+    let total_line_count = lines.len();
+    let start = line_start.max(1);
+    let selected_lines = lines
+        .iter()
+        .enumerate()
+        .skip(start.saturating_sub(1))
+        .take(line_count.min(500))
+        .map(|(index, line)| serde_json::json!({ "number": index + 1, "text": line }))
+        .collect::<Vec<_>>();
     Ok(serde_json::json!({
         "registry_id": row.registry_id,
         "fletch_id": row.fletch_id,
@@ -1875,8 +1946,32 @@ fn load_registry_source_preview(
         "byte_count": bytes.len(),
         "preview_byte_count": preview_bytes.len(),
         "truncated": truncated,
+        "total_line_count": total_line_count,
+        "line_start": start,
+        "line_count": selected_lines.len(),
+        "lines": selected_lines,
+        "json_outline": json_outline(&text),
         "text": text
     }))
+}
+
+fn json_outline(text: &str) -> Option<serde_json::Value> {
+    let value = serde_json::from_str::<serde_json::Value>(text).ok()?;
+    Some(match value {
+        serde_json::Value::Object(object) => serde_json::json!({
+            "kind": "object",
+            "keys": object.keys().take(80).cloned().collect::<Vec<_>>(),
+            "key_count": object.len()
+        }),
+        serde_json::Value::Array(array) => serde_json::json!({
+            "kind": "array",
+            "length": array.len()
+        }),
+        serde_json::Value::String(_) => serde_json::json!({ "kind": "string" }),
+        serde_json::Value::Number(_) => serde_json::json!({ "kind": "number" }),
+        serde_json::Value::Bool(_) => serde_json::json!({ "kind": "bool" }),
+        serde_json::Value::Null => serde_json::json!({ "kind": "null" }),
+    })
 }
 
 fn resolve_registry_source_url(row: &RegistryIndexRow, source_url: &str) -> String {
@@ -1927,12 +2022,14 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     input, button { border: 1px solid #475569; border-radius: .5rem; padding: .6rem; background: #020617; color: #e2e8f0; }
     button { cursor: pointer; background: #1d4ed8; border-color: #2563eb; }
     .search { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: .5rem; }
-    .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 480px); gap: 1rem; margin-top: 1rem; }
+    .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr) minmax(320px, 480px); gap: 1rem; margin-top: 1rem; }
     .card { background: #111827; border: 1px solid #334155; border-radius: .75rem; padding: .8rem; margin-bottom: .6rem; }
     .row { cursor: pointer; }
     .row:hover { border-color: #60a5fa; }
     .meta, .tags, .sources { color: #94a3b8; font-size: .9rem; overflow-wrap: anywhere; }
-    .tag { display: inline-block; margin: .15rem; padding: .15rem .4rem; border-radius: 999px; background: #1e293b; color: #bfdbfe; }
+    .tag, .facet { display: inline-block; margin: .15rem; padding: .15rem .4rem; border-radius: 999px; background: #1e293b; color: #bfdbfe; }
+    .facet { cursor: pointer; border: 1px solid #334155; }
+    .facet:hover { border-color: #60a5fa; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #020617; border-radius: .5rem; padding: .75rem; }
     a { color: #93c5fd; }
   </style>
@@ -1950,6 +2047,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       <button type="submit">Search</button>
     </form>
     <div class="layout">
+      <nav>
+        <h2>Facets</h2>
+        <div id="facets" class="card meta">Loading facets...</div>
+      </nav>
       <section>
         <div id="result-count" class="meta"></div>
         <div id="results"></div>
@@ -1964,6 +2065,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const results = document.querySelector('#results');
     const detail = document.querySelector('#detail');
     const count = document.querySelector('#result-count');
+    const facets = document.querySelector('#facets');
 
     function esc(value) {
       return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1985,25 +2087,61 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         const link = url.startsWith('http') ? `<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(url)}</a>` : esc(url);
         return `<li>${link} <button type="button" onclick="loadSource('${esc(row.registry_id)}','${esc(row.fletch_id)}',${index})">Load preview</button></li>`;
       }).join('');
+      detail.dataset.registryId = row.registry_id;
+      detail.dataset.fletchId = row.fletch_id;
+      detail.dataset.sourceIndex = '0';
       detail.innerHTML = `<h3>${esc(row.fletch_id)}</h3>
         <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)}</div>
         <h4>Sources</h4><ul>${urls}</ul>
         <h4>Tags</h4><div>${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
         <h4>Metadata</h4><pre>${esc(JSON.stringify(row.metadata || {}, null, 2))}</pre>
-        <h4>Loaded source preview</h4><pre id="source-preview">Click "Load preview" beside a source URL to fetch bounded source data.</pre>`;
+        <h4>Loaded source preview</h4>
+        <div id="source-controls" class="meta"></div>
+        <pre id="source-preview">Click "Load preview" beside a source URL to fetch bounded source data.</pre>`;
     }
 
-    async function loadSource(registryId, fletchId, sourceIndex) {
+    async function loadSource(registryId, fletchId, sourceIndex, lineStart = 1) {
       const preview = document.querySelector('#source-preview');
+      const controls = document.querySelector('#source-controls');
+      detail.dataset.registryId = registryId;
+      detail.dataset.fletchId = fletchId;
+      detail.dataset.sourceIndex = String(sourceIndex);
       preview.textContent = 'Loading source preview...';
-      const params = new URLSearchParams({ registry_id: registryId, fletch_id: fletchId, source: String(sourceIndex) });
+      const params = new URLSearchParams({ registry_id: registryId, fletch_id: fletchId, source: String(sourceIndex), line_start: String(lineStart), line_count: '80' });
       const response = await fetch(`/api/source?${params}`);
       if (!response.ok) {
         preview.textContent = `Could not load source preview: ${response.status} ${response.statusText}`;
         return;
       }
       const data = await response.json();
-      preview.textContent = `Resolved: ${data.resolved_url}\nBytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''}\n\n${data.text}`;
+      const next = data.line_start + data.line_count;
+      const prev = Math.max(1, data.line_start - 80);
+      const outline = data.json_outline ? `\nJSON outline: ${JSON.stringify(data.json_outline)}` : '';
+      controls.innerHTML = `Resolved: <a href="${esc(data.resolved_url)}" target="_blank" rel="noreferrer">${esc(data.resolved_url)}</a><br>
+        Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${outline}<br>
+        <button type="button" onclick="loadCurrentSource(${prev})">Previous lines</button>
+        <button type="button" onclick="loadCurrentSource(${next})">Next lines</button>`;
+      preview.textContent = data.lines.map(line => `${String(line.number).padStart(5, ' ')}  ${line.text}`).join('\n');
+    }
+
+    function loadCurrentSource(lineStart) {
+      loadSource(detail.dataset.registryId, detail.dataset.fletchId, Number(detail.dataset.sourceIndex || '0'), lineStart);
+    }
+
+    function applyFacet(kind, value) {
+      if (kind === 'tag') {
+        document.querySelector('#tag').value = value;
+      } else {
+        const metadata = document.querySelector('#metadata');
+        const filter = `${kind}=${value}`;
+        metadata.value = metadata.value ? `${metadata.value},${filter}` : filter;
+      }
+      runSearch();
+    }
+
+    function facetGroup(title, kind, items) {
+      const chips = (items || []).slice(0, 20).map(item => `<span class="facet" onclick="applyFacet('${esc(kind)}','${esc(item.value)}')">${esc(item.value)} (${item.count})</span>`).join('');
+      return `<h3>${esc(title)}</h3>${chips || '<div class="meta">No values</div>'}`;
     }
 
     async function runSearch(event) {
@@ -2025,6 +2163,15 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
 
     fetch('/api/summary').then(r => r.json()).then(summary => {
       document.querySelector('#summary').textContent = `${summary.registry_count} registries · ${summary.row_count} rows · ${summary.fletch_count} unique fletches`;
+    });
+    fetch('/api/facets').then(r => r.json()).then(data => {
+      facets.innerHTML = [
+        facetGroup('Owner repos', 'owner_repo', data.metadata.owner_repo),
+        facetGroup('Domains', 'domain', data.metadata.domain),
+        facetGroup('Asset kinds', 'asset_kind', data.metadata.asset_kind),
+        facetGroup('Fetch policy', 'fetch_policy', data.metadata.fetch_policy),
+        facetGroup('Tags', 'tag', data.tags)
+      ].join('');
     });
     document.querySelector('#search').addEventListener('submit', runSearch);
     runSearch();

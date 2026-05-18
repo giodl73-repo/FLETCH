@@ -44,6 +44,11 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     let summary = http_get(address, "/api/summary")?;
     assert!(summary.contains("\"row_count\": 2"));
 
+    let facets = http_get(address, "/api/facets")?;
+    assert!(facets.contains("\"owner_repo\""));
+    assert!(facets.contains("\"STORM\""));
+    assert!(facets.contains("\"storm\""));
+
     let search = http_get(address, "/api/search?text=storm%20seed&limit=10")?;
     assert!(search.contains("\"matched_row_count\": 1"));
     assert!(search.contains("\"storm.foundation.seed-storm\""));
@@ -58,10 +63,12 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
 
     let source = http_get(
         address,
-        "/api/source?registry_id=storm-foundation-assets&fletch_id=storm.foundation.seed-storm&source=0",
+        "/api/source?registry_id=storm-foundation-assets&fletch_id=storm.foundation.seed-storm&source=0&line_start=1&line_count=1",
     )?;
     assert!(source.contains("storm fixture payload"));
     assert!(source.contains("\"truncated\": false"));
+    assert!(source.contains("\"total_line_count\""));
+    assert!(source.contains("\"json_outline\""));
 
     drop(server);
     fs::remove_file(index_path)?;
