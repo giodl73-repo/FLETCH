@@ -37,6 +37,7 @@ without requiring a separate web app.
   sorting, page size, and offset.
 - Added search result snippets so rows explain the matching ID, tag, metadata
   value, or source URL.
+- Added relevance scores and default relevance sorting for text searches.
 
 ## Validation
 

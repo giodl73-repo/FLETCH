@@ -2000,9 +2000,9 @@ fn search_registry_web_index(
     direction: Option<&str>,
 ) -> fletch_core::RegistrySearchReport {
     let mut report = search_registry_index(index, tags, metadata_filters, text, 0, None);
-    let sort = sort.unwrap_or("index");
-    let descending = direction == Some("desc");
-    sort_registry_web_rows(&mut report.rows, sort, descending);
+    let sort = sort.unwrap_or("relevance");
+    let descending = direction.map_or(sort == "relevance", |direction| direction == "desc");
+    sort_registry_web_rows(&mut report.rows, sort, descending, text);
     if sort != "index" {
         report.query.insert("sort".to_string(), sort.to_string());
     }
@@ -2021,8 +2021,31 @@ fn search_registry_web_index(
     report
 }
 
-fn sort_registry_web_rows(rows: &mut [RegistryIndexRow], sort: &str, descending: bool) {
+fn sort_registry_web_rows(
+    rows: &mut [RegistryIndexRow],
+    sort: &str,
+    descending: bool,
+    text: Option<&str>,
+) {
     match sort {
+        "relevance" => {
+            let terms = registry_web_search_terms(text);
+            if !terms.is_empty() {
+                rows.sort_by(|left, right| {
+                    let left_score = registry_web_relevance_score(left, &terms);
+                    let right_score = registry_web_relevance_score(right, &terms);
+                    if descending {
+                        right_score
+                            .cmp(&left_score)
+                            .then_with(|| left.fletch_id.cmp(&right.fletch_id))
+                    } else {
+                        left_score
+                            .cmp(&right_score)
+                            .then_with(|| left.fletch_id.cmp(&right.fletch_id))
+                    }
+                });
+            }
+        }
         "fletch_id" => rows.sort_by(|left, right| left.fletch_id.cmp(&right.fletch_id)),
         "registry_id" => rows.sort_by(|left, right| left.registry_id.cmp(&right.registry_id)),
         "owner_repo" => {
@@ -2041,7 +2064,7 @@ fn sort_registry_web_rows(rows: &mut [RegistryIndexRow], sort: &str, descending:
         }),
         _ => {}
     }
-    if descending && !matches!(sort, "owner_repo" | "domain" | "asset_kind") {
+    if descending && !matches!(sort, "relevance" | "owner_repo" | "domain" | "asset_kind") {
         rows.reverse();
     }
 }
@@ -2071,6 +2094,7 @@ fn registry_web_search_response(
 ) -> Result<serde_json::Value> {
     let mut value = serde_json::to_value(report)?;
     if let serde_json::Value::Object(object) = &mut value {
+        let terms = registry_web_search_terms(text);
         object.insert(
             "snippets".to_string(),
             serde_json::Value::Array(
@@ -2081,16 +2105,22 @@ fn registry_web_search_response(
                     .collect(),
             ),
         );
+        object.insert(
+            "scores".to_string(),
+            serde_json::Value::Array(
+                report
+                    .rows
+                    .iter()
+                    .map(|row| serde_json::json!(registry_web_relevance_score(row, &terms)))
+                    .collect(),
+            ),
+        );
     }
     Ok(value)
 }
 
 fn registry_web_row_snippet(row: &RegistryIndexRow, text: Option<&str>) -> serde_json::Value {
-    let terms = text
-        .unwrap_or_default()
-        .split_whitespace()
-        .map(|term| term.to_lowercase())
-        .collect::<Vec<_>>();
+    let terms = registry_web_search_terms(text);
     let fields = registry_web_snippet_fields(row);
     let selected = fields
         .iter()
@@ -2109,6 +2139,47 @@ fn registry_web_row_snippet(row: &RegistryIndexRow, text: Option<&str>) -> serde
         "text": format!("{field}: {value}"),
         "matched_terms": matched_terms
     })
+}
+
+fn registry_web_search_terms(text: Option<&str>) -> Vec<String> {
+    text.unwrap_or_default()
+        .split_whitespace()
+        .map(|term| term.to_lowercase())
+        .collect()
+}
+
+fn registry_web_relevance_score(row: &RegistryIndexRow, terms: &[String]) -> usize {
+    if terms.is_empty() {
+        return 0;
+    }
+    let fields = registry_web_snippet_fields(row);
+    fields
+        .iter()
+        .map(|(field, value)| {
+            let lower = value.to_lowercase();
+            terms
+                .iter()
+                .filter(|term| lower.contains(term.as_str()))
+                .map(|term| registry_web_relevance_weight(field, term, &lower))
+                .sum::<usize>()
+        })
+        .sum()
+}
+
+fn registry_web_relevance_weight(field: &str, term: &str, value: &str) -> usize {
+    let base = match field {
+        "fletch_id" => 12,
+        "tag" => 8,
+        field if field.starts_with("metadata.") => 6,
+        "registry_id" => 5,
+        "source_url" => 2,
+        _ => 1,
+    };
+    if value == term {
+        base * 3
+    } else {
+        base
+    }
 }
 
 fn registry_web_snippet_fields(row: &RegistryIndexRow) -> Vec<(String, String)> {
@@ -2298,7 +2369,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
           <button type="button" id="prev-page">Previous page</button>
           <label class="meta">Sort
             <select id="sort">
-              <option value="index" selected>Index order</option>
+              <option value="relevance" selected>Relevance</option>
+              <option value="index">Index order</option>
               <option value="fletch_id">Fletch ID</option>
               <option value="registry_id">Registry ID</option>
               <option value="owner_repo">Owner repo</option>
@@ -2309,8 +2381,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
           </label>
           <label class="meta">Direction
             <select id="direction">
-              <option value="asc" selected>Asc</option>
-              <option value="desc">Desc</option>
+              <option value="desc" selected>Desc</option>
+              <option value="asc">Asc</option>
             </select>
           </label>
           <label class="meta">Page size
@@ -2349,11 +2421,11 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
-    function rowCard(row, snippet) {
+    function rowCard(row, snippet, score) {
       const div = document.createElement('div');
       div.className = 'card row';
       div.innerHTML = `<strong>${esc(row.fletch_id)}</strong>
-        <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)}</div>
+        <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)} · score ${esc(score ?? 0)}</div>
         <div class="snippet">${esc(snippet?.text || row.fletch_id)}</div>
         <div class="tags">${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
         <div class="sources">${(row.source_urls || []).map(url => `<div>${esc(url)}</div>`).join('')}</div>`;
@@ -2489,7 +2561,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       count.textContent = `${matchedRowCount} matches (${first}-${last} shown)`;
       prevPage.disabled = currentOffset === 0;
       nextPage.disabled = currentOffset + report.rows.length >= matchedRowCount;
-      results.replaceChildren(...report.rows.map((row, index) => rowCard(row, report.snippets?.[index])));
+      results.replaceChildren(...report.rows.map((row, index) => rowCard(row, report.snippets?.[index], report.scores?.[index])));
       if (report.rows[0]) {
         showDetail(report.rows[0]);
       } else {

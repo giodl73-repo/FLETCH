@@ -43,6 +43,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("Next page"));
     assert!(html.contains("Owner repo"));
     assert!(html.contains("Copy link"));
+    assert!(html.contains("Relevance"));
 
     let linked_html = http_get(
         address,
@@ -63,6 +64,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(search.contains("\"storm.foundation.seed-storm\""));
     assert!(search.contains("\"weather\""));
     assert!(search.contains("\"snippets\""));
+    assert!(search.contains("\"scores\""));
     assert!(search.contains("fletch_id: storm.foundation.seed-storm"));
 
     let paged = http_get(address, "/api/search?offset=1&limit=1")?;
