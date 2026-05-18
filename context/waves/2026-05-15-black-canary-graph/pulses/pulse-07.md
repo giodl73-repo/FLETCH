@@ -9,6 +9,8 @@ without requiring a separate web app.
 ## Changes
 
 - Added `fletch registry web --index <index.json>`.
+- Added direct launch with `fletch registry web --file <registry.json> --follow`
+  so users do not need to build an index file first.
 - Serves a local HTML UI at `http://127.0.0.1:7878/`.
 - Added JSON endpoints:
   - `/api/summary`
@@ -16,6 +18,7 @@ without requiring a separate web app.
   - `/api/row?registry_id=...&fletch_id=...`
 - Added an integration test that launches the actual CLI server and verifies
   HTML, summary, search, and detail responses return registry data.
+- Added an integration test for direct `--file` launch.
 - Added multi-term text matching and comma-separated web tag/metadata filters.
 - Added `/api/facets` and UI facet chips for registry sections by owner repo,
   domain, asset kind, fetch policy, and tags.

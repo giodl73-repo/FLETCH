@@ -76,6 +76,41 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     Ok(())
 }
 
+#[test]
+fn registry_web_can_build_index_from_registry_files() -> Result<(), Box<dyn Error>> {
+    let registry_path = write_test_registry()?;
+    let port = available_port()?;
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let server = WebServer {
+        child: Command::new(env!("CARGO_BIN_EXE_fletch-cli"))
+            .args([
+                "registry",
+                "web",
+                "--file",
+                registry_path.to_str().expect("temp path should be UTF-8"),
+                "--port",
+                &port.to_string(),
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?,
+    };
+
+    wait_for_server(address)?;
+
+    let summary = http_get(address, "/api/summary")?;
+    assert!(summary.contains("\"registry_count\": 1"));
+    assert!(summary.contains("\"row_count\": 1"));
+
+    let search = http_get(address, "/api/search?text=direct%20registry&limit=10")?;
+    assert!(search.contains("\"matched_row_count\": 1"));
+    assert!(search.contains("\"test.direct.registry\""));
+
+    drop(server);
+    fs::remove_file(registry_path)?;
+    Ok(())
+}
+
 fn write_test_index() -> Result<(std::path::PathBuf, std::path::PathBuf), Box<dyn Error>> {
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let path = std::env::temp_dir().join(format!(
@@ -123,6 +158,33 @@ fn write_test_index() -> Result<(std::path::PathBuf, std::path::PathBuf), Box<dy
     });
     fs::write(&path, serde_json::to_string_pretty(&index)?)?;
     Ok((path, source_path))
+}
+
+fn write_test_registry() -> Result<std::path::PathBuf, Box<dyn Error>> {
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "fletch-registry-web-direct-{}-{stamp}.json",
+        std::process::id()
+    ));
+    let registry = serde_json::json!({
+        "schema_version": "fletch.registry.v1",
+        "generated_by": "test",
+        "registry_id": "direct-registry-test",
+        "fletches": [
+            {
+                "id": "test.direct.registry",
+                "node_kind": "document",
+                "shafts": [{"kind": "file", "url": "direct-registry.json"}],
+                "tags": ["direct", "registry"],
+                "metadata": {
+                    "owner_repo": "TEST",
+                    "asset_kind": "direct-registry"
+                }
+            }
+        ]
+    });
+    fs::write(&path, serde_json::to_string_pretty(&registry)?)?;
+    Ok(path)
 }
 
 fn available_port() -> Result<u16, Box<dyn Error>> {

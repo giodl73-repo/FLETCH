@@ -243,17 +243,17 @@ key=value`, and case-insensitive `--text`. FLETCH owns the generic index/search
 mechanics only; catalog repos such as FONTES or MUNDUS own the actual source
 registries, rights metadata, and curation policy.
 
-`fletch registry web --index <index.json>` serves a local browser UI at
-`http://127.0.0.1:7878/` for searching a `fletch.registry-index.v1` file,
-clicking result rows, and inspecting tags, metadata, and source URLs. Search text
-is multi-term: `storm seed` matches rows that contain both terms even when the
-exact phrase is not present. The UI also supports comma-separated tag filters and
-comma-separated metadata filters such as `owner_repo=STORM,asset_kind=seed-fixture`.
-Use it after building a followed MUNDUS index:
+`fletch registry web` serves a local browser UI at `http://127.0.0.1:7878/` for
+searching registry data, clicking result rows, and inspecting tags, metadata, and
+source URLs. It can read an existing `fletch.registry-index.v1` with `--index`,
+or build the index in memory from registry files with `--file` and `--follow`.
+Search text is multi-term: `storm seed` matches rows that contain both terms even
+when the exact phrase is not present. The UI also supports comma-separated tag
+filters and comma-separated metadata filters such as
+`owner_repo=STORM,asset_kind=seed-fixture`. For a one-command MUNDUS launch:
 
 ```powershell
-fletch registry index --follow --file .fletch\registries\mundus-known-assets-seed.json --file .fletch\registries\mundus-knowledge-systems-registries.json --output .fletch\indexes\mundus-all.json
-fletch registry web --index .fletch\indexes\mundus-all.json
+fletch registry web --follow --file .fletch\registries\mundus-known-assets-seed.json --file .fletch\registries\mundus-knowledge-systems-registries.json
 ```
 
 The left facet rail summarizes high-value sections of the index: owner repo,

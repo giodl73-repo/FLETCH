@@ -547,9 +547,15 @@ enum RegistryCommands {
     },
     /// Serve a local browser UI for searching a fletch.registry-index.v1 report.
     Web {
-        /// Path to a fletch.registry-index.v1 JSON file.
+        /// Path to an existing fletch.registry-index.v1 JSON file.
         #[arg(long)]
-        index: PathBuf,
+        index: Option<PathBuf>,
+        /// Path to a fletch.registry.v1 JSON file. Repeat for multiple registries.
+        #[arg(long = "file")]
+        files: Vec<PathBuf>,
+        /// Follow repo-registry bridge rows when building an in-memory index from --file inputs.
+        #[arg(long)]
+        follow: bool,
         /// Host interface to bind.
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
@@ -1136,8 +1142,14 @@ fn main() -> Result<()> {
                     output,
                 )?;
             }
-            RegistryCommands::Web { index, host, port } => {
-                let index = read_registry_index(&index)?;
+            RegistryCommands::Web {
+                index,
+                files,
+                follow,
+                host,
+                port,
+            } => {
+                let index = read_registry_web_index(index, files, follow)?;
                 serve_registry_web(index, host, port)?;
             }
             RegistryCommands::Graph { file, output } => {
@@ -1660,6 +1672,22 @@ fn github_url_parts(url: &str, marker: &str) -> Option<(String, String, String, 
 fn read_registry_index(path: &PathBuf) -> Result<RegistryIndexReport> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
+}
+
+fn read_registry_web_index(
+    index: Option<PathBuf>,
+    files: Vec<PathBuf>,
+    follow: bool,
+) -> Result<RegistryIndexReport> {
+    match (index, files.is_empty()) {
+        (Some(index), true) => read_registry_index(&index),
+        (None, false) => {
+            let registries = read_registry_inputs(&files, follow)?;
+            Ok(registry_index_from_registries(&registries))
+        }
+        (Some(_), false) => bail!("use either --index or --file inputs for registry web, not both"),
+        (None, true) => bail!("registry web requires --index or at least one --file input"),
+    }
 }
 
 fn serve_registry_web(index: RegistryIndexReport, host: String, port: u16) -> Result<()> {
