@@ -243,6 +243,16 @@ key=value`, and case-insensitive `--text`. FLETCH owns the generic index/search
 mechanics only; catalog repos such as FONTES or MUNDUS own the actual source
 registries, rights metadata, and curation policy.
 
+`fletch registry web --index <index.json>` serves a local browser UI at
+`http://127.0.0.1:7878/` for searching a `fletch.registry-index.v1` file,
+clicking result rows, and inspecting tags, metadata, and source URLs. Use it
+after building a followed MUNDUS index:
+
+```powershell
+fletch registry index --follow --file .fletch\registries\mundus-known-assets-seed.json --file .fletch\registries\mundus-knowledge-systems-registries.json --output .fletch\indexes\mundus-all.json
+fletch registry web --index .fletch\indexes\mundus-all.json
+```
+
 `fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
 The initial generic tipper samples bounded bytes and reports JSON fields, JSON
 arrays/values, text samples, or opaque byte samples without interpreting product

@@ -20,10 +20,12 @@ use fletch_core::{
     AliasState, CacheEntry, CacheIndexGatePolicy, CacheIndexReport, CacheManifest, CropIndexReport,
     FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap,
     PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary, RegistryIndexReport,
-    RollupPreview, SourceKind,
+    RegistryIndexRow, RollupPreview, SourceKind,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -542,6 +544,18 @@ enum RegistryCommands {
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
+    },
+    /// Serve a local browser UI for searching a fletch.registry-index.v1 report.
+    Web {
+        /// Path to a fletch.registry-index.v1 JSON file.
+        #[arg(long)]
+        index: PathBuf,
+        /// Host interface to bind.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Port to bind. Use 0 to ask the OS for an available port.
+        #[arg(long, default_value_t = 7878)]
+        port: u16,
     },
     /// Export graph JSON from a fletch.registry.v1 file.
     Graph {
@@ -1122,6 +1136,10 @@ fn main() -> Result<()> {
                     output,
                 )?;
             }
+            RegistryCommands::Web { index, host, port } => {
+                let index = read_registry_index(&index)?;
+                serve_registry_web(index, host, port)?;
+            }
             RegistryCommands::Graph { file, output } => {
                 let registry = read_registry(&file)?;
                 write_json(&graph_from_registry(&registry), output)?;
@@ -1427,16 +1445,20 @@ fn parse_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
 fn parse_key_value_filters(filters: Vec<String>) -> Result<Vec<(String, String)>> {
     let mut parsed = Vec::new();
     for filter in filters {
-        let Some((name, value)) = filter.split_once('=') else {
-            bail!("filter must be formatted as name=value: {filter}");
-        };
-        let name = name.trim();
-        if name.is_empty() {
-            bail!("filter name must not be empty: {filter}");
-        }
-        parsed.push((name.to_string(), value.to_string()));
+        parsed.push(parse_key_value_filter(&filter)?);
     }
     Ok(parsed)
+}
+
+fn parse_key_value_filter(filter: &str) -> Result<(String, String)> {
+    let Some((name, value)) = filter.split_once('=') else {
+        bail!("filter must be formatted as name=value: {filter}");
+    };
+    let name = name.trim();
+    if name.is_empty() {
+        bail!("filter name must not be empty: {filter}");
+    }
+    Ok((name.to_string(), value.to_string()))
 }
 
 fn read_manifest(path: &PathBuf) -> Result<CacheManifest> {
@@ -1608,6 +1630,286 @@ fn read_registry_index(path: &PathBuf) -> Result<RegistryIndexReport> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }
+
+fn serve_registry_web(index: RegistryIndexReport, host: String, port: u16) -> Result<()> {
+    let listener = TcpListener::bind((host.as_str(), port))?;
+    let address = listener.local_addr()?;
+    eprintln!("FLETCH registry web listening at http://{address}/");
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                if let Err(error) = handle_registry_web_request(stream, &index) {
+                    eprintln!("FLETCH registry web request failed: {error:#}");
+                }
+            }
+            Err(error) => eprintln!("FLETCH registry web connection failed: {error}"),
+        }
+    }
+    Ok(())
+}
+
+fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexReport) -> Result<()> {
+    let mut buffer = [0; 8192];
+    let bytes_read = stream.read(&mut buffer)?;
+    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+    let Some(request_line) = request.lines().next() else {
+        write_http_response(
+            &mut stream,
+            "400 Bad Request",
+            "text/plain",
+            "missing request",
+        )?;
+        return Ok(());
+    };
+    let parts = request_line.split_whitespace().collect::<Vec<_>>();
+    if parts.len() < 2 || parts[0] != "GET" {
+        write_http_response(
+            &mut stream,
+            "405 Method Not Allowed",
+            "text/plain",
+            "only GET is supported",
+        )?;
+        return Ok(());
+    }
+    let (path, query) = split_path_query(parts[1]);
+    match path {
+        "/" | "/index.html" => write_http_response(
+            &mut stream,
+            "200 OK",
+            "text/html; charset=utf-8",
+            REGISTRY_WEB_HTML,
+        ),
+        "/api/summary" => write_json_response(
+            &mut stream,
+            &serde_json::json!({
+                "schema_version": index.schema_version,
+                "registry_count": index.registry_count,
+                "fletch_count": index.fletch_count,
+                "row_count": index.row_count
+            }),
+        ),
+        "/api/search" => {
+            let query = parse_query(query);
+            let tags = query.get("tag").cloned().unwrap_or_default();
+            let metadata = query
+                .get("metadata")
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|filter| parse_key_value_filter(&filter))
+                .collect::<Result<Vec<_>>>()?;
+            let text = query.get("text").and_then(|values| values.first()).cloned();
+            let offset = query
+                .get("offset")
+                .and_then(|values| values.first())
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(0);
+            let limit = query
+                .get("limit")
+                .and_then(|values| values.first())
+                .and_then(|value| value.parse::<usize>().ok())
+                .or(Some(50));
+            let report =
+                search_registry_index(index, &tags, &metadata, text.as_deref(), offset, limit);
+            write_json_response(&mut stream, &report)
+        }
+        "/api/row" => {
+            let query = parse_query(query);
+            let registry_id = query.get("registry_id").and_then(|values| values.first());
+            let fletch_id = query.get("fletch_id").and_then(|values| values.first());
+            let row = registry_id
+                .zip(fletch_id)
+                .and_then(|(registry_id, fletch_id)| {
+                    find_registry_index_row(index, registry_id, fletch_id)
+                });
+            if let Some(row) = row {
+                write_json_response(&mut stream, row)
+            } else {
+                write_http_response(&mut stream, "404 Not Found", "text/plain", "row not found")
+            }
+        }
+        _ => write_http_response(&mut stream, "404 Not Found", "text/plain", "not found"),
+    }
+}
+
+fn split_path_query(target: &str) -> (&str, &str) {
+    target.split_once('?').unwrap_or((target, ""))
+}
+
+fn parse_query(query: &str) -> BTreeMap<String, Vec<String>> {
+    let mut parsed = BTreeMap::new();
+    for part in query.split('&').filter(|part| !part.is_empty()) {
+        let (key, value) = part.split_once('=').unwrap_or((part, ""));
+        parsed
+            .entry(url_decode(key))
+            .or_insert_with(Vec::new)
+            .push(url_decode(value));
+    }
+    parsed
+}
+
+fn url_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            b'%' if index + 2 < bytes.len() => {
+                let hex = &value[index + 1..index + 3];
+                if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                    decoded.push(byte);
+                    index += 3;
+                } else {
+                    decoded.push(bytes[index]);
+                    index += 1;
+                }
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+fn find_registry_index_row<'a>(
+    index: &'a RegistryIndexReport,
+    registry_id: &str,
+    fletch_id: &str,
+) -> Option<&'a RegistryIndexRow> {
+    index
+        .rows
+        .iter()
+        .find(|row| row.registry_id == registry_id && row.fletch_id == fletch_id)
+}
+
+fn write_json_response<T: serde::Serialize + ?Sized>(
+    stream: &mut TcpStream,
+    value: &T,
+) -> Result<()> {
+    let body = serde_json::to_string_pretty(value)?;
+    write_http_response(stream, "200 OK", "application/json; charset=utf-8", &body)
+}
+
+fn write_http_response(
+    stream: &mut TcpStream,
+    status: &str,
+    content_type: &str,
+    body: &str,
+) -> Result<()> {
+    write!(
+        stream,
+        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )?;
+    Ok(())
+}
+
+const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FLETCH Registry Search</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    header, main { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+    input, button { border: 1px solid #475569; border-radius: .5rem; padding: .6rem; background: #020617; color: #e2e8f0; }
+    button { cursor: pointer; background: #1d4ed8; border-color: #2563eb; }
+    .search { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: .5rem; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 480px); gap: 1rem; margin-top: 1rem; }
+    .card { background: #111827; border: 1px solid #334155; border-radius: .75rem; padding: .8rem; margin-bottom: .6rem; }
+    .row { cursor: pointer; }
+    .row:hover { border-color: #60a5fa; }
+    .meta, .tags, .sources { color: #94a3b8; font-size: .9rem; overflow-wrap: anywhere; }
+    .tag { display: inline-block; margin: .15rem; padding: .15rem .4rem; border-radius: 999px; background: #1e293b; color: #bfdbfe; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #020617; border-radius: .5rem; padding: .75rem; }
+    a { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FLETCH Registry Search</h1>
+    <div id="summary" class="meta">Loading index summary...</div>
+  </header>
+  <main>
+    <form id="search" class="search">
+      <input id="text" name="text" placeholder="Text search: storm, MIT, route, source..." autofocus />
+      <input id="tag" name="tag" placeholder="Tag filter, optional" />
+      <input id="metadata" name="metadata" placeholder="Metadata key=value, optional" />
+      <button type="submit">Search</button>
+    </form>
+    <div class="layout">
+      <section>
+        <div id="result-count" class="meta"></div>
+        <div id="results"></div>
+      </section>
+      <aside>
+        <h2>Detail</h2>
+        <div id="detail" class="card meta">Select a row to inspect tags, metadata, and source URLs.</div>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const results = document.querySelector('#results');
+    const detail = document.querySelector('#detail');
+    const count = document.querySelector('#result-count');
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function rowCard(row) {
+      const div = document.createElement('div');
+      div.className = 'card row';
+      div.innerHTML = `<strong>${esc(row.fletch_id)}</strong>
+        <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)}</div>
+        <div class="tags">${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
+        <div class="sources">${(row.source_urls || []).map(url => `<div>${esc(url)}</div>`).join('')}</div>`;
+      div.addEventListener('click', () => showDetail(row));
+      return div;
+    }
+
+    function showDetail(row) {
+      const urls = (row.source_urls || []).map(url => url.startsWith('http') ? `<li><a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(url)}</a></li>` : `<li>${esc(url)}</li>`).join('');
+      detail.innerHTML = `<h3>${esc(row.fletch_id)}</h3>
+        <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)}</div>
+        <h4>Sources</h4><ul>${urls}</ul>
+        <h4>Tags</h4><div>${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
+        <h4>Metadata</h4><pre>${esc(JSON.stringify(row.metadata || {}, null, 2))}</pre>`;
+    }
+
+    async function runSearch(event) {
+      event?.preventDefault();
+      const params = new URLSearchParams();
+      const text = document.querySelector('#text').value.trim();
+      const tag = document.querySelector('#tag').value.trim();
+      const metadata = document.querySelector('#metadata').value.trim();
+      if (text) params.set('text', text);
+      if (tag) params.append('tag', tag);
+      if (metadata) params.append('metadata', metadata);
+      params.set('limit', '50');
+      const response = await fetch(`/api/search?${params}`);
+      const report = await response.json();
+      count.textContent = `${report.matched_row_count} matches (${report.rows.length} shown)`;
+      results.replaceChildren(...report.rows.map(rowCard));
+      if (report.rows[0]) showDetail(report.rows[0]);
+    }
+
+    fetch('/api/summary').then(r => r.json()).then(summary => {
+      document.querySelector('#summary').textContent = `${summary.registry_count} registries · ${summary.row_count} rows · ${summary.fletch_count} unique fletches`;
+    });
+    document.querySelector('#search').addEventListener('submit', runSearch);
+    runSearch();
+  </script>
+</body>
+</html>
+"#;
 
 fn expected_dataset_ids_from_inputs(
     explicit_ids: Vec<String>,
