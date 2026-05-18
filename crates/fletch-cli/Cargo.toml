@@ -9,5 +9,6 @@ license.workspace = true
 anyhow = { workspace = true }
 clap = { workspace = true }
 fletch-core = { path = "../fletch-core" }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

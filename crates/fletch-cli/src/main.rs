@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fletch_core::{
     active_partition_set, adapter_handoff_report, adapter_sources_from_registry,
@@ -512,6 +512,9 @@ enum RegistryCommands {
         /// Path to a fletch.registry.v1 JSON file. Repeat for multiple registries.
         #[arg(long = "file", required = true)]
         files: Vec<PathBuf>,
+        /// Follow repo-registry bridge rows to remote or local registry JSON files.
+        #[arg(long)]
+        follow: bool,
         /// Optional JSON output path. Defaults to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -1088,11 +1091,12 @@ fn main() -> Result<()> {
             }
         },
         Commands::Registry { command } => match command {
-            RegistryCommands::Index { files, output } => {
-                let registries = files
-                    .iter()
-                    .map(read_registry)
-                    .collect::<Result<Vec<_>>>()?;
+            RegistryCommands::Index {
+                files,
+                follow,
+                output,
+            } => {
+                let registries = read_registry_inputs(&files, follow)?;
                 write_json(&registry_index_from_registries(&registries), output)?;
             }
             RegistryCommands::Search {
@@ -1447,6 +1451,157 @@ fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
 fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
+}
+
+fn read_registry_inputs(files: &[PathBuf], follow: bool) -> Result<Vec<FletchRegistry>> {
+    let mut registries = files
+        .iter()
+        .map(read_registry)
+        .collect::<Result<Vec<_>>>()?;
+    if follow {
+        let followed = follow_registry_pointers(&registries)?;
+        registries.extend(followed);
+    }
+    Ok(registries)
+}
+
+fn follow_registry_pointers(registries: &[FletchRegistry]) -> Result<Vec<FletchRegistry>> {
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(format!("fletch-cli/{}", env!("CARGO_PKG_VERSION")))
+        .build()?;
+    let mut followed_urls = BTreeSet::new();
+    let mut followed = Vec::new();
+    for registry in registries {
+        for definition in &registry.fletches {
+            if !definition.tags.iter().any(|tag| tag == "repo-registry") {
+                continue;
+            }
+            for shaft in &definition.shafts {
+                match shaft.kind {
+                    SourceKind::Http => {
+                        let urls = registry_urls_from_pointer(&client, &shaft.url)
+                            .with_context(|| format!("failed to resolve {}", shaft.url))?;
+                        for url in urls {
+                            if followed_urls.insert(url.clone()) {
+                                followed.push(fetch_registry_url(&client, &url)?);
+                            }
+                        }
+                    }
+                    SourceKind::File => {
+                        if followed_urls.insert(shaft.url.clone()) {
+                            followed.push(read_registry(&PathBuf::from(&shaft.url))?);
+                        }
+                    }
+                    SourceKind::Adapter => {}
+                }
+            }
+        }
+    }
+    Ok(followed)
+}
+
+fn registry_urls_from_pointer(
+    client: &reqwest::blocking::Client,
+    url: &str,
+) -> Result<Vec<String>> {
+    if let Some(contents_url) = github_tree_url_to_contents_api(url) {
+        return registry_urls_from_github_contents(client, &contents_url);
+    }
+    if let Some(raw_url) = github_blob_url_to_raw(url) {
+        return Ok(vec![raw_url]);
+    }
+    if url.contains("api.github.com/repos/") && url.contains("/contents/") {
+        return registry_urls_from_github_contents(client, url);
+    }
+    Ok(vec![url.to_string()])
+}
+
+fn registry_urls_from_github_contents(
+    client: &reqwest::blocking::Client,
+    url: &str,
+) -> Result<Vec<String>> {
+    let text = client
+        .get(url)
+        .send()?
+        .error_for_status()?
+        .text()
+        .with_context(|| format!("failed to read GitHub contents response from {url}"))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("failed to parse GitHub contents response from {url}"))?;
+    let mut urls = Vec::new();
+    match value {
+        serde_json::Value::Array(items) => {
+            for item in items {
+                if let Some(download_url) = github_contents_download_url(&item) {
+                    urls.push(download_url);
+                }
+            }
+        }
+        serde_json::Value::Object(_) => {
+            if let Some(download_url) = github_contents_download_url(&value) {
+                urls.push(download_url);
+            }
+        }
+        _ => bail!("GitHub contents response from {url} was not an object or array"),
+    }
+    if urls.is_empty() {
+        bail!("GitHub contents response from {url} did not contain registry JSON download URLs");
+    }
+    Ok(urls)
+}
+
+fn github_contents_download_url(value: &serde_json::Value) -> Option<String> {
+    let name = value.get("name")?.as_str()?;
+    if !name.ends_with(".json") {
+        return None;
+    }
+    value
+        .get("download_url")
+        .and_then(|download_url| download_url.as_str())
+        .map(ToString::to_string)
+}
+
+fn fetch_registry_url(client: &reqwest::blocking::Client, url: &str) -> Result<FletchRegistry> {
+    let text = client
+        .get(url)
+        .send()?
+        .error_for_status()?
+        .text()
+        .with_context(|| format!("failed to read registry JSON from {url}"))?;
+    serde_json::from_str(&text).with_context(|| format!("failed to parse registry JSON from {url}"))
+}
+
+fn github_tree_url_to_contents_api(url: &str) -> Option<String> {
+    github_url_to_contents_api(url, "tree")
+}
+
+fn github_blob_url_to_raw(url: &str) -> Option<String> {
+    let (owner, repo, branch, path) = github_url_parts(url, "blob")?;
+    Some(format!(
+        "https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+    ))
+}
+
+fn github_url_to_contents_api(url: &str, marker: &str) -> Option<String> {
+    let (owner, repo, branch, path) = github_url_parts(url, marker)?;
+    Some(format!(
+        "https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}"
+    ))
+}
+
+fn github_url_parts(url: &str, marker: &str) -> Option<(String, String, String, String)> {
+    let path = url.strip_prefix("https://github.com/")?;
+    let parts = path.split('/').collect::<Vec<_>>();
+    if parts.len() < 5 || parts[2] != marker {
+        return None;
+    }
+    let rest = parts[4..].join("/");
+    Some((
+        parts[0].to_string(),
+        parts[1].to_string(),
+        parts[3].to_string(),
+        rest,
+    ))
 }
 
 fn read_registry_index(path: &PathBuf) -> Result<RegistryIndexReport> {

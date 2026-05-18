@@ -233,11 +233,15 @@ which require adapters, and which are metadata-only rollups/aliases, then embeds
 a graph view without touching the network or cache.
 
 `fletch registry index` folds one or more external `fletch.registry.v1` files
-into `fletch.registry-index.v1` rows for catalog search. `fletch registry search`
-filters that index by repeated `--tag`, repeated `--metadata key=value`, and
-case-insensitive `--text`. FLETCH owns the generic index/search mechanics only;
-catalog repos such as FONTES or MUNDUS own the actual source registries, rights
-metadata, and curation policy.
+into `fletch.registry-index.v1` rows for catalog search. Add `--follow` to
+resolve `repo-registry` bridge rows into remote or local registry JSON files and
+merge those registries into the same index. GitHub raw/blob file pointers and
+GitHub contents/tree directory pointers are supported, so a MUNDUS-only checkout
+can index repo registry entry points without cloning every domain repo. `fletch
+registry search` filters that index by repeated `--tag`, repeated `--metadata
+key=value`, and case-insensitive `--text`. FLETCH owns the generic index/search
+mechanics only; catalog repos such as FONTES or MUNDUS own the actual source
+registries, rights metadata, and curation policy.
 
 `fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
 The initial generic tipper samples bounded bytes and reports JSON fields, JSON
