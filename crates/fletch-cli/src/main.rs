@@ -1590,7 +1590,38 @@ fn fetch_registry_url(client: &reqwest::blocking::Client, url: &str) -> Result<F
         .error_for_status()?
         .text()
         .with_context(|| format!("failed to read registry JSON from {url}"))?;
-    serde_json::from_str(&text).with_context(|| format!("failed to parse registry JSON from {url}"))
+    let mut registry: FletchRegistry = serde_json::from_str(&text)
+        .with_context(|| format!("failed to parse registry JSON from {url}"))?;
+    annotate_registry_source(&mut registry, url);
+    Ok(registry)
+}
+
+fn annotate_registry_source(registry: &mut FletchRegistry, url: &str) {
+    let base_url = raw_github_repo_base_url(url);
+    for definition in &mut registry.fletches {
+        definition
+            .metadata
+            .entry("registry_source_url".to_string())
+            .or_insert_with(|| url.to_string());
+        if let Some(base_url) = &base_url {
+            definition
+                .metadata
+                .entry("registry_source_base_url".to_string())
+                .or_insert_with(|| base_url.clone());
+        }
+    }
+}
+
+fn raw_github_repo_base_url(url: &str) -> Option<String> {
+    let path = url.strip_prefix("https://raw.githubusercontent.com/")?;
+    let parts = path.split('/').collect::<Vec<_>>();
+    if parts.len() < 4 {
+        return None;
+    }
+    Some(format!(
+        "https://raw.githubusercontent.com/{}/{}/{}/",
+        parts[0], parts[1], parts[2]
+    ))
 }
 
 fn github_tree_url_to_contents_api(url: &str) -> Option<String> {
@@ -1728,6 +1759,29 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                 write_http_response(&mut stream, "404 Not Found", "text/plain", "row not found")
             }
         }
+        "/api/source" => {
+            let query = parse_query(query);
+            let registry_id = query.get("registry_id").and_then(|values| values.first());
+            let fletch_id = query.get("fletch_id").and_then(|values| values.first());
+            let source_index = query
+                .get("source")
+                .and_then(|values| values.first())
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(0);
+            let row = registry_id
+                .zip(fletch_id)
+                .and_then(|(registry_id, fletch_id)| {
+                    find_registry_index_row(index, registry_id, fletch_id)
+                });
+            if let Some(row) = row {
+                write_json_response(
+                    &mut stream,
+                    &load_registry_source_preview(row, source_index)?,
+                )
+            } else {
+                write_http_response(&mut stream, "404 Not Found", "text/plain", "row not found")
+            }
+        }
         _ => write_http_response(&mut stream, "404 Not Found", "text/plain", "not found"),
     }
 }
@@ -1788,6 +1842,57 @@ fn find_registry_index_row<'a>(
         .find(|row| row.registry_id == registry_id && row.fletch_id == fletch_id)
 }
 
+fn load_registry_source_preview(
+    row: &RegistryIndexRow,
+    source_index: usize,
+) -> Result<serde_json::Value> {
+    let Some(source_url) = row.source_urls.get(source_index) else {
+        bail!("source index {source_index} is out of range");
+    };
+    let resolved_url = resolve_registry_source_url(row, source_url);
+    let bytes = if resolved_url.starts_with("http://") || resolved_url.starts_with("https://") {
+        reqwest::blocking::Client::builder()
+            .user_agent(format!("fletch-cli/{}", env!("CARGO_PKG_VERSION")))
+            .build()?
+            .get(&resolved_url)
+            .send()?
+            .error_for_status()?
+            .bytes()?
+            .to_vec()
+    } else {
+        fs::read(&resolved_url)?
+    };
+    let limit = 65_536;
+    let truncated = bytes.len() > limit;
+    let preview_bytes = &bytes[..bytes.len().min(limit)];
+    let text = String::from_utf8_lossy(preview_bytes).into_owned();
+    Ok(serde_json::json!({
+        "registry_id": row.registry_id,
+        "fletch_id": row.fletch_id,
+        "source_index": source_index,
+        "source_url": source_url,
+        "resolved_url": resolved_url,
+        "byte_count": bytes.len(),
+        "preview_byte_count": preview_bytes.len(),
+        "truncated": truncated,
+        "text": text
+    }))
+}
+
+fn resolve_registry_source_url(row: &RegistryIndexRow, source_url: &str) -> String {
+    if source_url.starts_with("http://") || source_url.starts_with("https://") {
+        return source_url.to_string();
+    }
+    if let Some(base_url) = row.metadata.get("registry_source_base_url") {
+        return format!(
+            "{}{}",
+            base_url.trim_end_matches('/'),
+            format!("/{source_url}")
+        );
+    }
+    source_url.to_string()
+}
+
 fn write_json_response<T: serde::Serialize + ?Sized>(
     stream: &mut TcpStream,
     value: &T,
@@ -1839,9 +1944,9 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
   </header>
   <main>
     <form id="search" class="search">
-      <input id="text" name="text" placeholder="Text search: storm, MIT, route, source..." autofocus />
-      <input id="tag" name="tag" placeholder="Tag filter, optional" />
-      <input id="metadata" name="metadata" placeholder="Metadata key=value, optional" />
+      <input id="text" name="text" placeholder="Multi-term text: storm foundation, MIT algorithms..." autofocus />
+      <input id="tag" name="tag" placeholder="Tags, comma separated" />
+      <input id="metadata" name="metadata" placeholder="Metadata filters, comma separated key=value" />
       <button type="submit">Search</button>
     </form>
     <div class="layout">
@@ -1876,12 +1981,29 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     }
 
     function showDetail(row) {
-      const urls = (row.source_urls || []).map(url => url.startsWith('http') ? `<li><a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(url)}</a></li>` : `<li>${esc(url)}</li>`).join('');
+      const urls = (row.source_urls || []).map((url, index) => {
+        const link = url.startsWith('http') ? `<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(url)}</a>` : esc(url);
+        return `<li>${link} <button type="button" onclick="loadSource('${esc(row.registry_id)}','${esc(row.fletch_id)}',${index})">Load preview</button></li>`;
+      }).join('');
       detail.innerHTML = `<h3>${esc(row.fletch_id)}</h3>
         <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)}</div>
         <h4>Sources</h4><ul>${urls}</ul>
         <h4>Tags</h4><div>${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
-        <h4>Metadata</h4><pre>${esc(JSON.stringify(row.metadata || {}, null, 2))}</pre>`;
+        <h4>Metadata</h4><pre>${esc(JSON.stringify(row.metadata || {}, null, 2))}</pre>
+        <h4>Loaded source preview</h4><pre id="source-preview">Click "Load preview" beside a source URL to fetch bounded source data.</pre>`;
+    }
+
+    async function loadSource(registryId, fletchId, sourceIndex) {
+      const preview = document.querySelector('#source-preview');
+      preview.textContent = 'Loading source preview...';
+      const params = new URLSearchParams({ registry_id: registryId, fletch_id: fletchId, source: String(sourceIndex) });
+      const response = await fetch(`/api/source?${params}`);
+      if (!response.ok) {
+        preview.textContent = `Could not load source preview: ${response.status} ${response.statusText}`;
+        return;
+      }
+      const data = await response.json();
+      preview.textContent = `Resolved: ${data.resolved_url}\nBytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''}\n\n${data.text}`;
     }
 
     async function runSearch(event) {
@@ -1891,8 +2013,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const tag = document.querySelector('#tag').value.trim();
       const metadata = document.querySelector('#metadata').value.trim();
       if (text) params.set('text', text);
-      if (tag) params.append('tag', tag);
-      if (metadata) params.append('metadata', metadata);
+      if (tag) tag.split(',').map(v => v.trim()).filter(Boolean).forEach(v => params.append('tag', v));
+      if (metadata) metadata.split(',').map(v => v.trim()).filter(Boolean).forEach(v => params.append('metadata', v));
       params.set('limit', '50');
       const response = await fetch(`/api/search?${params}`);
       const report = await response.json();

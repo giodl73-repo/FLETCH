@@ -1123,7 +1123,7 @@ pub fn search_registry_index(
                 .all(|(key, value)| row.metadata.get(key) == Some(value))
         })
         .filter(|row| match normalized_text.as_deref() {
-            Some(text) => registry_index_row_search_text(row).contains(text),
+            Some(text) => registry_index_row_matches_text(row, text),
             None => true,
         })
         .cloned()
@@ -1175,6 +1175,15 @@ fn registry_index_row_search_text(row: &RegistryIndexRow) -> String {
         values.push(value.clone());
     }
     values.join(" ").to_lowercase()
+}
+
+fn registry_index_row_matches_text(row: &RegistryIndexRow, text: &str) -> bool {
+    let haystack = registry_index_row_search_text(row);
+    let terms = text.split_whitespace().collect::<Vec<_>>();
+    if terms.is_empty() {
+        return true;
+    }
+    haystack.contains(text) || terms.iter().all(|term| haystack.contains(term))
 }
 
 pub fn validate_registry(registry: &FletchRegistry) -> RegistryValidationReport {
@@ -6776,6 +6785,14 @@ mod tests {
         assert_eq!(report.total_row_count, 2);
         assert_eq!(report.matched_row_count, 1);
         assert_eq!(report.rows[0].fletch_id, "fontes.mit.ocw.test.course-page");
+
+        let multi_term_report =
+            search_registry_index(&index, &[], &[], Some("MIT course"), 0, None);
+        assert_eq!(multi_term_report.matched_row_count, 1);
+        assert_eq!(
+            multi_term_report.rows[0].fletch_id,
+            "fontes.mit.ocw.test.course-page"
+        );
     }
 
     #[test]

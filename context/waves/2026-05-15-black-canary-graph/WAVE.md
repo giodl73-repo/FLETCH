@@ -23,7 +23,7 @@ into `fletch-core`.
 | 04 | Dry-run flights | done | Added `fletch.flight.v1` dry-run registry resolution, CLI output, and mock-client flight preview. |
 | 05 | Tips | done | Added `fletch.tip.v1` bounded cache previews, CLI output, and mock-client tip export. |
 | 06 | CROP/PROOF publish scout | done | Added `fletch.publish.v1` status/graph/tip reports, CLI output, and mock-client publish export. |
-| 07 | Registry web browser | done | Added local `fletch registry web` search/detail UI over registry indexes with integration coverage. |
+| 07 | Registry web browser | done | Added local `fletch registry web` search/detail/source-preview UI over registry indexes with integration coverage. |
 
 ## Validation expectations
 

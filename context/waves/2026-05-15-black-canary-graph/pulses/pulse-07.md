@@ -16,6 +16,10 @@ without requiring a separate web app.
   - `/api/row?registry_id=...&fletch_id=...`
 - Added an integration test that launches the actual CLI server and verifies
   HTML, summary, search, and detail responses return registry data.
+- Added multi-term text matching and comma-separated web tag/metadata filters.
+- Added `/api/source` and UI **Load preview** buttons for bounded source data.
+- Annotated followed GitHub registry rows with their raw repo base URL so relative
+  source paths can be previewed without cloning the domain repo.
 
 ## Validation
 
@@ -24,7 +28,9 @@ without requiring a separate web app.
 - Full MUNDUS followed-index smoke test with the web server:
   - 243 registries
   - 11,381 rows
-  - `storm-foundation` search returns MUNDUS and STORM rows
+  - `storm seed` search returns STORM seed rows
+  - source preview resolves `storm.foundation.seed-storm` to raw GitHub and loads
+    2,710 bytes
 - `git diff --check`
 
 ## Status
