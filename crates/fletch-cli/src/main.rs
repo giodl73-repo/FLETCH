@@ -10,16 +10,17 @@ use fletch_core::{
     partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
     preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
     proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
-    quiver_merge_ready_report, read_cache_manifest_json, slice_active_partition_set,
-    slice_adapter_source_report, slice_archive_expansion_preview, slice_cache_index_report,
-    slice_crop_index_report, slice_local_url_map, slice_partition_state,
-    slice_proof_document_manifest, slice_quiver_merge_ready_report,
-    slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
-    tips_from_manifest, upsert_cache_manifest_entries, validate_registry, verify_cache_manifest,
-    verify_quiver_bundle, write_cache_manifest_json, AdapterHandoffReport, AliasState, CacheEntry,
-    CacheIndexGatePolicy, CacheIndexReport, CacheManifest, CropIndexReport, FetchOptions,
-    FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap, PartitionState,
-    ProofDocumentManifest, QuiverManifest, QuiverSummary, RollupPreview, SourceKind,
+    quiver_merge_ready_report, read_cache_manifest_json, registry_index_from_registries,
+    search_registry_index, slice_active_partition_set, slice_adapter_source_report,
+    slice_archive_expansion_preview, slice_cache_index_report, slice_crop_index_report,
+    slice_local_url_map, slice_partition_state, slice_proof_document_manifest,
+    slice_quiver_merge_ready_report, slice_registry_validation_report, summarize_cache_manifest,
+    summarize_quiver, tips_from_manifest, upsert_cache_manifest_entries, validate_registry,
+    verify_cache_manifest, verify_quiver_bundle, write_cache_manifest_json, AdapterHandoffReport,
+    AliasState, CacheEntry, CacheIndexGatePolicy, CacheIndexReport, CacheManifest, CropIndexReport,
+    FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap,
+    PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary, RegistryIndexReport,
+    RollupPreview, SourceKind,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -506,6 +507,39 @@ enum GraphCommands {
 
 #[derive(Debug, Subcommand)]
 enum RegistryCommands {
+    /// Build a searchable index from one or more fletch.registry.v1 files.
+    Index {
+        /// Path to a fletch.registry.v1 JSON file. Repeat for multiple registries.
+        #[arg(long = "file", required = true)]
+        files: Vec<PathBuf>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Search a fletch.registry-index.v1 report by tag, metadata, URL, or text.
+    Search {
+        /// Path to a fletch.registry-index.v1 JSON file.
+        #[arg(long)]
+        index: PathBuf,
+        /// Required tag. Repeat to require multiple tags.
+        #[arg(long = "tag")]
+        tags: Vec<String>,
+        /// Metadata equality filter as key=value. Repeat for multiple filters.
+        #[arg(long = "metadata")]
+        metadata: Vec<String>,
+        /// Case-insensitive text search over IDs, URLs, tags, and metadata.
+        #[arg(long)]
+        text: Option<String>,
+        /// Number of matching rows to skip before output.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Maximum number of matching rows to output.
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Optional JSON output path. Defaults to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Export graph JSON from a fletch.registry.v1 file.
     Graph {
         /// Path to a fletch.registry.v1 JSON file.
@@ -1054,6 +1088,36 @@ fn main() -> Result<()> {
             }
         },
         Commands::Registry { command } => match command {
+            RegistryCommands::Index { files, output } => {
+                let registries = files
+                    .iter()
+                    .map(read_registry)
+                    .collect::<Result<Vec<_>>>()?;
+                write_json(&registry_index_from_registries(&registries), output)?;
+            }
+            RegistryCommands::Search {
+                index,
+                tags,
+                metadata,
+                text,
+                offset,
+                limit,
+                output,
+            } => {
+                let index = read_registry_index(&index)?;
+                let metadata_filters = parse_key_value_filters(metadata)?;
+                write_json(
+                    &search_registry_index(
+                        &index,
+                        &tags,
+                        &metadata_filters,
+                        text.as_deref(),
+                        offset,
+                        limit,
+                    ),
+                    output,
+                )?;
+            }
             RegistryCommands::Graph { file, output } => {
                 let registry = read_registry(&file)?;
                 write_json(&graph_from_registry(&registry), output)?;
@@ -1356,6 +1420,21 @@ fn parse_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
     Ok(parsed)
 }
 
+fn parse_key_value_filters(filters: Vec<String>) -> Result<Vec<(String, String)>> {
+    let mut parsed = Vec::new();
+    for filter in filters {
+        let Some((name, value)) = filter.split_once('=') else {
+            bail!("filter must be formatted as name=value: {filter}");
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            bail!("filter name must not be empty: {filter}");
+        }
+        parsed.push((name.to_string(), value.to_string()));
+    }
+    Ok(parsed)
+}
+
 fn read_manifest(path: &PathBuf) -> Result<CacheManifest> {
     Ok(read_cache_manifest_json(path)?)
 }
@@ -1366,6 +1445,11 @@ fn read_plan(path: &PathBuf) -> Result<FetchPlan> {
 }
 
 fn read_registry(path: &PathBuf) -> Result<FletchRegistry> {
+    let json = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+fn read_registry_index(path: &PathBuf) -> Result<RegistryIndexReport> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

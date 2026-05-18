@@ -19,6 +19,8 @@ pub const FLETCH_QUIVER_VERIFY_SCHEMA: &str = "fletch.quiver-verify.v1";
 pub const FLETCH_QUIVER_MERGE_READY_SCHEMA: &str = "fletch.quiver-merge-ready.v1";
 pub const FLETCH_GRAPH_SCHEMA: &str = "fletch.graph.v1";
 pub const FLETCH_REGISTRY_SCHEMA: &str = "fletch.registry.v1";
+pub const FLETCH_REGISTRY_INDEX_SCHEMA: &str = "fletch.registry-index.v1";
+pub const FLETCH_REGISTRY_SEARCH_SCHEMA: &str = "fletch.registry-search.v1";
 pub const FLETCH_ADAPTER_SOURCES_SCHEMA: &str = "fletch.adapter-sources.v1";
 pub const FLETCH_REGISTRY_VALIDATION_SCHEMA: &str = "fletch.registry-validation.v1";
 pub const FLETCH_ARCHIVE_EXPANSION_SCHEMA: &str = "fletch.archive-expansion-preview.v1";
@@ -781,6 +783,38 @@ pub struct AdapterSourceReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryIndexRow {
+    pub registry_id: String,
+    pub fletch_id: String,
+    pub node_kind: GraphNodeKind,
+    pub source_urls: Vec<String>,
+    pub source_kinds: Vec<String>,
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryIndexReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub registry_count: usize,
+    pub fletch_count: usize,
+    pub row_count: usize,
+    pub rows: Vec<RegistryIndexRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistrySearchReport {
+    pub schema_version: String,
+    pub generated_by: String,
+    pub query: BTreeMap<String, String>,
+    pub total_row_count: usize,
+    pub matched_row_count: usize,
+    pub rows: Vec<RegistryIndexRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegistryValidationFinding {
     pub fletch_id: Option<String>,
     pub severity: String,
@@ -1021,6 +1055,126 @@ pub fn adapter_sources_from_registry(registry: &FletchRegistry) -> AdapterSource
         adapter_source_count: sources.iter().filter(|source| source.adapter_owned).count(),
         sources,
     }
+}
+
+pub fn registry_index_from_registries(registries: &[FletchRegistry]) -> RegistryIndexReport {
+    let rows = registries
+        .iter()
+        .flat_map(|registry| {
+            registry.fletches.iter().map(|definition| {
+                let mut source_kinds = definition
+                    .shafts
+                    .iter()
+                    .map(|shaft| source_kind_key(&shaft.kind).to_string())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                source_kinds.sort();
+                RegistryIndexRow {
+                    registry_id: registry.registry_id.clone(),
+                    fletch_id: definition.id.clone(),
+                    node_kind: definition.node_kind.clone(),
+                    source_urls: definition
+                        .shafts
+                        .iter()
+                        .map(|shaft| shaft.url.clone())
+                        .collect(),
+                    source_kinds,
+                    tags: definition.tags.clone(),
+                    metadata: definition.metadata.clone(),
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    let fletch_count = rows
+        .iter()
+        .map(|row| row.fletch_id.clone())
+        .collect::<BTreeSet<_>>()
+        .len();
+    RegistryIndexReport {
+        schema_version: FLETCH_REGISTRY_INDEX_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        registry_count: registries.len(),
+        fletch_count,
+        row_count: rows.len(),
+        rows,
+    }
+}
+
+pub fn search_registry_index(
+    index: &RegistryIndexReport,
+    tags: &[String],
+    metadata_filters: &[(String, String)],
+    text: Option<&str>,
+    offset: usize,
+    limit: Option<usize>,
+) -> RegistrySearchReport {
+    let normalized_text = text.map(|text| text.to_lowercase());
+    let rows = index
+        .rows
+        .iter()
+        .filter(|row| {
+            tags.iter()
+                .all(|tag| row.tags.iter().any(|row_tag| row_tag == tag))
+        })
+        .filter(|row| {
+            metadata_filters
+                .iter()
+                .all(|(key, value)| row.metadata.get(key) == Some(value))
+        })
+        .filter(|row| match normalized_text.as_deref() {
+            Some(text) => registry_index_row_search_text(row).contains(text),
+            None => true,
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let sliced_rows = rows
+        .iter()
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut query = BTreeMap::new();
+    if !tags.is_empty() {
+        query.insert("tags".to_string(), tags.join(","));
+    }
+    if !metadata_filters.is_empty() {
+        query.insert(
+            "metadata".to_string(),
+            metadata_filters
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+    }
+    if let Some(text) = text {
+        query.insert("text".to_string(), text.to_string());
+    }
+    RegistrySearchReport {
+        schema_version: FLETCH_REGISTRY_SEARCH_SCHEMA.to_string(),
+        generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
+        query,
+        total_row_count: index.rows.len(),
+        matched_row_count: rows.len(),
+        rows: sliced_rows,
+    }
+}
+
+fn registry_index_row_search_text(row: &RegistryIndexRow) -> String {
+    let mut values = vec![
+        row.registry_id.clone(),
+        row.fletch_id.clone(),
+        format!("{:?}", row.node_kind),
+    ];
+    values.extend(row.source_urls.clone());
+    values.extend(row.source_kinds.clone());
+    values.extend(row.tags.clone());
+    for (key, value) in &row.metadata {
+        values.push(key.clone());
+        values.push(value.clone());
+    }
+    values.join(" ").to_lowercase()
 }
 
 pub fn validate_registry(registry: &FletchRegistry) -> RegistryValidationReport {
@@ -6563,6 +6717,65 @@ mod tests {
             .findings
             .iter()
             .any(|finding| finding.code == "duplicate-fletch-id"));
+    }
+
+    #[test]
+    fn registry_index_searches_tags_metadata_and_text() {
+        let registry = fletch_registry(
+            "fontes:test",
+            vec![
+                FletchDefinition {
+                    id: "fontes.mit.ocw.test.course-page".to_string(),
+                    node_kind: GraphNodeKind::Fletch,
+                    shafts: vec![SourceSpec {
+                        kind: SourceKind::Http,
+                        url: "https://ocw.mit.edu/courses/test/".to_string(),
+                        headers: BTreeMap::new(),
+                    }],
+                    edges: Vec::new(),
+                    format: None,
+                    tags: vec!["mit".to_string(), "ai-ml".to_string()],
+                    metadata: BTreeMap::from([
+                        ("fetch_policy".to_string(), "metadata_only".to_string()),
+                        ("domain".to_string(), "ai-ml".to_string()),
+                    ]),
+                },
+                FletchDefinition {
+                    id: "fontes.nist.test.standard".to_string(),
+                    node_kind: GraphNodeKind::Document,
+                    shafts: vec![SourceSpec {
+                        kind: SourceKind::Http,
+                        url: "https://nist.gov/test".to_string(),
+                        headers: BTreeMap::new(),
+                    }],
+                    edges: Vec::new(),
+                    format: None,
+                    tags: vec!["nist".to_string(), "standard".to_string()],
+                    metadata: BTreeMap::from([(
+                        "fetch_policy".to_string(),
+                        "derived_text_allowed".to_string(),
+                    )]),
+                },
+            ],
+        );
+
+        let index = registry_index_from_registries(&[registry]);
+        let report = search_registry_index(
+            &index,
+            &["mit".to_string()],
+            &[("fetch_policy".to_string(), "metadata_only".to_string())],
+            Some("ocw"),
+            0,
+            None,
+        );
+
+        assert_eq!(index.schema_version, FLETCH_REGISTRY_INDEX_SCHEMA);
+        assert_eq!(index.registry_count, 1);
+        assert_eq!(index.fletch_count, 2);
+        assert_eq!(report.schema_version, FLETCH_REGISTRY_SEARCH_SCHEMA);
+        assert_eq!(report.total_row_count, 2);
+        assert_eq!(report.matched_row_count, 1);
+        assert_eq!(report.rows[0].fletch_id, "fontes.mit.ocw.test.course-page");
     }
 
     #[test]

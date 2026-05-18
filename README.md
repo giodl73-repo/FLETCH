@@ -104,6 +104,8 @@ cargo run -p fletch-cli -- quiver import --quiver-dir .fletch/quivers/demo --cac
 cargo run -p fletch-cli -- graph export --manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- registry graph --file fletch.registry.json
 cargo run -p fletch-cli -- registry flight --file fletch.registry.json --fletch-id justice-league:villains:index
+cargo run -p fletch-cli -- registry index --file fletch.registry.json --output .fletch/registry-index.json
+cargo run -p fletch-cli -- registry search --index .fletch/registry-index.json --tag ai-ml --metadata fetch_policy=metadata_only
 cargo run -p fletch-cli -- tip from-manifest --manifest .fletch/cache/manifest.json --max-bytes 4096
 cargo run -p fletch-cli -- publish from-manifest --manifest .fletch/cache/manifest.json --freshness immutable
 ```
@@ -229,6 +231,13 @@ data-link edges before anything is fetched.
 definitions. It walks declared graph edges, reports which fletches would fetch,
 which require adapters, and which are metadata-only rollups/aliases, then embeds
 a graph view without touching the network or cache.
+
+`fletch registry index` folds one or more external `fletch.registry.v1` files
+into `fletch.registry-index.v1` rows for catalog search. `fletch registry search`
+filters that index by repeated `--tag`, repeated `--metadata key=value`, and
+case-insensitive `--text`. FLETCH owns the generic index/search mechanics only;
+catalog repos such as FONTES or MUNDUS own the actual source registries, rights
+metadata, and curation policy.
 
 `fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
 The initial generic tipper samples bounded bytes and reports JSON fields, JSON
