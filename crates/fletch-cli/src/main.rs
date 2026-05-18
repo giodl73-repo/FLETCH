@@ -2094,9 +2094,11 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
     header, main { max-width: 1200px; margin: 0 auto; padding: 1rem; }
-    input, button { border: 1px solid #475569; border-radius: .5rem; padding: .6rem; background: #020617; color: #e2e8f0; }
+    input, button, select { border: 1px solid #475569; border-radius: .5rem; padding: .6rem; background: #020617; color: #e2e8f0; }
     button { cursor: pointer; background: #1d4ed8; border-color: #2563eb; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
     .search { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: .5rem; }
+    .pager { display: flex; align-items: center; gap: .5rem; margin: .5rem 0 1rem; }
     .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr) minmax(320px, 480px); gap: 1rem; margin-top: 1rem; }
     .card { background: #111827; border: 1px solid #334155; border-radius: .75rem; padding: .8rem; margin-bottom: .6rem; }
     .row { cursor: pointer; }
@@ -2128,6 +2130,17 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       </nav>
       <section>
         <div id="result-count" class="meta"></div>
+        <div class="pager">
+          <button type="button" id="prev-page">Previous page</button>
+          <label class="meta">Page size
+            <select id="page-size">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+            </select>
+          </label>
+          <button type="button" id="next-page">Next page</button>
+        </div>
         <div id="results"></div>
       </section>
       <aside>
@@ -2141,6 +2154,11 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const detail = document.querySelector('#detail');
     const count = document.querySelector('#result-count');
     const facets = document.querySelector('#facets');
+    const prevPage = document.querySelector('#prev-page');
+    const nextPage = document.querySelector('#next-page');
+    const pageSize = document.querySelector('#page-size');
+    let currentOffset = 0;
+    let matchedRowCount = 0;
 
     function esc(value) {
       return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -2211,7 +2229,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         const filter = `${kind}=${value}`;
         metadata.value = metadata.value ? `${metadata.value},${filter}` : filter;
       }
-      runSearch();
+      runSearch(undefined, 0);
     }
 
     function facetGroup(title, kind, items) {
@@ -2219,8 +2237,9 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       return `<h3>${esc(title)}</h3>${chips || '<div class="meta">No values</div>'}`;
     }
 
-    async function runSearch(event) {
+    async function runSearch(event, offset = 0) {
       event?.preventDefault();
+      currentOffset = Math.max(0, offset);
       const params = new URLSearchParams();
       const text = document.querySelector('#text').value.trim();
       const tag = document.querySelector('#tag').value.trim();
@@ -2228,12 +2247,22 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       if (text) params.set('text', text);
       if (tag) tag.split(',').map(v => v.trim()).filter(Boolean).forEach(v => params.append('tag', v));
       if (metadata) metadata.split(',').map(v => v.trim()).filter(Boolean).forEach(v => params.append('metadata', v));
-      params.set('limit', '50');
+      params.set('offset', String(currentOffset));
+      params.set('limit', pageSize.value);
       const response = await fetch(`/api/search?${params}`);
       const report = await response.json();
-      count.textContent = `${report.matched_row_count} matches (${report.rows.length} shown)`;
+      matchedRowCount = report.matched_row_count;
+      const first = matchedRowCount === 0 ? 0 : currentOffset + 1;
+      const last = currentOffset + report.rows.length;
+      count.textContent = `${matchedRowCount} matches (${first}-${last} shown)`;
+      prevPage.disabled = currentOffset === 0;
+      nextPage.disabled = currentOffset + report.rows.length >= matchedRowCount;
       results.replaceChildren(...report.rows.map(rowCard));
-      if (report.rows[0]) showDetail(report.rows[0]);
+      if (report.rows[0]) {
+        showDetail(report.rows[0]);
+      } else {
+        detail.textContent = 'No matching rows.';
+      }
     }
 
     fetch('/api/summary').then(r => r.json()).then(summary => {
@@ -2248,7 +2277,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         facetGroup('Tags', 'tag', data.tags)
       ].join('');
     });
-    document.querySelector('#search').addEventListener('submit', runSearch);
+    document.querySelector('#search').addEventListener('submit', event => runSearch(event, 0));
+    prevPage.addEventListener('click', () => runSearch(undefined, currentOffset - Number(pageSize.value || '50')));
+    nextPage.addEventListener('click', () => runSearch(undefined, currentOffset + Number(pageSize.value || '50')));
+    pageSize.addEventListener('change', () => runSearch(undefined, 0));
     runSearch();
   </script>
 </body>

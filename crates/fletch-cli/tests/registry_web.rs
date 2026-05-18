@@ -40,6 +40,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
 
     let html = http_get(address, "/")?;
     assert!(html.contains("FLETCH Registry Search"));
+    assert!(html.contains("Next page"));
 
     let summary = http_get(address, "/api/summary")?;
     assert!(summary.contains("\"row_count\": 2"));
@@ -53,6 +54,10 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(search.contains("\"matched_row_count\": 1"));
     assert!(search.contains("\"storm.foundation.seed-storm\""));
     assert!(search.contains("\"weather\""));
+
+    let paged = http_get(address, "/api/search?offset=1&limit=1")?;
+    assert!(paged.contains("\"matched_row_count\": 2"));
+    assert!(paged.contains("\"mundus.registry.porto\""));
 
     let detail = http_get(
         address,

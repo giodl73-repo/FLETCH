@@ -29,6 +29,8 @@ without requiring a separate web app.
   navigation, and compact JSON outlines.
 - Added `--open` to `fletch registry web` so a successful bind can launch the
   local registry browser in the default browser.
+- Added result pagination controls with 25, 50, and 100 row page sizes for large
+  followed indexes.
 
 ## Validation
 

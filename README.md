@@ -259,8 +259,9 @@ fletch registry web --open --follow --file .fletch\registries\mundus-known-asset
 
 The left facet rail summarizes high-value sections of the index: owner repo,
 domain, asset kind, fetch policy, and tags. Click a facet chip to filter into
-that section. Click **Load preview** beside a source URL to fetch bounded source
-data. Source previews include line-numbered sections, previous/next line
+that section. Result pagination controls let large indexes move through 25, 50,
+or 100 rows at a time. Click **Load preview** beside a source URL to fetch bounded
+source data. Source previews include line-numbered sections, previous/next line
 navigation, and a compact JSON outline when the loaded data is JSON. For followed
 GitHub registry rows, FLETCH preserves the remote registry base URL so relative
 source paths such as `fixtures\seed-storm.json` can be previewed from raw GitHub
