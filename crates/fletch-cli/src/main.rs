@@ -1798,40 +1798,20 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
         "/api/presets" => write_json_response(&mut stream, &registry_web_presets()),
         "/api/search" => {
             let query = parse_query(query);
-            let tags = query.get("tag").cloned().unwrap_or_default();
-            let metadata = query
-                .get("metadata")
-                .cloned()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|filter| parse_key_value_filter(&filter))
-                .collect::<Result<Vec<_>>>()?;
-            let text = query.get("text").and_then(|values| values.first()).cloned();
-            let offset = query
-                .get("offset")
-                .and_then(|values| values.first())
-                .and_then(|value| value.parse::<usize>().ok())
-                .unwrap_or(0);
-            let limit = query
-                .get("limit")
-                .and_then(|values| values.first())
-                .and_then(|value| value.parse::<usize>().ok())
-                .or(Some(50));
-            let sort = query.get("sort").and_then(|values| values.first());
-            let direction = query.get("direction").and_then(|values| values.first());
-            let report = search_registry_web_index(
-                index,
-                &tags,
-                &metadata,
-                text.as_deref(),
-                offset,
-                limit,
-                sort.map(String::as_str),
-                direction.map(String::as_str),
-            );
+            let (report, text) = registry_web_search_from_query(index, &query)?;
             write_json_response(
                 &mut stream,
                 &registry_web_search_response(&report, text.as_deref())?,
+            )
+        }
+        "/api/export.csv" => {
+            let query = parse_query(query);
+            let (report, text) = registry_web_search_from_query(index, &query)?;
+            write_http_response(
+                &mut stream,
+                "200 OK",
+                "text/csv; charset=utf-8",
+                &registry_web_search_csv(&report, text.as_deref())?,
             )
         }
         "/api/row" => {
@@ -2031,6 +2011,50 @@ fn top_facets(counts: BTreeMap<String, usize>, limit: usize) -> Vec<serde_json::
         .collect()
 }
 
+fn registry_web_search_from_query(
+    index: &RegistryIndexReport,
+    query: &BTreeMap<String, Vec<String>>,
+) -> Result<(fletch_core::RegistrySearchReport, Option<String>)> {
+    let tags = query.get("tag").cloned().unwrap_or_default();
+    let metadata = query
+        .get("metadata")
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|filter| parse_key_value_filter(&filter))
+        .collect::<Result<Vec<_>>>()?;
+    let text = query.get("text").and_then(|values| values.first()).cloned();
+    let offset = query
+        .get("offset")
+        .and_then(|values| values.first())
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let limit = query
+        .get("limit")
+        .and_then(|values| values.first())
+        .and_then(|value| value.parse::<usize>().ok())
+        .or(Some(50));
+    let sort = query
+        .get("sort")
+        .and_then(|values| values.first())
+        .map(String::as_str);
+    let direction = query
+        .get("direction")
+        .and_then(|values| values.first())
+        .map(String::as_str);
+    let report = search_registry_web_index(
+        index,
+        &tags,
+        &metadata,
+        text.as_deref(),
+        offset,
+        limit,
+        sort,
+        direction,
+    );
+    Ok((report, text))
+}
+
 fn search_registry_web_index(
     index: &RegistryIndexReport,
     tags: &[String],
@@ -2159,6 +2183,49 @@ fn registry_web_search_response(
         );
     }
     Ok(value)
+}
+
+fn registry_web_search_csv(
+    report: &fletch_core::RegistrySearchReport,
+    text: Option<&str>,
+) -> Result<String> {
+    let terms = registry_web_search_terms(text);
+    let mut csv =
+        String::from("registry_id,fletch_id,node_kind,score,snippet,tags,source_urls,metadata\n");
+    for row in &report.rows {
+        let snippet = registry_web_row_snippet(row, text);
+        let snippet_text = snippet
+            .get("text")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        let values = [
+            row.registry_id.clone(),
+            row.fletch_id.clone(),
+            format!("{:?}", row.node_kind),
+            registry_web_relevance_score(row, &terms).to_string(),
+            snippet_text.to_string(),
+            row.tags.join("|"),
+            row.source_urls.join("|"),
+            serde_json::to_string(&row.metadata)?,
+        ];
+        csv.push_str(
+            &values
+                .iter()
+                .map(|value| csv_escape(value))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+        csv.push('\n');
+    }
+    Ok(csv)
+}
+
+fn csv_escape(value: &str) -> String {
+    if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r') {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
 }
 
 fn registry_web_row_snippet(row: &RegistryIndexRow, text: Option<&str>) -> serde_json::Value {
@@ -2438,6 +2505,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
           </label>
           <button type="button" id="next-page">Next page</button>
           <button type="button" id="copy-link">Copy link</button>
+          <button type="button" id="export-csv">Export CSV</button>
         </div>
         <div id="results"></div>
       </section>
@@ -2459,6 +2527,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const sort = document.querySelector('#sort');
     const direction = document.querySelector('#direction');
     const copyLink = document.querySelector('#copy-link');
+    const exportCsv = document.querySelector('#export-csv');
     let currentOffset = 0;
     let matchedRowCount = 0;
 
@@ -2599,9 +2668,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       });
     }
 
-    async function runSearch(event, offset = 0, pushState = true) {
-      event?.preventDefault();
-      currentOffset = Math.max(0, offset);
+    function currentSearchParams(offset) {
       const params = new URLSearchParams();
       const text = document.querySelector('#text').value.trim();
       const tag = document.querySelector('#tag').value.trim();
@@ -2609,10 +2676,21 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       if (text) params.set('text', text);
       if (tag) tag.split(',').map(v => v.trim()).filter(Boolean).forEach(v => params.append('tag', v));
       if (metadata) metadata.split(',').map(v => v.trim()).filter(Boolean).forEach(v => params.append('metadata', v));
-      params.set('offset', String(currentOffset));
+      params.set('offset', String(offset));
       params.set('limit', pageSize.value);
       params.set('sort', sort.value);
       params.set('direction', direction.value);
+      return params;
+    }
+
+    function exportCurrentCsv() {
+      window.open(`/api/export.csv?${currentSearchParams(currentOffset)}`, '_blank', 'noreferrer');
+    }
+
+    async function runSearch(event, offset = 0, pushState = true) {
+      event?.preventDefault();
+      currentOffset = Math.max(0, offset);
+      const params = currentSearchParams(currentOffset);
       updateBrowserUrl(params, pushState);
       const response = await fetch(`/api/search?${params}`);
       const report = await response.json();
@@ -2653,6 +2731,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     sort.addEventListener('change', () => runSearch(undefined, 0));
     direction.addEventListener('change', () => runSearch(undefined, 0));
     copyLink.addEventListener('click', copyShareLink);
+    exportCsv.addEventListener('click', exportCurrentCsv);
     window.addEventListener('popstate', () => runSearch(undefined, loadControlsFromUrl(), false));
     runSearch(undefined, loadControlsFromUrl(), false);
   </script>

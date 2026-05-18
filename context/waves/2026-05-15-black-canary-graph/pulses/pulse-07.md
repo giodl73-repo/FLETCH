@@ -40,6 +40,8 @@ without requiring a separate web app.
 - Added relevance scores and default relevance sorting for text searches.
 - Added built-in query presets for MIT textbooks, Knowledge Systems repo
   registries, source-corpus packs, and STORM hazards.
+- Added CSV export for the current result page, including scores, snippets, tags,
+  source URLs, and metadata.
 
 ## Validation
 
