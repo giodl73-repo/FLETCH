@@ -27,11 +27,14 @@ without requiring a separate web app.
   source paths can be previewed without cloning the domain repo.
 - Source previews now include line-numbered sections, previous/next line
   navigation, and compact JSON outlines.
+- Added `--open` to `fletch registry web` so a successful bind can launch the
+  local registry browser in the default browser.
 
 ## Validation
 
 - `cargo fmt`
 - `cargo test --workspace --quiet`
+- `cargo run -p fletch-cli -- registry web --help`
 - Full MUNDUS followed-index smoke test with the web server:
   - 243 registries
   - 11,381 rows

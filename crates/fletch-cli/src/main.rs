@@ -562,6 +562,9 @@ enum RegistryCommands {
         /// Port to bind. Use 0 to ask the OS for an available port.
         #[arg(long, default_value_t = 7878)]
         port: u16,
+        /// Open the local registry browser URL in the default browser after binding.
+        #[arg(long)]
+        open: bool,
     },
     /// Export graph JSON from a fletch.registry.v1 file.
     Graph {
@@ -1148,9 +1151,10 @@ fn main() -> Result<()> {
                 follow,
                 host,
                 port,
+                open,
             } => {
                 let index = read_registry_web_index(index, files, follow)?;
-                serve_registry_web(index, host, port)?;
+                serve_registry_web(index, host, port, open)?;
             }
             RegistryCommands::Graph { file, output } => {
                 let registry = read_registry(&file)?;
@@ -1690,10 +1694,19 @@ fn read_registry_web_index(
     }
 }
 
-fn serve_registry_web(index: RegistryIndexReport, host: String, port: u16) -> Result<()> {
+fn serve_registry_web(
+    index: RegistryIndexReport,
+    host: String,
+    port: u16,
+    open: bool,
+) -> Result<()> {
     let listener = TcpListener::bind((host.as_str(), port))?;
     let address = listener.local_addr()?;
-    eprintln!("FLETCH registry web listening at http://{address}/");
+    let url = format!("http://{address}/");
+    eprintln!("FLETCH registry web listening at {url}");
+    if open {
+        open_browser(&url)?;
+    }
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
@@ -1703,6 +1716,40 @@ fn serve_registry_web(index: RegistryIndexReport, host: String, port: u16) -> Re
             }
             Err(error) => eprintln!("FLETCH registry web connection failed: {error}"),
         }
+    }
+    Ok(())
+}
+
+fn open_browser(url: &str) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/C", "start", "", url]);
+        return run_browser_launcher(command);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = std::process::Command::new("open");
+        command.arg(url);
+        return run_browser_launcher(command);
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(url);
+        return run_browser_launcher(command);
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
+    bail!("--open is not supported on this platform; open {url} manually");
+}
+
+fn run_browser_launcher(mut command: std::process::Command) -> Result<()> {
+    let status = command.status().context("failed to launch browser")?;
+    if !status.success() {
+        bail!("browser launcher exited with status {status}");
     }
     Ok(())
 }

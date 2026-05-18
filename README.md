@@ -245,15 +245,16 @@ registries, rights metadata, and curation policy.
 
 `fletch registry web` serves a local browser UI at `http://127.0.0.1:7878/` for
 searching registry data, clicking result rows, and inspecting tags, metadata, and
-source URLs. It can read an existing `fletch.registry-index.v1` with `--index`,
-or build the index in memory from registry files with `--file` and `--follow`.
-Search text is multi-term: `storm seed` matches rows that contain both terms even
-when the exact phrase is not present. The UI also supports comma-separated tag
-filters and comma-separated metadata filters such as
-`owner_repo=STORM,asset_kind=seed-fixture`. For a one-command MUNDUS launch:
+source URLs. Add `--open` to launch the bound URL in the default browser. It can
+read an existing `fletch.registry-index.v1` with `--index`, or build the index in
+memory from registry files with `--file` and `--follow`. Search text is
+multi-term: `storm seed` matches rows that contain both terms even when the exact
+phrase is not present. The UI also supports comma-separated tag filters and
+comma-separated metadata filters such as `owner_repo=STORM,asset_kind=seed-fixture`.
+For a one-command MUNDUS launch:
 
 ```powershell
-fletch registry web --follow --file .fletch\registries\mundus-known-assets-seed.json --file .fletch\registries\mundus-knowledge-systems-registries.json
+fletch registry web --open --follow --file .fletch\registries\mundus-known-assets-seed.json --file .fletch\registries\mundus-knowledge-systems-registries.json
 ```
 
 The left facet rail summarizes high-value sections of the index: owner repo,
