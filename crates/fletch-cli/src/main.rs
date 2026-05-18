@@ -1816,8 +1816,18 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                 .and_then(|values| values.first())
                 .and_then(|value| value.parse::<usize>().ok())
                 .or(Some(50));
-            let report =
-                search_registry_index(index, &tags, &metadata, text.as_deref(), offset, limit);
+            let sort = query.get("sort").and_then(|values| values.first());
+            let direction = query.get("direction").and_then(|values| values.first());
+            let report = search_registry_web_index(
+                index,
+                &tags,
+                &metadata,
+                text.as_deref(),
+                offset,
+                limit,
+                sort.map(String::as_str),
+                direction.map(String::as_str),
+            );
             write_json_response(&mut stream, &report)
         }
         "/api/row" => {
@@ -1976,6 +1986,82 @@ fn top_facets(counts: BTreeMap<String, usize>, limit: usize) -> Vec<serde_json::
         .collect()
 }
 
+fn search_registry_web_index(
+    index: &RegistryIndexReport,
+    tags: &[String],
+    metadata_filters: &[(String, String)],
+    text: Option<&str>,
+    offset: usize,
+    limit: Option<usize>,
+    sort: Option<&str>,
+    direction: Option<&str>,
+) -> fletch_core::RegistrySearchReport {
+    let mut report = search_registry_index(index, tags, metadata_filters, text, 0, None);
+    let sort = sort.unwrap_or("index");
+    let descending = direction == Some("desc");
+    sort_registry_web_rows(&mut report.rows, sort, descending);
+    if sort != "index" {
+        report.query.insert("sort".to_string(), sort.to_string());
+    }
+    if descending {
+        report
+            .query
+            .insert("direction".to_string(), "desc".to_string());
+    }
+    report.rows = report
+        .rows
+        .iter()
+        .skip(offset)
+        .take(limit.unwrap_or(usize::MAX))
+        .cloned()
+        .collect();
+    report
+}
+
+fn sort_registry_web_rows(rows: &mut [RegistryIndexRow], sort: &str, descending: bool) {
+    match sort {
+        "fletch_id" => rows.sort_by(|left, right| left.fletch_id.cmp(&right.fletch_id)),
+        "registry_id" => rows.sort_by(|left, right| left.registry_id.cmp(&right.registry_id)),
+        "owner_repo" => {
+            rows.sort_by(|left, right| metadata_sort_order(left, right, "owner_repo", descending))
+        }
+        "domain" => {
+            rows.sort_by(|left, right| metadata_sort_order(left, right, "domain", descending))
+        }
+        "asset_kind" => {
+            rows.sort_by(|left, right| metadata_sort_order(left, right, "asset_kind", descending))
+        }
+        "node_kind" => rows.sort_by(|left, right| {
+            format!("{:?}", left.node_kind)
+                .cmp(&format!("{:?}", right.node_kind))
+                .then_with(|| left.fletch_id.cmp(&right.fletch_id))
+        }),
+        _ => {}
+    }
+    if descending && !matches!(sort, "owner_repo" | "domain" | "asset_kind") {
+        rows.reverse();
+    }
+}
+
+fn metadata_sort_order(
+    left: &RegistryIndexRow,
+    right: &RegistryIndexRow,
+    key: &str,
+    descending: bool,
+) -> std::cmp::Ordering {
+    match (left.metadata.get(key), right.metadata.get(key)) {
+        (Some(left_value), Some(right_value)) if descending => right_value
+            .cmp(left_value)
+            .then_with(|| left.fletch_id.cmp(&right.fletch_id)),
+        (Some(left_value), Some(right_value)) => left_value
+            .cmp(right_value)
+            .then_with(|| left.fletch_id.cmp(&right.fletch_id)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => left.fletch_id.cmp(&right.fletch_id),
+    }
+}
+
 fn load_registry_source_preview(
     row: &RegistryIndexRow,
     source_index: usize,
@@ -2132,6 +2218,23 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         <div id="result-count" class="meta"></div>
         <div class="pager">
           <button type="button" id="prev-page">Previous page</button>
+          <label class="meta">Sort
+            <select id="sort">
+              <option value="index" selected>Index order</option>
+              <option value="fletch_id">Fletch ID</option>
+              <option value="registry_id">Registry ID</option>
+              <option value="owner_repo">Owner repo</option>
+              <option value="domain">Domain</option>
+              <option value="asset_kind">Asset kind</option>
+              <option value="node_kind">Node kind</option>
+            </select>
+          </label>
+          <label class="meta">Direction
+            <select id="direction">
+              <option value="asc" selected>Asc</option>
+              <option value="desc">Desc</option>
+            </select>
+          </label>
           <label class="meta">Page size
             <select id="page-size">
               <option value="25">25</option>
@@ -2157,6 +2260,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const prevPage = document.querySelector('#prev-page');
     const nextPage = document.querySelector('#next-page');
     const pageSize = document.querySelector('#page-size');
+    const sort = document.querySelector('#sort');
+    const direction = document.querySelector('#direction');
     let currentOffset = 0;
     let matchedRowCount = 0;
 
@@ -2249,6 +2354,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       if (metadata) metadata.split(',').map(v => v.trim()).filter(Boolean).forEach(v => params.append('metadata', v));
       params.set('offset', String(currentOffset));
       params.set('limit', pageSize.value);
+      params.set('sort', sort.value);
+      params.set('direction', direction.value);
       const response = await fetch(`/api/search?${params}`);
       const report = await response.json();
       matchedRowCount = report.matched_row_count;
@@ -2281,6 +2388,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     prevPage.addEventListener('click', () => runSearch(undefined, currentOffset - Number(pageSize.value || '50')));
     nextPage.addEventListener('click', () => runSearch(undefined, currentOffset + Number(pageSize.value || '50')));
     pageSize.addEventListener('change', () => runSearch(undefined, 0));
+    sort.addEventListener('change', () => runSearch(undefined, 0));
+    direction.addEventListener('change', () => runSearch(undefined, 0));
     runSearch();
   </script>
 </body>

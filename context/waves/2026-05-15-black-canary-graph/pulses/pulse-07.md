@@ -31,6 +31,8 @@ without requiring a separate web app.
   local registry browser in the default browser.
 - Added result pagination controls with 25, 50, and 100 row page sizes for large
   followed indexes.
+- Added web result sorting by fletch ID, registry ID, owner repo, domain, asset
+  kind, or node kind.
 
 ## Validation
 
