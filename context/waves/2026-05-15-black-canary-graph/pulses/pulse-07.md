@@ -33,6 +33,8 @@ without requiring a separate web app.
   followed indexes.
 - Added web result sorting by fletch ID, registry ID, owner repo, domain, asset
   kind, or node kind.
+- Added shareable query URLs and browser history state for search, filters,
+  sorting, page size, and offset.
 
 ## Validation
 

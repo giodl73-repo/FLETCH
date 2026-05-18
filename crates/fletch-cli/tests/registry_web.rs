@@ -42,6 +42,13 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("FLETCH Registry Search"));
     assert!(html.contains("Next page"));
     assert!(html.contains("Owner repo"));
+    assert!(html.contains("Copy link"));
+
+    let linked_html = http_get(
+        address,
+        "/?text=storm%20seed&sort=fletch_id&direction=desc&offset=1&limit=25",
+    )?;
+    assert!(linked_html.contains("loadControlsFromUrl"));
 
     let summary = http_get(address, "/api/summary")?;
     assert!(summary.contains("\"row_count\": 2"));

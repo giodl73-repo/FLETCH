@@ -2243,6 +2243,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
             </select>
           </label>
           <button type="button" id="next-page">Next page</button>
+          <button type="button" id="copy-link">Copy link</button>
         </div>
         <div id="results"></div>
       </section>
@@ -2262,6 +2263,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const pageSize = document.querySelector('#page-size');
     const sort = document.querySelector('#sort');
     const direction = document.querySelector('#direction');
+    const copyLink = document.querySelector('#copy-link');
     let currentOffset = 0;
     let matchedRowCount = 0;
 
@@ -2342,7 +2344,50 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       return `<h3>${esc(title)}</h3>${chips || '<div class="meta">No values</div>'}`;
     }
 
-    async function runSearch(event, offset = 0) {
+    function setControlFromQuery(params, key, selector) {
+      const value = params.get(key);
+      if (value !== null) {
+        document.querySelector(selector).value = value;
+      }
+    }
+
+    function loadControlsFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      setControlFromQuery(params, 'text', '#text');
+      setControlFromQuery(params, 'tag', '#tag');
+      setControlFromQuery(params, 'metadata', '#metadata');
+      setControlFromQuery(params, 'limit', '#page-size');
+      setControlFromQuery(params, 'sort', '#sort');
+      setControlFromQuery(params, 'direction', '#direction');
+      return Number(params.get('offset') || '0');
+    }
+
+    function updateBrowserUrl(params, pushState) {
+      const next = new URL(window.location.href);
+      next.search = params.toString();
+      if (pushState) {
+        window.history.pushState({}, '', next);
+      } else {
+        window.history.replaceState({}, '', next);
+      }
+    }
+
+    function copyShareLink() {
+      if (!navigator.clipboard) {
+        copyLink.textContent = 'Copy unavailable';
+        setTimeout(() => { copyLink.textContent = 'Copy link'; }, 1200);
+        return;
+      }
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        copyLink.textContent = 'Copied';
+        setTimeout(() => { copyLink.textContent = 'Copy link'; }, 1200);
+      }, () => {
+        copyLink.textContent = 'Copy failed';
+        setTimeout(() => { copyLink.textContent = 'Copy link'; }, 1200);
+      });
+    }
+
+    async function runSearch(event, offset = 0, pushState = true) {
       event?.preventDefault();
       currentOffset = Math.max(0, offset);
       const params = new URLSearchParams();
@@ -2356,6 +2401,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       params.set('limit', pageSize.value);
       params.set('sort', sort.value);
       params.set('direction', direction.value);
+      updateBrowserUrl(params, pushState);
       const response = await fetch(`/api/search?${params}`);
       const report = await response.json();
       matchedRowCount = report.matched_row_count;
@@ -2390,7 +2436,9 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     pageSize.addEventListener('change', () => runSearch(undefined, 0));
     sort.addEventListener('change', () => runSearch(undefined, 0));
     direction.addEventListener('change', () => runSearch(undefined, 0));
-    runSearch();
+    copyLink.addEventListener('click', copyShareLink);
+    window.addEventListener('popstate', () => runSearch(undefined, loadControlsFromUrl(), false));
+    runSearch(undefined, loadControlsFromUrl(), false);
   </script>
 </body>
 </html>
