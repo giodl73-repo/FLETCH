@@ -265,17 +265,18 @@ Result controls default to relevance ranking for text searches and can also sort
 by fletch ID, registry ID, owner repo, domain, asset kind, or node kind.
 Pagination moves large indexes through 25, 50, or 100 rows at a time. Search,
 filter, sort, and page state is mirrored into the browser URL, and **Copy link**
-captures a shareable local query URL. **Export CSV** downloads the current result
-page with IDs, scores, snippets, tags, source URLs, and metadata; **Export all
-CSV** downloads every row matching the current filters. Result cards include a
-highlighted match snippet and score so users can see which ID, tag, metadata
-value, or source URL made the row relevant. Click **Load preview** beside a source
-URL to fetch bounded source data. Source previews include line-numbered sections,
-highlight current text-search terms inside loaded lines, previous/next line
-navigation, and a compact JSON outline when the loaded data is JSON. For followed
-GitHub registry rows, FLETCH preserves the remote registry base URL so relative
-source paths such as `fixtures\seed-storm.json` can be previewed from raw GitHub
-without requiring that repo to be cloned locally.
+captures a shareable local query URL. Selecting a row records a stable row deep
+link, and **Copy row link** shares that selected detail. **Export CSV** downloads
+the current result page with IDs, scores, snippets, tags, source URLs, and
+metadata; **Export all CSV** downloads every row matching the current filters.
+Result cards include a highlighted match snippet and score so users can see which
+ID, tag, metadata value, or source URL made the row relevant. Click **Load
+preview** beside a source URL to fetch bounded source data. Source previews include
+line-numbered sections, highlight current text-search terms inside loaded lines,
+previous/next line navigation, and a compact JSON outline when the loaded data is
+JSON. For followed GitHub registry rows, FLETCH preserves the remote registry base
+URL so relative source paths such as `fixtures\seed-storm.json` can be previewed
+from raw GitHub without requiring that repo to be cloned locally.
 
 `fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
 The initial generic tipper samples bounded bytes and reports JSON fields, JSON

@@ -2564,7 +2564,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         <div class="snippet">${highlightSnippet(snippet, row.fletch_id)}</div>
         <div class="tags">${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
         <div class="sources">${(row.source_urls || []).map(url => `<div>${esc(url)}</div>`).join('')}</div>`;
-      div.addEventListener('click', () => showDetail(row));
+      div.addEventListener('click', () => showRowDetail(row, true));
       return div;
     }
 
@@ -2586,6 +2586,11 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     }
 
     function showDetail(row) {
+      showRowDetail(row, false);
+    }
+
+    function showRowDetail(row, updateUrl) {
+      if (updateUrl) updateSelectedRowUrl(row);
       const urls = (row.source_urls || []).map((url, index) => {
         const link = url.startsWith('http') ? `<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(url)}</a>` : esc(url);
         return `<li>${link} <button type="button" onclick="loadSource('${esc(row.registry_id)}','${esc(row.fletch_id)}',${index})">Load preview</button></li>`;
@@ -2594,6 +2599,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       detail.dataset.fletchId = row.fletch_id;
       detail.dataset.sourceIndex = '0';
       detail.innerHTML = `<h3>${esc(row.fletch_id)}</h3>
+        <button type="button" onclick="copySelectedRowLink()">Copy row link</button>
         <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)}</div>
         <h4>Sources</h4><ul>${urls}</ul>
         <h4>Tags</h4><div>${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
@@ -2601,6 +2607,30 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         <h4>Loaded source preview</h4>
         <div id="source-controls" class="meta"></div>
         <pre id="source-preview">Click "Load preview" beside a source URL to fetch bounded source data.</pre>`;
+    }
+
+    function updateSelectedRowUrl(row) {
+      const next = new URL(window.location.href);
+      next.searchParams.set('selected_registry_id', row.registry_id);
+      next.searchParams.set('selected_fletch_id', row.fletch_id);
+      window.history.replaceState({}, '', next);
+    }
+
+    function selectedRegistryFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const registryId = params.get('selected_registry_id');
+      const fletchId = params.get('selected_fletch_id');
+      return registryId && fletchId ? { registryId, fletchId } : null;
+    }
+
+    async function loadSelectedRowDetail(selected) {
+      const params = new URLSearchParams({ registry_id: selected.registryId, fletch_id: selected.fletchId });
+      const response = await fetch(`/api/row?${params}`);
+      if (response.ok) showRowDetail(await response.json(), false);
+    }
+
+    function copySelectedRowLink() {
+      if (navigator.clipboard) navigator.clipboard.writeText(window.location.href);
     }
 
     async function loadSource(registryId, fletchId, sourceIndex, lineStart = 1) {
@@ -2714,7 +2744,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       });
     }
 
-    function currentSearchParams(offset) {
+    function currentSearchParams(offset, selected) {
       const params = new URLSearchParams();
       const text = document.querySelector('#text').value.trim();
       const tag = document.querySelector('#tag').value.trim();
@@ -2726,6 +2756,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       params.set('limit', pageSize.value);
       params.set('sort', sort.value);
       params.set('direction', direction.value);
+      if (selected) {
+        params.set('selected_registry_id', selected.registryId);
+        params.set('selected_fletch_id', selected.fletchId);
+      }
       return params;
     }
 
@@ -2739,10 +2773,11 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       window.open(`/api/export.csv?${params}`, '_blank', 'noreferrer');
     }
 
-    async function runSearch(event, offset = 0, pushState = true) {
+    async function runSearch(event, offset = 0, pushState = true, preserveSelection = false) {
       event?.preventDefault();
       currentOffset = Math.max(0, offset);
-      const params = currentSearchParams(currentOffset);
+      const selected = preserveSelection ? selectedRegistryFromUrl() : null;
+      const params = currentSearchParams(currentOffset, selected);
       updateBrowserUrl(params, pushState);
       const response = await fetch(`/api/search?${params}`);
       const report = await response.json();
@@ -2753,7 +2788,14 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       prevPage.disabled = currentOffset === 0;
       nextPage.disabled = currentOffset + report.rows.length >= matchedRowCount;
       results.replaceChildren(...report.rows.map((row, index) => rowCard(row, report.snippets?.[index], report.scores?.[index])));
-      if (report.rows[0]) {
+      if (selected) {
+        const selectedRow = report.rows.find(row => row.registry_id === selected.registryId && row.fletch_id === selected.fletchId);
+        if (selectedRow) {
+          showDetail(selectedRow);
+        } else {
+          await loadSelectedRowDetail(selected);
+        }
+      } else if (report.rows[0]) {
         showDetail(report.rows[0]);
       } else {
         detail.textContent = 'No matching rows.';
@@ -2785,8 +2827,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     copyLink.addEventListener('click', copyShareLink);
     exportCsv.addEventListener('click', exportCurrentCsv);
     exportAllCsv.addEventListener('click', exportAllCsvMatches);
-    window.addEventListener('popstate', () => runSearch(undefined, loadControlsFromUrl(), false));
-    runSearch(undefined, loadControlsFromUrl(), false);
+    window.addEventListener('popstate', () => runSearch(undefined, loadControlsFromUrl(), false, true));
+    runSearch(undefined, loadControlsFromUrl(), false, true);
   </script>
 </body>
 </html>

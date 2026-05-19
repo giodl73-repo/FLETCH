@@ -49,12 +49,15 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("Loading presets"));
     assert!(html.contains("highlightSnippet"));
     assert!(html.contains("currentTextSearchTerms"));
+    assert!(html.contains("Copy row link"));
+    assert!(html.contains("selectedRegistryFromUrl"));
 
     let linked_html = http_get(
         address,
-        "/?text=storm%20seed&sort=fletch_id&direction=desc&offset=1&limit=25",
+        "/?text=storm%20seed&sort=fletch_id&direction=desc&offset=1&limit=25&selected_registry_id=storm-foundation-assets&selected_fletch_id=storm.foundation.seed-storm",
     )?;
     assert!(linked_html.contains("loadControlsFromUrl"));
+    assert!(linked_html.contains("loadSelectedRowDetail"));
 
     let summary = http_get(address, "/api/summary")?;
     assert!(summary.contains("\"row_count\": 2"));

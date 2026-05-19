@@ -46,6 +46,8 @@ without requiring a separate web app.
 - Added all-match CSV export so filtered searches can become full working
   datasets, not just visible result pages.
 - Highlighted current text-search terms inside loaded source preview lines.
+- Added selected-row deep links and copyable row URLs for sharing exact result
+  details.
 
 ## Validation
 
