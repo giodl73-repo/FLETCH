@@ -2696,6 +2696,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       next.searchParams.set('selected_fletch_id', row.fletch_id);
       next.searchParams.delete('selected_source');
       next.searchParams.delete('selected_line_start');
+      next.searchParams.delete('selected_matched_only');
       window.history.replaceState({}, '', next);
     }
 
@@ -2705,11 +2706,13 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const fletchId = params.get('selected_fletch_id');
       const sourceIndex = params.get('selected_source');
       const lineStart = params.get('selected_line_start');
+      const matchedOnly = params.get('selected_matched_only');
       return registryId && fletchId ? {
         registryId,
         fletchId,
         sourceIndex: sourceIndex === null ? null : Number(sourceIndex),
-        lineStart: lineStart === null ? null : Number(lineStart)
+        lineStart: lineStart === null ? null : Number(lineStart),
+        matchedOnly: matchedOnly === 'true'
       } : null;
     }
 
@@ -2749,7 +2752,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         return;
       }
       const data = await response.json();
-      updateSelectedSourceUrl(registryId, fletchId, sourceIndex, data.line_start);
+      updateSelectedSourceUrl(registryId, fletchId, sourceIndex, data.line_start, data.matched_only);
       const next = data.line_start + data.line_count;
       const prev = Math.max(1, data.line_start - 80);
       const outline = data.json_outline ? `\nJSON outline: ${JSON.stringify(data.json_outline)}` : '';
@@ -2767,18 +2770,23 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         .join('\n');
     }
 
-    function updateSelectedSourceUrl(registryId, fletchId, sourceIndex, lineStart) {
+    function updateSelectedSourceUrl(registryId, fletchId, sourceIndex, lineStart, matchedOnly) {
       const next = new URL(window.location.href);
       next.searchParams.set('selected_registry_id', registryId);
       next.searchParams.set('selected_fletch_id', fletchId);
       next.searchParams.set('selected_source', String(sourceIndex));
       next.searchParams.set('selected_line_start', String(lineStart));
+      if (matchedOnly) {
+        next.searchParams.set('selected_matched_only', 'true');
+      } else {
+        next.searchParams.delete('selected_matched_only');
+      }
       window.history.replaceState({}, '', next);
     }
 
     function loadSelectedSourcePreview(selected) {
       if (!hasSelectedSourcePreview(selected)) return;
-      loadSource(selected.registryId, selected.fletchId, selected.sourceIndex, selected.lineStart);
+      loadSource(selected.registryId, selected.fletchId, selected.sourceIndex, selected.lineStart, selected.matchedOnly);
     }
 
     function hasSelectedSourcePreview(selected) {
@@ -2893,6 +2901,9 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         }
         if (selected.lineStart !== null && !Number.isNaN(selected.lineStart)) {
           params.set('selected_line_start', String(selected.lineStart));
+        }
+        if (selected.matchedOnly) {
+          params.set('selected_matched_only', 'true');
         }
       }
       return params;

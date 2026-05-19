@@ -61,6 +61,7 @@ without requiring a separate web app.
 - Added matched preview-line counts to source-preview JSON and UI controls.
 - Added a `matched_only=true` source-preview API/UI path for showing only loaded
   lines that match the active text query.
+- Preserved matched-only mode in source-preview deep links.
 
 ## Validation
 
