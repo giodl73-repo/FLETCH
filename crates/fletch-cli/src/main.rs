@@ -2382,14 +2382,21 @@ fn load_registry_source_preview(
     let lines = preview_text.lines().collect::<Vec<_>>();
     let total_line_count = lines.len();
     let effective_line_count = line_count.min(500);
+    let terms = registry_web_search_terms(text);
     let (start, matched_line) =
-        source_preview_start(&lines, line_start, effective_line_count, text);
+        source_preview_start(&lines, line_start, effective_line_count, &terms);
     let selected_lines = lines
         .iter()
         .enumerate()
         .skip(start.saturating_sub(1))
         .take(effective_line_count)
-        .map(|(index, line)| serde_json::json!({ "number": index + 1, "text": line }))
+        .map(|(index, line)| {
+            serde_json::json!({
+                "number": index + 1,
+                "text": line,
+                "matched": source_line_matches_terms(line, &terms)
+            })
+        })
         .collect::<Vec<_>>();
     Ok(serde_json::json!({
         "registry_id": row.registry_id,
@@ -2403,6 +2410,7 @@ fn load_registry_source_preview(
         "total_line_count": total_line_count,
         "line_start": start,
         "matched_line": matched_line,
+        "matched_terms": terms,
         "line_count": selected_lines.len(),
         "lines": selected_lines,
         "json_outline": json_outline(&preview_text),
@@ -2414,16 +2422,15 @@ fn source_preview_start(
     lines: &[&str],
     line_start: Option<usize>,
     line_count: usize,
-    text: Option<&str>,
+    terms: &[String],
 ) -> (usize, Option<usize>) {
     if let Some(line_start) = line_start {
         return (line_start.max(1), None);
     }
-    let terms = registry_web_search_terms(text);
-    let Some(match_index) = lines.iter().position(|line| {
-        let line = line.to_lowercase();
-        terms.iter().any(|term| line.contains(term))
-    }) else {
+    let Some(match_index) = lines
+        .iter()
+        .position(|line| source_line_matches_terms(line, terms))
+    else {
         return (1, None);
     };
     let matched_line = match_index + 1;
@@ -2432,6 +2439,14 @@ fn source_preview_start(
         matched_line.saturating_sub(context).max(1),
         Some(matched_line),
     )
+}
+
+fn source_line_matches_terms(line: &str, terms: &[String]) -> bool {
+    if terms.is_empty() {
+        return false;
+    }
+    let line = line.to_lowercase();
+    terms.iter().any(|term| line.contains(term))
 }
 
 fn json_outline(text: &str) -> Option<serde_json::Value> {

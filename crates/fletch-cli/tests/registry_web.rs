@@ -138,6 +138,9 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     )?;
     assert!(matched_source.contains("\"line_start\": 2"));
     assert!(matched_source.contains("\"matched_line\": 2"));
+    assert!(matched_source.contains("\"matched_terms\": ["));
+    assert!(matched_source.contains("\"payload\""));
+    assert!(matched_source.contains("\"matched\": true"));
     assert!(matched_source.contains("storm fixture payload"));
 
     drop(server);

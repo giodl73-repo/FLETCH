@@ -56,6 +56,8 @@ without requiring a separate web app.
   preserving explicit source-preview deep links.
 - Centered source previews around the first source line matching the active text
   query when no explicit line is pinned.
+- Added source-preview matched terms and per-line match flags to the JSON
+  response.
 
 ## Validation
 
