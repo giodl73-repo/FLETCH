@@ -52,6 +52,7 @@ without requiring a separate web app.
   reopen exact source preview windows.
 - Added all-match JSON export with rows, snippets, and scores for downstream
   tooling.
+- Added current-page JSON export from the browser, matching current-page CSV.
 - Auto-loaded the first bounded source preview when row details open, while
   preserving explicit source-preview deep links.
 - Centered source previews around the first source line matching the active text

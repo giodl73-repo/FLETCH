@@ -270,9 +270,10 @@ link, and **Copy row link** shares that selected detail. Loaded source previews
 also update the URL with source index and line start so shared links can reopen the
 same bounded data window. **Export CSV** downloads the current result page with
 IDs, scores, snippets, tags, source URLs, and metadata; **Export all CSV**
-downloads every row matching the current filters; **Export all JSON** downloads
-the full filtered result report with rows, snippets, and scores for downstream
-tools. Result cards include a highlighted match snippet and score so users can see
+downloads every row matching the current filters. **Export JSON** downloads the
+current result page as a machine-readable report; **Export all JSON** downloads the
+full filtered result report with rows, snippets, and scores for downstream tools.
+Result cards include a highlighted match snippet and score so users can see
 which ID, tag, metadata value, or source URL made the row relevant. Selecting a
 row auto-loads its first bounded source preview, and **Load preview** beside any
 source URL can switch the loaded source. When a text query is active and no exact

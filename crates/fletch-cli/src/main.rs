@@ -2604,6 +2604,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
           <button type="button" id="copy-link">Copy link</button>
           <button type="button" id="export-csv">Export CSV</button>
           <button type="button" id="export-all-csv">Export all CSV</button>
+          <button type="button" id="export-json">Export JSON</button>
           <button type="button" id="export-all-json">Export all JSON</button>
         </div>
         <div id="results"></div>
@@ -2628,6 +2629,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const copyLink = document.querySelector('#copy-link');
     const exportCsv = document.querySelector('#export-csv');
     const exportAllCsv = document.querySelector('#export-all-csv');
+    const exportJson = document.querySelector('#export-json');
     const exportAllJson = document.querySelector('#export-all-json');
     let currentOffset = 0;
     let matchedRowCount = 0;
@@ -2924,6 +2926,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       window.open(`/api/export.csv?${params}`, '_blank', 'noreferrer');
     }
 
+    function exportCurrentJson() {
+      window.open(`/api/export.json?${currentSearchParams(currentOffset)}`, '_blank', 'noreferrer');
+    }
+
     function exportAllJsonMatches() {
       const params = currentSearchParams(0);
       params.set('all', 'true');
@@ -2985,6 +2991,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     copyLink.addEventListener('click', copyShareLink);
     exportCsv.addEventListener('click', exportCurrentCsv);
     exportAllCsv.addEventListener('click', exportAllCsvMatches);
+    exportJson.addEventListener('click', exportCurrentJson);
     exportAllJson.addEventListener('click', exportAllJsonMatches);
     window.addEventListener('popstate', () => runSearch(undefined, loadControlsFromUrl(), false, true));
     runSearch(undefined, loadControlsFromUrl(), false, true);

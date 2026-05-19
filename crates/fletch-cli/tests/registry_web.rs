@@ -45,6 +45,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("Copy link"));
     assert!(html.contains("Export CSV"));
     assert!(html.contains("Export all CSV"));
+    assert!(html.contains("Export JSON"));
     assert!(html.contains("Export all JSON"));
     assert!(html.contains("Relevance"));
     assert!(html.contains("Loading presets"));
