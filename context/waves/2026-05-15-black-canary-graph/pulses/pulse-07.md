@@ -42,6 +42,7 @@ without requiring a separate web app.
   registries, source-corpus packs, and STORM hazards.
 - Added CSV export for the current result page, including scores, snippets, tags,
   source URLs, and metadata.
+- Highlighted matched terms inside browser result snippets.
 
 ## Validation
 

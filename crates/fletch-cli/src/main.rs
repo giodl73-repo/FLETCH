@@ -2448,6 +2448,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     .row:hover { border-color: #60a5fa; }
     .meta, .tags, .sources, .snippet { color: #94a3b8; font-size: .9rem; overflow-wrap: anywhere; }
     .snippet { color: #dbeafe; margin-top: .35rem; }
+    mark { background: #fde68a; color: #111827; border-radius: .2rem; padding: 0 .1rem; }
     .tag, .facet { display: inline-block; margin: .15rem; padding: .15rem .4rem; border-radius: 999px; background: #1e293b; color: #bfdbfe; }
     .facet { cursor: pointer; border: 1px solid #334155; }
     .facet:hover { border-color: #60a5fa; }
@@ -2540,11 +2541,23 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       div.className = 'card row';
       div.innerHTML = `<strong>${esc(row.fletch_id)}</strong>
         <div class="meta">${esc(row.registry_id)} · ${esc(row.node_kind)} · score ${esc(score ?? 0)}</div>
-        <div class="snippet">${esc(snippet?.text || row.fletch_id)}</div>
+        <div class="snippet">${highlightSnippet(snippet, row.fletch_id)}</div>
         <div class="tags">${(row.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
         <div class="sources">${(row.source_urls || []).map(url => `<div>${esc(url)}</div>`).join('')}</div>`;
       div.addEventListener('click', () => showDetail(row));
       return div;
+    }
+
+    function highlightSnippet(snippet, fallback) {
+      const text = String(snippet?.text || fallback || '');
+      const terms = [...new Set(snippet?.matched_terms || [])].filter(Boolean).sort((a, b) => b.length - a.length);
+      if (!terms.length) return esc(text);
+      const pattern = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'ig');
+      return esc(text).replace(pattern, '<mark>$1</mark>');
+    }
+
+    function escapeRegExp(value) {
+      return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     function showDetail(row) {
