@@ -59,6 +59,8 @@ without requiring a separate web app.
 - Added source-preview matched terms and per-line match flags to the JSON
   response.
 - Added matched preview-line counts to source-preview JSON and UI controls.
+- Added a `matched_only=true` source-preview API/UI path for showing only loaded
+  lines that match the active text query.
 
 ## Validation
 

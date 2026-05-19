@@ -279,9 +279,10 @@ source URL can switch the loaded source. When a text query is active and no exac
 line is pinned, previews open around the first matching source line. Source
 previews include line-numbered sections, per-line match flags and matched terms in
 the JSON response, a matched preview-line count, highlighted current text-search
-terms inside loaded lines, previous/next line navigation, and a compact JSON
-outline when the loaded data is JSON. For followed GitHub registry rows, FLETCH
-preserves the remote registry base URL so relative source paths such as
+terms inside loaded lines, previous/next line navigation, a matched-lines-only
+view, and a compact JSON outline when the loaded data is JSON. The same behavior is
+available from `/api/source?matched_only=true`. For followed GitHub registry rows,
+FLETCH preserves the remote registry base URL so relative source paths such as
 `fixtures\seed-storm.json` can be previewed from raw GitHub without requiring that
 repo to be cloned locally.
 

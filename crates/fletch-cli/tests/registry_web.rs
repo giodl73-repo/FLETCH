@@ -56,6 +56,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("loadSelectedSourcePreview"));
     assert!(html.contains("loadFirstSourcePreview"));
     assert!(html.contains("hasSelectedSourcePreview"));
+    assert!(html.contains("loadMatchedCurrentSource"));
 
     let linked_html = http_get(
         address,
@@ -140,9 +141,19 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(matched_source.contains("\"matched_line\": 2"));
     assert!(matched_source.contains("\"matched_terms\": ["));
     assert!(matched_source.contains("\"matched_line_count\": 1"));
+    assert!(matched_source.contains("\"matched_only\": false"));
     assert!(matched_source.contains("\"payload\""));
     assert!(matched_source.contains("\"matched\": true"));
     assert!(matched_source.contains("storm fixture payload"));
+
+    let matched_only_source = http_get(
+        address,
+        "/api/source?registry_id=storm-foundation-assets&fletch_id=storm.foundation.seed-storm&source=0&text=payload&line_count=3&matched_only=true",
+    )?;
+    assert!(matched_only_source.contains("\"matched_only\": true"));
+    assert!(matched_only_source.contains("\"line_count\": 1"));
+    assert!(matched_only_source.contains("\"matched_line_count\": 1"));
+    assert!(matched_only_source.contains("storm fixture payload"));
 
     drop(server);
     fs::remove_file(index_path)?;

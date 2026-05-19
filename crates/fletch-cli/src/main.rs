@@ -1858,6 +1858,7 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                 .and_then(|value| value.parse::<usize>().ok())
                 .unwrap_or(80);
             let text = query.get("text").and_then(|values| values.first());
+            let matched_only = query_flag(&query, "matched_only");
             let row = registry_id
                 .zip(fletch_id)
                 .and_then(|(registry_id, fletch_id)| {
@@ -1872,6 +1873,7 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                         line_start,
                         line_count,
                         text.map(String::as_str),
+                        matched_only,
                     )?,
                 )
             } else {
@@ -2358,6 +2360,7 @@ fn load_registry_source_preview(
     line_start: Option<usize>,
     line_count: usize,
     text: Option<&str>,
+    matched_only: bool,
 ) -> Result<serde_json::Value> {
     let Some(source_url) = row.source_urls.get(source_index) else {
         bail!("source index {source_index} is out of range");
@@ -2385,7 +2388,7 @@ fn load_registry_source_preview(
     let terms = registry_web_search_terms(text);
     let (start, matched_line) =
         source_preview_start(&lines, line_start, effective_line_count, &terms);
-    let selected_lines = lines
+    let mut selected_lines = lines
         .iter()
         .enumerate()
         .skip(start.saturating_sub(1))
@@ -2406,6 +2409,13 @@ fn load_registry_source_preview(
                 .unwrap_or(false)
         })
         .count();
+    if matched_only {
+        selected_lines.retain(|line| {
+            line.get("matched")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false)
+        });
+    }
     Ok(serde_json::json!({
         "registry_id": row.registry_id,
         "fletch_id": row.fletch_id,
@@ -2420,6 +2430,7 @@ fn load_registry_source_preview(
         "matched_line": matched_line,
         "matched_terms": terms,
         "matched_line_count": matched_line_count,
+        "matched_only": matched_only,
         "line_count": selected_lines.len(),
         "lines": selected_lines,
         "json_outline": json_outline(&preview_text),
@@ -2720,7 +2731,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       if ((row.source_urls || []).length) loadSource(row.registry_id, row.fletch_id, 0);
     }
 
-    async function loadSource(registryId, fletchId, sourceIndex, lineStart = null) {
+    async function loadSource(registryId, fletchId, sourceIndex, lineStart = null, matchedOnly = false) {
       const preview = document.querySelector('#source-preview');
       const controls = document.querySelector('#source-controls');
       detail.dataset.registryId = registryId;
@@ -2731,6 +2742,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const text = document.querySelector('#text').value.trim();
       if (text) params.set('text', text);
       if (lineStart !== null) params.set('line_start', String(lineStart));
+      if (matchedOnly) params.set('matched_only', 'true');
       const response = await fetch(`/api/source?${params}`);
       if (!response.ok) {
         preview.textContent = `Could not load source preview: ${response.status} ${response.statusText}`;
@@ -2743,10 +2755,12 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const outline = data.json_outline ? `\nJSON outline: ${JSON.stringify(data.json_outline)}` : '';
       const match = data.matched_line ? ` · First match line: ${data.matched_line}` : '';
       const matchCount = data.matched_terms?.length ? ` · Matched preview lines: ${data.matched_line_count}` : '';
+      const matchedOnlyButton = data.matched_terms?.length ? '<button type="button" onclick="loadMatchedCurrentSource()">Matched lines only</button>' : '';
       controls.innerHTML = `Resolved: <a href="${esc(data.resolved_url)}" target="_blank" rel="noreferrer">${esc(data.resolved_url)}</a><br>
         Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${match}${matchCount}${outline}<br>
         <button type="button" onclick="loadCurrentSource(${prev})">Previous lines</button>
-        <button type="button" onclick="loadCurrentSource(${next})">Next lines</button>`;
+        <button type="button" onclick="loadCurrentSource(${next})">Next lines</button>
+        ${matchedOnlyButton}`;
       const terms = currentTextSearchTerms();
       preview.innerHTML = data.lines
         .map(line => `${esc(String(line.number).padStart(5, ' '))}  ${highlightText(line.text, terms)}`)
@@ -2773,6 +2787,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
 
     function loadCurrentSource(lineStart) {
       loadSource(detail.dataset.registryId, detail.dataset.fletchId, Number(detail.dataset.sourceIndex || '0'), lineStart);
+    }
+
+    function loadMatchedCurrentSource() {
+      loadSource(detail.dataset.registryId, detail.dataset.fletchId, Number(detail.dataset.sourceIndex || '0'), null, true);
     }
 
     function currentTextSearchTerms() {
