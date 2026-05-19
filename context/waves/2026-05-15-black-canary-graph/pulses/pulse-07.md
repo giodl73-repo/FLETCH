@@ -45,6 +45,7 @@ without requiring a separate web app.
 - Highlighted matched terms inside browser result snippets.
 - Added all-match CSV export so filtered searches can become full working
   datasets, not just visible result pages.
+- Highlighted current text-search terms inside loaded source preview lines.
 
 ## Validation
 

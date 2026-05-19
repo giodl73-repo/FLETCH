@@ -2571,8 +2571,13 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     function highlightSnippet(snippet, fallback) {
       const text = String(snippet?.text || fallback || '');
       const terms = [...new Set(snippet?.matched_terms || [])].filter(Boolean).sort((a, b) => b.length - a.length);
-      if (!terms.length) return esc(text);
-      const pattern = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'ig');
+      return highlightText(text, terms);
+    }
+
+    function highlightText(text, terms) {
+      const uniqueTerms = [...new Set(terms || [])].filter(Boolean).sort((a, b) => b.length - a.length);
+      if (!uniqueTerms.length) return esc(text);
+      const pattern = new RegExp(`(${uniqueTerms.map(escapeRegExp).join('|')})`, 'ig');
       return esc(text).replace(pattern, '<mark>$1</mark>');
     }
 
@@ -2619,11 +2624,19 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${outline}<br>
         <button type="button" onclick="loadCurrentSource(${prev})">Previous lines</button>
         <button type="button" onclick="loadCurrentSource(${next})">Next lines</button>`;
-      preview.textContent = data.lines.map(line => `${String(line.number).padStart(5, ' ')}  ${line.text}`).join('\n');
+      const terms = currentTextSearchTerms();
+      preview.innerHTML = data.lines
+        .map(line => `${esc(String(line.number).padStart(5, ' '))}  ${highlightText(line.text, terms)}`)
+        .join('\n');
     }
 
     function loadCurrentSource(lineStart) {
       loadSource(detail.dataset.registryId, detail.dataset.fletchId, Number(detail.dataset.sourceIndex || '0'), lineStart);
+    }
+
+    function currentTextSearchTerms() {
+      const text = document.querySelector('#text').value.trim();
+      return text ? [text, ...text.split(/\s+/)].filter(Boolean) : [];
     }
 
     function applyFacet(kind, value) {

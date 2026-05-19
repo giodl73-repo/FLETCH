@@ -48,6 +48,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("Relevance"));
     assert!(html.contains("Loading presets"));
     assert!(html.contains("highlightSnippet"));
+    assert!(html.contains("currentTextSearchTerms"));
 
     let linked_html = http_get(
         address,
