@@ -2763,6 +2763,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${match}${matchCount}${outline}<br>
         <button type="button" onclick="loadCurrentSource(${prev})">Previous lines</button>
         <button type="button" onclick="loadCurrentSource(${next})">Next lines</button>
+        <button type="button" onclick="copySelectedSourceLink()">Copy source link</button>
         ${matchedOnlyButton}`;
       const terms = currentTextSearchTerms();
       preview.innerHTML = data.lines
@@ -2799,6 +2800,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
 
     function loadMatchedCurrentSource() {
       loadSource(detail.dataset.registryId, detail.dataset.fletchId, Number(detail.dataset.sourceIndex || '0'), null, true);
+    }
+
+    function copySelectedSourceLink() {
+      if (navigator.clipboard) navigator.clipboard.writeText(window.location.href);
     }
 
     function currentTextSearchTerms() {

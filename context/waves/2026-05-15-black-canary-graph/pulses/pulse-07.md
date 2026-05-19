@@ -62,6 +62,7 @@ without requiring a separate web app.
 - Added a `matched_only=true` source-preview API/UI path for showing only loaded
   lines that match the active text query.
 - Preserved matched-only mode in source-preview deep links.
+- Added **Copy source link** for exact loaded source-preview URLs.
 
 ## Validation
 
