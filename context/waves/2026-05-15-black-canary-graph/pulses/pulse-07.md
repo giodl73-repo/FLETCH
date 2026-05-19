@@ -58,6 +58,7 @@ without requiring a separate web app.
   query when no explicit line is pinned.
 - Added source-preview matched terms and per-line match flags to the JSON
   response.
+- Added matched preview-line counts to source-preview JSON and UI controls.
 
 ## Validation
 

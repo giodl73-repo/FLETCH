@@ -278,11 +278,12 @@ row auto-loads its first bounded source preview, and **Load preview** beside any
 source URL can switch the loaded source. When a text query is active and no exact
 line is pinned, previews open around the first matching source line. Source
 previews include line-numbered sections, per-line match flags and matched terms in
-the JSON response, highlighted current text-search terms inside loaded lines,
-previous/next line navigation, and a compact JSON outline when the loaded data is
-JSON. For followed GitHub registry rows, FLETCH preserves the remote registry base
-URL so relative source paths such as `fixtures\seed-storm.json` can be previewed
-from raw GitHub without requiring that repo to be cloned locally.
+the JSON response, a matched preview-line count, highlighted current text-search
+terms inside loaded lines, previous/next line navigation, and a compact JSON
+outline when the loaded data is JSON. For followed GitHub registry rows, FLETCH
+preserves the remote registry base URL so relative source paths such as
+`fixtures\seed-storm.json` can be previewed from raw GitHub without requiring that
+repo to be cloned locally.
 
 `fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
 The initial generic tipper samples bounded bytes and reports JSON fields, JSON

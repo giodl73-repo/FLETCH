@@ -2398,6 +2398,14 @@ fn load_registry_source_preview(
             })
         })
         .collect::<Vec<_>>();
+    let matched_line_count = selected_lines
+        .iter()
+        .filter(|line| {
+            line.get("matched")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false)
+        })
+        .count();
     Ok(serde_json::json!({
         "registry_id": row.registry_id,
         "fletch_id": row.fletch_id,
@@ -2411,6 +2419,7 @@ fn load_registry_source_preview(
         "line_start": start,
         "matched_line": matched_line,
         "matched_terms": terms,
+        "matched_line_count": matched_line_count,
         "line_count": selected_lines.len(),
         "lines": selected_lines,
         "json_outline": json_outline(&preview_text),
@@ -2733,8 +2742,9 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const prev = Math.max(1, data.line_start - 80);
       const outline = data.json_outline ? `\nJSON outline: ${JSON.stringify(data.json_outline)}` : '';
       const match = data.matched_line ? ` · First match line: ${data.matched_line}` : '';
+      const matchCount = data.matched_terms?.length ? ` · Matched preview lines: ${data.matched_line_count}` : '';
       controls.innerHTML = `Resolved: <a href="${esc(data.resolved_url)}" target="_blank" rel="noreferrer">${esc(data.resolved_url)}</a><br>
-        Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${match}${outline}<br>
+        Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${match}${matchCount}${outline}<br>
         <button type="button" onclick="loadCurrentSource(${prev})">Previous lines</button>
         <button type="button" onclick="loadCurrentSource(${next})">Next lines</button>`;
       const terms = currentTextSearchTerms();
