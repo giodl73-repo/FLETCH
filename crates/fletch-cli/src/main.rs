@@ -2597,10 +2597,10 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     }
 
     function showDetail(row) {
-      showRowDetail(row, false);
+      showRowDetail(row, false, true);
     }
 
-    function showRowDetail(row, updateUrl) {
+    function showRowDetail(row, updateUrl, autoLoadFirstSource) {
       if (updateUrl) updateSelectedRowUrl(row);
       const urls = (row.source_urls || []).map((url, index) => {
         const link = url.startsWith('http') ? `<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(url)}</a>` : esc(url);
@@ -2618,6 +2618,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         <h4>Loaded source preview</h4>
         <div id="source-controls" class="meta"></div>
         <pre id="source-preview">Click "Load preview" beside a source URL to fetch bounded source data.</pre>`;
+      if (autoLoadFirstSource) loadFirstSourcePreview(row);
     }
 
     function updateSelectedRowUrl(row) {
@@ -2647,13 +2648,18 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const params = new URLSearchParams({ registry_id: selected.registryId, fletch_id: selected.fletchId });
       const response = await fetch(`/api/row?${params}`);
       if (response.ok) {
-        showRowDetail(await response.json(), false);
-        loadSelectedSourcePreview(selected);
+        const row = await response.json();
+        showRowDetail(row, false, !hasSelectedSourcePreview(selected));
+        if (hasSelectedSourcePreview(selected)) loadSelectedSourcePreview(selected);
       }
     }
 
     function copySelectedRowLink() {
       if (navigator.clipboard) navigator.clipboard.writeText(window.location.href);
+    }
+
+    function loadFirstSourcePreview(row) {
+      if ((row.source_urls || []).length) loadSource(row.registry_id, row.fletch_id, 0, 1);
     }
 
     async function loadSource(registryId, fletchId, sourceIndex, lineStart = 1) {
@@ -2694,8 +2700,12 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     }
 
     function loadSelectedSourcePreview(selected) {
-      if (selected?.sourceIndex === null || Number.isNaN(selected?.sourceIndex)) return;
+      if (!hasSelectedSourcePreview(selected)) return;
       loadSource(selected.registryId, selected.fletchId, selected.sourceIndex, selected.lineStart || 1);
+    }
+
+    function hasSelectedSourcePreview(selected) {
+      return selected?.sourceIndex !== null && !Number.isNaN(selected?.sourceIndex);
     }
 
     function loadCurrentSource(lineStart) {
@@ -2841,8 +2851,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       if (selected) {
         const selectedRow = report.rows.find(row => row.registry_id === selected.registryId && row.fletch_id === selected.fletchId);
         if (selectedRow) {
-          showDetail(selectedRow);
-          loadSelectedSourcePreview(selected);
+          showRowDetail(selectedRow, false, !hasSelectedSourcePreview(selected));
+          if (hasSelectedSourcePreview(selected)) loadSelectedSourcePreview(selected);
         } else {
           await loadSelectedRowDetail(selected);
         }

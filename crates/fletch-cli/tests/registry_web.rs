@@ -54,6 +54,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("selectedRegistryFromUrl"));
     assert!(html.contains("selected_source"));
     assert!(html.contains("loadSelectedSourcePreview"));
+    assert!(html.contains("loadFirstSourcePreview"));
+    assert!(html.contains("hasSelectedSourcePreview"));
 
     let linked_html = http_get(
         address,

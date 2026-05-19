@@ -52,6 +52,8 @@ without requiring a separate web app.
   reopen exact source preview windows.
 - Added all-match JSON export with rows, snippets, and scores for downstream
   tooling.
+- Auto-loaded the first bounded source preview when row details open, while
+  preserving explicit source-preview deep links.
 
 ## Validation
 
