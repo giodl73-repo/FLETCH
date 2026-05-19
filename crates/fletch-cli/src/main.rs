@@ -2613,6 +2613,8 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const next = new URL(window.location.href);
       next.searchParams.set('selected_registry_id', row.registry_id);
       next.searchParams.set('selected_fletch_id', row.fletch_id);
+      next.searchParams.delete('selected_source');
+      next.searchParams.delete('selected_line_start');
       window.history.replaceState({}, '', next);
     }
 
@@ -2620,13 +2622,23 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       const params = new URLSearchParams(window.location.search);
       const registryId = params.get('selected_registry_id');
       const fletchId = params.get('selected_fletch_id');
-      return registryId && fletchId ? { registryId, fletchId } : null;
+      const sourceIndex = params.get('selected_source');
+      const lineStart = params.get('selected_line_start');
+      return registryId && fletchId ? {
+        registryId,
+        fletchId,
+        sourceIndex: sourceIndex === null ? null : Number(sourceIndex),
+        lineStart: lineStart === null ? null : Number(lineStart)
+      } : null;
     }
 
     async function loadSelectedRowDetail(selected) {
       const params = new URLSearchParams({ registry_id: selected.registryId, fletch_id: selected.fletchId });
       const response = await fetch(`/api/row?${params}`);
-      if (response.ok) showRowDetail(await response.json(), false);
+      if (response.ok) {
+        showRowDetail(await response.json(), false);
+        loadSelectedSourcePreview(selected);
+      }
     }
 
     function copySelectedRowLink() {
@@ -2639,6 +2651,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       detail.dataset.registryId = registryId;
       detail.dataset.fletchId = fletchId;
       detail.dataset.sourceIndex = String(sourceIndex);
+      updateSelectedSourceUrl(registryId, fletchId, sourceIndex, lineStart);
       preview.textContent = 'Loading source preview...';
       const params = new URLSearchParams({ registry_id: registryId, fletch_id: fletchId, source: String(sourceIndex), line_start: String(lineStart), line_count: '80' });
       const response = await fetch(`/api/source?${params}`);
@@ -2658,6 +2671,20 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       preview.innerHTML = data.lines
         .map(line => `${esc(String(line.number).padStart(5, ' '))}  ${highlightText(line.text, terms)}`)
         .join('\n');
+    }
+
+    function updateSelectedSourceUrl(registryId, fletchId, sourceIndex, lineStart) {
+      const next = new URL(window.location.href);
+      next.searchParams.set('selected_registry_id', registryId);
+      next.searchParams.set('selected_fletch_id', fletchId);
+      next.searchParams.set('selected_source', String(sourceIndex));
+      next.searchParams.set('selected_line_start', String(lineStart));
+      window.history.replaceState({}, '', next);
+    }
+
+    function loadSelectedSourcePreview(selected) {
+      if (selected?.sourceIndex === null || Number.isNaN(selected?.sourceIndex)) return;
+      loadSource(selected.registryId, selected.fletchId, selected.sourceIndex, selected.lineStart || 1);
     }
 
     function loadCurrentSource(lineStart) {
@@ -2759,6 +2786,12 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       if (selected) {
         params.set('selected_registry_id', selected.registryId);
         params.set('selected_fletch_id', selected.fletchId);
+        if (selected.sourceIndex !== null && !Number.isNaN(selected.sourceIndex)) {
+          params.set('selected_source', String(selected.sourceIndex));
+        }
+        if (selected.lineStart !== null && !Number.isNaN(selected.lineStart)) {
+          params.set('selected_line_start', String(selected.lineStart));
+        }
       }
       return params;
     }
@@ -2792,6 +2825,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
         const selectedRow = report.rows.find(row => row.registry_id === selected.registryId && row.fletch_id === selected.fletchId);
         if (selectedRow) {
           showDetail(selectedRow);
+          loadSelectedSourcePreview(selected);
         } else {
           await loadSelectedRowDetail(selected);
         }

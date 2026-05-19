@@ -48,6 +48,8 @@ without requiring a separate web app.
 - Highlighted current text-search terms inside loaded source preview lines.
 - Added selected-row deep links and copyable row URLs for sharing exact result
   details.
+- Extended selected-row URLs with source index and line start so shared links can
+  reopen exact source preview windows.
 
 ## Validation
 
