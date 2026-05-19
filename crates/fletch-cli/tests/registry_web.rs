@@ -44,6 +44,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("Owner repo"));
     assert!(html.contains("Copy link"));
     assert!(html.contains("Export CSV"));
+    assert!(html.contains("Export all CSV"));
     assert!(html.contains("Relevance"));
     assert!(html.contains("Loading presets"));
     assert!(html.contains("highlightSnippet"));
@@ -78,6 +79,13 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     let export = http_get(address, "/api/export.csv?text=storm%20seed&limit=10")?;
     assert!(export.contains("registry_id,fletch_id,node_kind,score,snippet"));
     assert!(export.contains("storm-foundation-assets,storm.foundation.seed-storm"));
+
+    let export_page = http_get(address, "/api/export.csv?limit=1")?;
+    assert!(export_page.contains("storm-foundation-assets,storm.foundation.seed-storm"));
+    assert!(!export_page.contains("mundus-knowledge-systems-registries,mundus.registry.porto"));
+    let export_all = http_get(address, "/api/export.csv?limit=1&all=true")?;
+    assert!(export_all.contains("storm-foundation-assets,storm.foundation.seed-storm"));
+    assert!(export_all.contains("mundus-knowledge-systems-registries,mundus.registry.porto"));
 
     let paged = http_get(address, "/api/search?offset=1&limit=1")?;
     assert!(paged.contains("\"matched_row_count\": 2"));

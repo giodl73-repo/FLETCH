@@ -1798,7 +1798,7 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
         "/api/presets" => write_json_response(&mut stream, &registry_web_presets()),
         "/api/search" => {
             let query = parse_query(query);
-            let (report, text) = registry_web_search_from_query(index, &query)?;
+            let (report, text) = registry_web_search_from_query(index, &query, false)?;
             write_json_response(
                 &mut stream,
                 &registry_web_search_response(&report, text.as_deref())?,
@@ -1806,7 +1806,8 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
         }
         "/api/export.csv" => {
             let query = parse_query(query);
-            let (report, text) = registry_web_search_from_query(index, &query)?;
+            let all_rows = query_flag(&query, "all");
+            let (report, text) = registry_web_search_from_query(index, &query, all_rows)?;
             write_http_response(
                 &mut stream,
                 "200 OK",
@@ -2014,6 +2015,7 @@ fn top_facets(counts: BTreeMap<String, usize>, limit: usize) -> Vec<serde_json::
 fn registry_web_search_from_query(
     index: &RegistryIndexReport,
     query: &BTreeMap<String, Vec<String>>,
+    all_rows: bool,
 ) -> Result<(fletch_core::RegistrySearchReport, Option<String>)> {
     let tags = query.get("tag").cloned().unwrap_or_default();
     let metadata = query
@@ -2024,16 +2026,24 @@ fn registry_web_search_from_query(
         .map(|filter| parse_key_value_filter(&filter))
         .collect::<Result<Vec<_>>>()?;
     let text = query.get("text").and_then(|values| values.first()).cloned();
-    let offset = query
-        .get("offset")
-        .and_then(|values| values.first())
-        .and_then(|value| value.parse::<usize>().ok())
-        .unwrap_or(0);
-    let limit = query
-        .get("limit")
-        .and_then(|values| values.first())
-        .and_then(|value| value.parse::<usize>().ok())
-        .or(Some(50));
+    let offset = if all_rows {
+        0
+    } else {
+        query
+            .get("offset")
+            .and_then(|values| values.first())
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0)
+    };
+    let limit = if all_rows {
+        None
+    } else {
+        query
+            .get("limit")
+            .and_then(|values| values.first())
+            .and_then(|value| value.parse::<usize>().ok())
+            .or(Some(50))
+    };
     let sort = query
         .get("sort")
         .and_then(|values| values.first())
@@ -2053,6 +2063,14 @@ fn registry_web_search_from_query(
         direction,
     );
     Ok((report, text))
+}
+
+fn query_flag(query: &BTreeMap<String, Vec<String>>, key: &str) -> bool {
+    query.get(key).is_some_and(|values| {
+        values
+            .iter()
+            .any(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+    })
 }
 
 fn search_registry_web_index(
@@ -2507,6 +2525,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
           <button type="button" id="next-page">Next page</button>
           <button type="button" id="copy-link">Copy link</button>
           <button type="button" id="export-csv">Export CSV</button>
+          <button type="button" id="export-all-csv">Export all CSV</button>
         </div>
         <div id="results"></div>
       </section>
@@ -2529,6 +2548,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const direction = document.querySelector('#direction');
     const copyLink = document.querySelector('#copy-link');
     const exportCsv = document.querySelector('#export-csv');
+    const exportAllCsv = document.querySelector('#export-all-csv');
     let currentOffset = 0;
     let matchedRowCount = 0;
 
@@ -2700,6 +2720,12 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       window.open(`/api/export.csv?${currentSearchParams(currentOffset)}`, '_blank', 'noreferrer');
     }
 
+    function exportAllCsvMatches() {
+      const params = currentSearchParams(0);
+      params.set('all', 'true');
+      window.open(`/api/export.csv?${params}`, '_blank', 'noreferrer');
+    }
+
     async function runSearch(event, offset = 0, pushState = true) {
       event?.preventDefault();
       currentOffset = Math.max(0, offset);
@@ -2745,6 +2771,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     direction.addEventListener('change', () => runSearch(undefined, 0));
     copyLink.addEventListener('click', copyShareLink);
     exportCsv.addEventListener('click', exportCurrentCsv);
+    exportAllCsv.addEventListener('click', exportAllCsvMatches);
     window.addEventListener('popstate', () => runSearch(undefined, loadControlsFromUrl(), false));
     runSearch(undefined, loadControlsFromUrl(), false);
   </script>

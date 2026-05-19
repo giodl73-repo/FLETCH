@@ -43,6 +43,8 @@ without requiring a separate web app.
 - Added CSV export for the current result page, including scores, snippets, tags,
   source URLs, and metadata.
 - Highlighted matched terms inside browser result snippets.
+- Added all-match CSV export so filtered searches can become full working
+  datasets, not just visible result pages.
 
 ## Validation
 
