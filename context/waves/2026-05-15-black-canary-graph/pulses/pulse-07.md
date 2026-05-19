@@ -54,6 +54,8 @@ without requiring a separate web app.
   tooling.
 - Auto-loaded the first bounded source preview when row details open, while
   preserving explicit source-preview deep links.
+- Centered source previews around the first source line matching the active text
+  query when no explicit line is pinned.
 
 ## Validation
 

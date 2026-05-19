@@ -125,12 +125,20 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
 
     let source = http_get(
         address,
-        "/api/source?registry_id=storm-foundation-assets&fletch_id=storm.foundation.seed-storm&source=0&line_start=1&line_count=1",
+        "/api/source?registry_id=storm-foundation-assets&fletch_id=storm.foundation.seed-storm&source=0&line_start=2&line_count=1",
     )?;
     assert!(source.contains("storm fixture payload"));
     assert!(source.contains("\"truncated\": false"));
     assert!(source.contains("\"total_line_count\""));
     assert!(source.contains("\"json_outline\""));
+
+    let matched_source = http_get(
+        address,
+        "/api/source?registry_id=storm-foundation-assets&fletch_id=storm.foundation.seed-storm&source=0&text=payload&line_count=1",
+    )?;
+    assert!(matched_source.contains("\"line_start\": 2"));
+    assert!(matched_source.contains("\"matched_line\": 2"));
+    assert!(matched_source.contains("storm fixture payload"));
 
     drop(server);
     fs::remove_file(index_path)?;
@@ -183,7 +191,10 @@ fn write_test_index() -> Result<(std::path::PathBuf, std::path::PathBuf), Box<dy
         "fletch-registry-web-source-{}-{stamp}.json",
         std::process::id()
     ));
-    fs::write(&source_path, r#"{"name":"storm fixture payload"}"#)?;
+    fs::write(
+        &source_path,
+        "{\n  \"name\": \"storm fixture payload\"\n}\n",
+    )?;
     let index = serde_json::json!({
         "schema_version": "fletch.registry-index.v1",
         "generated_by": "test",

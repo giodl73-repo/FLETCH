@@ -275,12 +275,14 @@ the full filtered result report with rows, snippets, and scores for downstream
 tools. Result cards include a highlighted match snippet and score so users can see
 which ID, tag, metadata value, or source URL made the row relevant. Selecting a
 row auto-loads its first bounded source preview, and **Load preview** beside any
-source URL can switch the loaded source. Source previews include line-numbered
-sections, highlight current text-search terms inside loaded lines, previous/next
-line navigation, and a compact JSON outline when the loaded data is JSON. For
-followed GitHub registry rows, FLETCH preserves the remote registry base URL so
-relative source paths such as `fixtures\seed-storm.json` can be previewed from raw
-GitHub without requiring that repo to be cloned locally.
+source URL can switch the loaded source. When a text query is active and no exact
+line is pinned, previews open around the first matching source line. Source
+previews include line-numbered sections, highlight current text-search terms
+inside loaded lines, previous/next line navigation, and a compact JSON outline
+when the loaded data is JSON. For followed GitHub registry rows, FLETCH preserves
+the remote registry base URL so relative source paths such as
+`fixtures\seed-storm.json` can be previewed from raw GitHub without requiring that
+repo to be cloned locally.
 
 `fletch tip from-manifest` emits `fletch.tip.v1` previews from cached artifacts.
 The initial generic tipper samples bounded bytes and reports JSON fields, JSON

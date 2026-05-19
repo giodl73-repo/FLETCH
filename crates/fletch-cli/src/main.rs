@@ -1851,13 +1851,13 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
             let line_start = query
                 .get("line_start")
                 .and_then(|values| values.first())
-                .and_then(|value| value.parse::<usize>().ok())
-                .unwrap_or(1);
+                .and_then(|value| value.parse::<usize>().ok());
             let line_count = query
                 .get("line_count")
                 .and_then(|values| values.first())
                 .and_then(|value| value.parse::<usize>().ok())
                 .unwrap_or(80);
+            let text = query.get("text").and_then(|values| values.first());
             let row = registry_id
                 .zip(fletch_id)
                 .and_then(|(registry_id, fletch_id)| {
@@ -1866,7 +1866,13 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
             if let Some(row) = row {
                 write_json_response(
                     &mut stream,
-                    &load_registry_source_preview(row, source_index, line_start, line_count)?,
+                    &load_registry_source_preview(
+                        row,
+                        source_index,
+                        line_start,
+                        line_count,
+                        text.map(String::as_str),
+                    )?,
                 )
             } else {
                 write_http_response(&mut stream, "404 Not Found", "text/plain", "row not found")
@@ -2349,8 +2355,9 @@ fn registry_web_snippet_matches(value: &str, terms: &[String]) -> bool {
 fn load_registry_source_preview(
     row: &RegistryIndexRow,
     source_index: usize,
-    line_start: usize,
+    line_start: Option<usize>,
     line_count: usize,
+    text: Option<&str>,
 ) -> Result<serde_json::Value> {
     let Some(source_url) = row.source_urls.get(source_index) else {
         bail!("source index {source_index} is out of range");
@@ -2371,15 +2378,17 @@ fn load_registry_source_preview(
     let limit = 65_536;
     let truncated = bytes.len() > limit;
     let preview_bytes = &bytes[..bytes.len().min(limit)];
-    let text = String::from_utf8_lossy(preview_bytes).into_owned();
-    let lines = text.lines().collect::<Vec<_>>();
+    let preview_text = String::from_utf8_lossy(preview_bytes).into_owned();
+    let lines = preview_text.lines().collect::<Vec<_>>();
     let total_line_count = lines.len();
-    let start = line_start.max(1);
+    let effective_line_count = line_count.min(500);
+    let (start, matched_line) =
+        source_preview_start(&lines, line_start, effective_line_count, text);
     let selected_lines = lines
         .iter()
         .enumerate()
         .skip(start.saturating_sub(1))
-        .take(line_count.min(500))
+        .take(effective_line_count)
         .map(|(index, line)| serde_json::json!({ "number": index + 1, "text": line }))
         .collect::<Vec<_>>();
     Ok(serde_json::json!({
@@ -2393,11 +2402,36 @@ fn load_registry_source_preview(
         "truncated": truncated,
         "total_line_count": total_line_count,
         "line_start": start,
+        "matched_line": matched_line,
         "line_count": selected_lines.len(),
         "lines": selected_lines,
-        "json_outline": json_outline(&text),
-        "text": text
+        "json_outline": json_outline(&preview_text),
+        "text": preview_text
     }))
+}
+
+fn source_preview_start(
+    lines: &[&str],
+    line_start: Option<usize>,
+    line_count: usize,
+    text: Option<&str>,
+) -> (usize, Option<usize>) {
+    if let Some(line_start) = line_start {
+        return (line_start.max(1), None);
+    }
+    let terms = registry_web_search_terms(text);
+    let Some(match_index) = lines.iter().position(|line| {
+        let line = line.to_lowercase();
+        terms.iter().any(|term| line.contains(term))
+    }) else {
+        return (1, None);
+    };
+    let matched_line = match_index + 1;
+    let context = line_count.saturating_div(2);
+    (
+        matched_line.saturating_sub(context).max(1),
+        Some(matched_line),
+    )
 }
 
 fn json_outline(text: &str) -> Option<serde_json::Value> {
@@ -2659,29 +2693,33 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     }
 
     function loadFirstSourcePreview(row) {
-      if ((row.source_urls || []).length) loadSource(row.registry_id, row.fletch_id, 0, 1);
+      if ((row.source_urls || []).length) loadSource(row.registry_id, row.fletch_id, 0);
     }
 
-    async function loadSource(registryId, fletchId, sourceIndex, lineStart = 1) {
+    async function loadSource(registryId, fletchId, sourceIndex, lineStart = null) {
       const preview = document.querySelector('#source-preview');
       const controls = document.querySelector('#source-controls');
       detail.dataset.registryId = registryId;
       detail.dataset.fletchId = fletchId;
       detail.dataset.sourceIndex = String(sourceIndex);
-      updateSelectedSourceUrl(registryId, fletchId, sourceIndex, lineStart);
       preview.textContent = 'Loading source preview...';
-      const params = new URLSearchParams({ registry_id: registryId, fletch_id: fletchId, source: String(sourceIndex), line_start: String(lineStart), line_count: '80' });
+      const params = new URLSearchParams({ registry_id: registryId, fletch_id: fletchId, source: String(sourceIndex), line_count: '80' });
+      const text = document.querySelector('#text').value.trim();
+      if (text) params.set('text', text);
+      if (lineStart !== null) params.set('line_start', String(lineStart));
       const response = await fetch(`/api/source?${params}`);
       if (!response.ok) {
         preview.textContent = `Could not load source preview: ${response.status} ${response.statusText}`;
         return;
       }
       const data = await response.json();
+      updateSelectedSourceUrl(registryId, fletchId, sourceIndex, data.line_start);
       const next = data.line_start + data.line_count;
       const prev = Math.max(1, data.line_start - 80);
       const outline = data.json_outline ? `\nJSON outline: ${JSON.stringify(data.json_outline)}` : '';
+      const match = data.matched_line ? ` · First match line: ${data.matched_line}` : '';
       controls.innerHTML = `Resolved: <a href="${esc(data.resolved_url)}" target="_blank" rel="noreferrer">${esc(data.resolved_url)}</a><br>
-        Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${outline}<br>
+        Bytes: ${data.byte_count}${data.truncated ? ' (truncated)' : ''} · Lines: ${data.total_line_count}${match}${outline}<br>
         <button type="button" onclick="loadCurrentSource(${prev})">Previous lines</button>
         <button type="button" onclick="loadCurrentSource(${next})">Next lines</button>`;
       const terms = currentTextSearchTerms();
@@ -2701,7 +2739,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
 
     function loadSelectedSourcePreview(selected) {
       if (!hasSelectedSourcePreview(selected)) return;
-      loadSource(selected.registryId, selected.fletchId, selected.sourceIndex, selected.lineStart || 1);
+      loadSource(selected.registryId, selected.fletchId, selected.sourceIndex, selected.lineStart);
     }
 
     function hasSelectedSourcePreview(selected) {
