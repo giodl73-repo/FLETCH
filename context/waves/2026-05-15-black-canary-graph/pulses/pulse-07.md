@@ -50,6 +50,8 @@ without requiring a separate web app.
   details.
 - Extended selected-row URLs with source index and line start so shared links can
   reopen exact source preview windows.
+- Added all-match JSON export with rows, snippets, and scores for downstream
+  tooling.
 
 ## Validation
 

@@ -1815,6 +1815,15 @@ fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexRepor
                 &registry_web_search_csv(&report, text.as_deref())?,
             )
         }
+        "/api/export.json" => {
+            let query = parse_query(query);
+            let all_rows = query_flag(&query, "all");
+            let (report, text) = registry_web_search_from_query(index, &query, all_rows)?;
+            write_json_response(
+                &mut stream,
+                &registry_web_search_response(&report, text.as_deref())?,
+            )
+        }
         "/api/row" => {
             let query = parse_query(query);
             let registry_id = query.get("registry_id").and_then(|values| values.first());
@@ -2526,6 +2535,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
           <button type="button" id="copy-link">Copy link</button>
           <button type="button" id="export-csv">Export CSV</button>
           <button type="button" id="export-all-csv">Export all CSV</button>
+          <button type="button" id="export-all-json">Export all JSON</button>
         </div>
         <div id="results"></div>
       </section>
@@ -2549,6 +2559,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     const copyLink = document.querySelector('#copy-link');
     const exportCsv = document.querySelector('#export-csv');
     const exportAllCsv = document.querySelector('#export-all-csv');
+    const exportAllJson = document.querySelector('#export-all-json');
     let currentOffset = 0;
     let matchedRowCount = 0;
 
@@ -2806,6 +2817,12 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
       window.open(`/api/export.csv?${params}`, '_blank', 'noreferrer');
     }
 
+    function exportAllJsonMatches() {
+      const params = currentSearchParams(0);
+      params.set('all', 'true');
+      window.open(`/api/export.json?${params}`, '_blank', 'noreferrer');
+    }
+
     async function runSearch(event, offset = 0, pushState = true, preserveSelection = false) {
       event?.preventDefault();
       currentOffset = Math.max(0, offset);
@@ -2861,6 +2878,7 @@ const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
     copyLink.addEventListener('click', copyShareLink);
     exportCsv.addEventListener('click', exportCurrentCsv);
     exportAllCsv.addEventListener('click', exportAllCsvMatches);
+    exportAllJson.addEventListener('click', exportAllJsonMatches);
     window.addEventListener('popstate', () => runSearch(undefined, loadControlsFromUrl(), false, true));
     runSearch(undefined, loadControlsFromUrl(), false, true);
   </script>

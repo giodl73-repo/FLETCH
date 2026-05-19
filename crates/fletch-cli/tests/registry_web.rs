@@ -45,6 +45,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(html.contains("Copy link"));
     assert!(html.contains("Export CSV"));
     assert!(html.contains("Export all CSV"));
+    assert!(html.contains("Export all JSON"));
     assert!(html.contains("Relevance"));
     assert!(html.contains("Loading presets"));
     assert!(html.contains("highlightSnippet"));
@@ -92,6 +93,17 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     let export_all = http_get(address, "/api/export.csv?limit=1&all=true")?;
     assert!(export_all.contains("storm-foundation-assets,storm.foundation.seed-storm"));
     assert!(export_all.contains("mundus-knowledge-systems-registries,mundus.registry.porto"));
+
+    let json_export_page = http_get(address, "/api/export.json?limit=1")?;
+    assert!(json_export_page.contains("\"matched_row_count\": 2"));
+    assert!(json_export_page.contains("\"storm.foundation.seed-storm\""));
+    assert!(!json_export_page.contains("\"mundus.registry.porto\""));
+    let json_export_all = http_get(address, "/api/export.json?limit=1&all=true")?;
+    assert!(json_export_all.contains("\"matched_row_count\": 2"));
+    assert!(json_export_all.contains("\"storm.foundation.seed-storm\""));
+    assert!(json_export_all.contains("\"mundus.registry.porto\""));
+    assert!(json_export_all.contains("\"snippets\""));
+    assert!(json_export_all.contains("\"scores\""));
 
     let paged = http_get(address, "/api/search?offset=1&limit=1")?;
     assert!(paged.contains("\"matched_row_count\": 2"));
