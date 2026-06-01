@@ -2,3 +2,4 @@ target/
 Cargo.lock
 .fletch/
 *.tmp
+.cargo/config.toml
