@@ -8,6 +8,25 @@
 [ROLES](https://github.com/giodl73-repo/ROLES), the `.roles` convention for
 repository-local review panels.
 
+## Context & Harness family
+
+FLETCH is the acquisition layer in a four-stage context-control family:
+
+```text
+Sources → FLETCH → MDCROP → LATTICE → FLETCHER
+           fetch     select     close       replay
+```
+
+| Repo | Responsibility |
+|------|----------------|
+| **FLETCH** | Acquire, verify, cache, partition, and bundle source material. |
+| [MDCROP](https://github.com/giodl73-repo/MDCROP) | Index and select bounded, provenance-aware candidate context. |
+| [LATTICE](https://github.com/giodl73-repo/LATTICE) | Apply closure, meet/join, budgets, frontiers, packs, and receipts. |
+| [FLETCHER](https://github.com/giodl73-repo/FLETCHER) | Capture harness events, checkpoints, context deltas, and deterministic replay. |
+
+The dependency boundaries remain explicit: fetching is not selection, selection
+is not semantic closure, and closure is not harness execution.
+
 FLETCH is a shared Rust fetch/cache layer for projects that need reproducible
 data acquisition without each product reinventing download, cache, bundle,
 manifest, verification, and offline behavior.
