@@ -23,7 +23,7 @@ FLETCH's product language is intentionally concrete:
   view.
 
 In prose, **source** still means provenance or authority, such as NHL API,
-Census, FHWA, MoneyPuck, or a generated PROOF backend. A **shaft** is the
+Census, FHWA, MoneyPuck, or a generated MDLOOM backend. A **shaft** is the
 specific URL, path, release asset, generated artifact handle, or adapter handle
 that carries bytes for a fletch.
 
@@ -71,7 +71,7 @@ products interpret the domain meaning.
   expressible as typed nodes and edges so CROP can crop, index, and explain data
   provenance without reverse-engineering cache files.
 - **Format clarity**: opaque bytes are the safe default; declared format options
-  allow adapters to choose JSON, CSV, ZIP, Parquet, SQLite, PROOF output, or
+  allow adapters to choose JSON, CSV, ZIP, Parquet, SQLite, MDLOOM output, or
   other representations without hard-coding product semantics.
 - **Offline by design**: flights must explain what works without live network
   access and what quiver or fletch is missing.
@@ -80,10 +80,10 @@ products interpret the domain meaning.
 - **Fast common path**: verified cache hits, dry-run planning, and ledger status
   should be cheap enough for every consumer to call routinely.
 - **Publishable state**: CROP can index ledgers, MDPATH can address generated
-  docs, and PROOF can render local Markdown/backend views from contracts.
+  docs, and MDLOOM can render local Markdown/backend views from contracts.
 - **Data tips**: shafts and fletches can expose structured previews such as CSV
   headers, JSON fields, ZIP member indexes, SQLite table lists, or generated
-  PROOF/CROP status snippets without forcing product-specific loads.
+  MDLOOM/CROP status snippets without forcing product-specific loads.
 - **Partition safety**: fetch adds or verifies candidate partitions; merge
   updates aliases, active views, and rollups through an auditable transaction.
 - **Conflict grouping**: equivalent conflicts can be labeled as choices, e.g.
@@ -139,7 +139,7 @@ keeps a plain technical contract:
    reporting and query quiver handoff reporting. Product semantics remain in
    each consumer.
 9. **Overwatch - Publishers**: make FLETCH ledgers easy for CROP to index and
-   for PROOF to render as local Markdown/status/backend views. Mock client:
+   for MDLOOM to render as local Markdown/status/backend views. Mock client:
    publish villain-file status, threat query summaries, tips, and quiver
    contents as local views.
 
@@ -148,7 +148,7 @@ keeps a plain technical contract:
 - FLETCH does not own domain semantics for BISECT, icelines, route, or CROP.
 - FLETCH does not replace each product's user-facing commands.
 - FLETCH does not depend on BISECT.
-- FLETCH does not make generated PROOF/CROP documents the source of truth; they
+- FLETCH does not make generated MDLOOM/CROP documents the source of truth; they
   reflect registry, flight, quiver, and ledger contracts.
 - FLETCH does not silently trust unverified remote data, extracted archive paths,
   or generated artifacts.

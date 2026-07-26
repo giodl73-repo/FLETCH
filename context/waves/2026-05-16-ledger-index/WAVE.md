@@ -10,7 +10,7 @@ source of truth.
 
 - `fletch-core`: cache ledger index contract and helpers.
 - `fletch-cli`: read-only cache index report command.
-- Consumers: ICELINES, BISECT/apportionment, ROUTE, CROP, PROOF, and CI/release
+- Consumers: ICELINES, BISECT/apportionment, ROUTE, CROP, MDLOOM, and CI/release
   tooling that need compact ledger views.
 
 ## Pulse table
@@ -36,7 +36,7 @@ Before closing, run a `.roles` review with:
 - Parliament: cache systems, provenance, offline release, adapter boundary,
   performance, and doc publisher.
 - Editorial: scope keeper, contract checker, validation checker.
-- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, CROP, PROOF, CI/release.
+- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, CROP, MDLOOM, CI/release.
 - Panel reviewers: F-I1 through F-I6.
 
 ## Non-goals

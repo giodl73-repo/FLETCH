@@ -279,9 +279,9 @@ fn run_maxim_source_corpus_scenario(workspace_root: &Path) -> Result<MaximSource
 }"###,
     )?;
     std::fs::write(
-        source_root.join("maxim-computing-frontend-frameworks.pebble.json"),
+        source_root.join("maxim-computing-frontend-frameworks.mdport.json"),
         br###"{
-  "schema": "pebble.v1",
+  "schema": "mdport.v1",
   "kind": "corpus-slice",
   "title": "maxim-computing-frontend-frameworks",
   "source": "../../computing",
@@ -505,34 +505,34 @@ fn maxim_source_corpus_registry(source_root: &Path) -> FletchRegistry {
                 Some("crop.view.v1"),
             ),
             fletch_definition(
-                "maxim.computing-frontend-frameworks.pebble",
+                "maxim.computing-frontend-frameworks.mdport",
                 GraphNodeKind::Fletch,
-                Some(source_root.join("maxim-computing-frontend-frameworks.pebble.json")),
+                Some(source_root.join("maxim-computing-frontend-frameworks.mdport.json")),
                 vec![edge(
                     "maxim.computing-frontend-frameworks.view",
                     GraphEdgeKind::DerivedFrom,
                 )],
-                Some("pebble.v1"),
+                Some("mdport.v1"),
             ),
             fletch_definition(
                 "maxim.computing-frontend-frameworks.tables",
                 GraphNodeKind::Fletch,
                 Some(source_root.join("05-FRONTEND.tables.json")),
                 vec![edge(
-                    "maxim.computing-frontend-frameworks.pebble",
+                    "maxim.computing-frontend-frameworks.mdport",
                     GraphEdgeKind::DerivedFrom,
                 )],
-                Some("proof.backfill.tables.v1"),
+                Some("mdloom.backfill.tables.v1"),
             ),
             fletch_definition(
                 "maxim.computing-frontend-frameworks.blocks",
                 GraphNodeKind::Fletch,
                 Some(source_root.join("05-FRONTEND.blocks.json")),
                 vec![edge(
-                    "maxim.computing-frontend-frameworks.pebble",
+                    "maxim.computing-frontend-frameworks.mdport",
                     GraphEdgeKind::DerivedFrom,
                 )],
-                Some("proof.backfill.blocks.v1"),
+                Some("mdloom.backfill.blocks.v1"),
             ),
         ],
     )
@@ -676,12 +676,12 @@ struct MaximQuerySummary {
 }
 
 #[derive(Debug, Deserialize)]
-struct PebblePack {
-    sections: Vec<PebbleSection>,
+struct MdportPack {
+    sections: Vec<MdportSection>,
 }
 
 #[derive(Debug, Deserialize)]
-struct PebbleSection {
+struct MdportSection {
     metadata: BTreeMap<String, String>,
     text: String,
 }
@@ -731,8 +731,8 @@ fn query_maxim_source_corpus(manifest: &CacheManifest) -> Result<MaximQuerySumma
             {
                 summary.frontend_view_query_count += 1;
             }
-        } else if entry.dataset_id.ends_with(".pebble") {
-            let pack: PebblePack = serde_json::from_slice(&bytes)?;
+        } else if entry.dataset_id.ends_with(".mdport") {
+            let pack: MdportPack = serde_json::from_slice(&bytes)?;
             for section in pack.sections {
                 if let Some(path) = section.metadata.get("current_path") {
                     guides.insert(path.clone(), ());
@@ -810,7 +810,7 @@ mod tests {
             report.maxim_source_corpus.fetched_fletches,
             vec![
                 "maxim.computing-frontend-frameworks.view",
-                "maxim.computing-frontend-frameworks.pebble",
+                "maxim.computing-frontend-frameworks.mdport",
                 "maxim.computing-frontend-frameworks.tables",
                 "maxim.computing-frontend-frameworks.blocks"
             ]

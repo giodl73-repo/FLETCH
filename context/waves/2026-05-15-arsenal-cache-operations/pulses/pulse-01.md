@@ -3,7 +3,7 @@
 ## Goal
 
 Add a compact, product-neutral aggregate report over existing manifest inspection
-results so humans, CROP, PROOF, and CI can see cache health without parsing every
+results so humans, CROP, MDLOOM, and CI can see cache health without parsing every
 status row themselves.
 
 ## Outcome

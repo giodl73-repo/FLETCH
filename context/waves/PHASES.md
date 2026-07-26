@@ -6,7 +6,7 @@ FLETCH work is organized into Arrow-family phases, then small waves and pulses.
 
 Deliver every Arrow phase in this file, from Green Arrow through Overwatch, as a
 coherent shared fetch/cache substrate for ICELINES, apportionment/BISECT, ROUTE,
-CROP, MDPATH, and PROOF.
+CROP, MDPATH, and MDLOOM.
 
 Each wave must close with a `.roles` review before the active wave advances. The
 review is part of delivery, not an optional retrospective: role findings either
@@ -46,7 +46,7 @@ in the next wave plan.
 8. **Connor Hawke - Adapters**: product adapters for Census/apportionment,
    NHL/icelines, route/geodata, and generic archive sources. Mock client becomes
    the adapter harness that proves consumer code stays outside `fletch-core`.
-9. **Overwatch - Publishers**: CROP graph/status indexing and PROOF-rendered
+9. **Overwatch - Publishers**: CROP graph/status indexing and MDLOOM-rendered
    local docs, dashboards, or backend views. Mock client publishes villain-file
    status, threat query summaries, tips, and quiver contents as local views.
 

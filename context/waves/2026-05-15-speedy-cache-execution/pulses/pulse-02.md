@@ -3,7 +3,7 @@
 ## Goal
 
 Make retry behavior visible in machine-readable fetch outputs so consumers,
-CROP, PROOF, and CI can explain whether an object arrived on the first attempt
+CROP, MDLOOM, and CI can explain whether an object arrived on the first attempt
 or after retry recovery.
 
 ## Changes

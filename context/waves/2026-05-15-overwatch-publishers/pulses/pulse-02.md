@@ -1,4 +1,4 @@
-# Pulse 02: PROOF document manifest
+# Pulse 02: MDLOOM document manifest
 
 ## Goal
 
@@ -7,15 +7,15 @@ or rendered documents the source of truth.
 
 ## Outcome
 
-- Added `fletch.proof-docs.v1`.
+- Added `fletch.mdloom-docs.v1`.
 - Emitted document IDs, titles, anchors, and source schema references from CROP
   index rows.
-- Added `fletch publish proof-docs --crop-index ...`.
-- Kept PROOF backend/rendering choices outside `fletch-core`.
+- Added `fletch publish mdloom-docs --crop-index ...`.
+- Kept MDLOOM backend/rendering choices outside `fletch-core`.
 
 ## Validation
 
 - `cargo fmt`
 - `cargo test --workspace`
-- focused CLI smoke for PROOF docs JSON
+- focused CLI smoke for MDLOOM docs JSON
 - `git diff --check`

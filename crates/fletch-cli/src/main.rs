@@ -6,20 +6,20 @@ use fletch_core::{
     cache_index_gate_report, cache_key, cache_list, cache_manifest, crop_index_from_manifest,
     dry_run_flight, export_quiver, fetch_plan, fetch_plan_with_kind, fetch_to_cache,
     graph_from_manifest, graph_from_quiver, graph_from_registry, import_quiver,
-    inspect_cache_manifest, label_state_from_aliases, local_url_map, offline_cache_report,
-    partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
-    preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
-    proof_document_manifest, publish_report_from_manifest, publisher_bundle_report,
+    inspect_cache_manifest, label_state_from_aliases, local_url_map, mdloom_document_manifest,
+    offline_cache_report, partition_invalidation_report, partition_state_from_manifest,
+    plan_cache_prune, preview_archive_expansion, preview_manifest_merge, preview_rollback,
+    preview_rollup_edges, publish_report_from_manifest, publisher_bundle_report,
     quiver_merge_ready_report, read_cache_manifest_json, registry_index_from_registries,
     search_registry_index, slice_active_partition_set, slice_adapter_source_report,
     slice_archive_expansion_preview, slice_cache_index_report, slice_crop_index_report,
-    slice_local_url_map, slice_partition_state, slice_proof_document_manifest,
+    slice_local_url_map, slice_mdloom_document_manifest, slice_partition_state,
     slice_quiver_merge_ready_report, slice_registry_validation_report, summarize_cache_manifest,
     summarize_quiver, tips_from_manifest, upsert_cache_manifest_entries, validate_registry,
     verify_cache_manifest, verify_quiver_bundle, write_cache_manifest_json, AdapterHandoffReport,
     AliasState, CacheEntry, CacheIndexGatePolicy, CacheIndexReport, CacheManifest, CropIndexReport,
     FetchOptions, FetchPlan, FletchRegistry, FreshnessPolicy, LabelState, LocalUrlMap,
-    PartitionState, ProofDocumentManifest, QuiverManifest, QuiverSummary, RegistryIndexReport,
+    MdloomDocumentManifest, PartitionState, QuiverManifest, QuiverSummary, RegistryIndexReport,
     RegistryIndexRow, RollupPreview, SourceKind,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -718,7 +718,7 @@ enum PublishCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    /// Generate PROOF document anchors from a CROP index report.
+    /// Generate MDLOOM document anchors from a CROP index report.
     ProofDocs {
         /// Path to a fletch.crop-index.v1 JSON file.
         #[arg(long)]
@@ -733,11 +733,11 @@ enum PublishCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    /// Generate stable local URLs from a PROOF document manifest.
+    /// Generate stable local URLs from a MDLOOM document manifest.
     LocalUrlMap {
-        /// Path to a fletch.proof-docs.v1 JSON file.
+        /// Path to a fletch.mdloom-docs.v1 JSON file.
         #[arg(long)]
-        proof_docs: PathBuf,
+        mdloom_docs: PathBuf,
         /// Local base path or URL prefix for generated documents.
         #[arg(long, default_value = "fletch")]
         base_path: String,
@@ -751,14 +751,14 @@ enum PublishCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    /// Summarize publisher inputs for downstream CROP/PROOF backends.
+    /// Summarize publisher inputs for downstream CROP/MDLOOM backends.
     Bundle {
         /// Path to a fletch.crop-index.v1 JSON file.
         #[arg(long)]
         crop_index: PathBuf,
-        /// Path to a fletch.proof-docs.v1 JSON file.
+        /// Path to a fletch.mdloom-docs.v1 JSON file.
         #[arg(long)]
-        proof_docs: PathBuf,
+        mdloom_docs: PathBuf,
         /// Path to a fletch.local-url-map.v1 JSON file.
         #[arg(long)]
         local_url_map: PathBuf,
@@ -1269,30 +1269,33 @@ fn main() -> Result<()> {
                 output,
             } => {
                 let crop_index = read_crop_index(&crop_index)?;
-                let docs = proof_document_manifest(&crop_index);
-                write_json(&slice_proof_document_manifest(&docs, offset, limit), output)?;
+                let docs = mdloom_document_manifest(&crop_index);
+                write_json(
+                    &slice_mdloom_document_manifest(&docs, offset, limit),
+                    output,
+                )?;
             }
             PublishCommands::LocalUrlMap {
-                proof_docs,
+                mdloom_docs,
                 base_path,
                 offset,
                 limit,
                 output,
             } => {
-                let proof_docs = read_proof_docs(&proof_docs)?;
-                let urls = local_url_map(&proof_docs, base_path);
+                let mdloom_docs = read_mdloom_docs(&mdloom_docs)?;
+                let urls = local_url_map(&mdloom_docs, base_path);
                 write_json(&slice_local_url_map(&urls, offset, limit), output)?;
             }
             PublishCommands::Bundle {
                 crop_index,
-                proof_docs,
+                mdloom_docs,
                 local_url_map,
                 quiver_summary,
                 adapter_handoff,
                 output,
             } => {
                 let crop_index = read_crop_index(&crop_index)?;
-                let proof_docs = read_proof_docs(&proof_docs)?;
+                let mdloom_docs = read_mdloom_docs(&mdloom_docs)?;
                 let local_url_map = read_local_url_map(&local_url_map)?;
                 let quiver_summary = quiver_summary
                     .as_ref()
@@ -1305,7 +1308,7 @@ fn main() -> Result<()> {
                 write_json(
                     &publisher_bundle_report(
                         &crop_index,
-                        &proof_docs,
+                        &mdloom_docs,
                         &local_url_map,
                         quiver_summary.as_ref(),
                         adapter_handoff.as_ref(),
@@ -3033,7 +3036,7 @@ fn read_cache_index(path: &PathBuf) -> Result<CacheIndexReport> {
     Ok(serde_json::from_str(&json)?)
 }
 
-fn read_proof_docs(path: &PathBuf) -> Result<ProofDocumentManifest> {
+fn read_mdloom_docs(path: &PathBuf) -> Result<MdloomDocumentManifest> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }

@@ -32,7 +32,7 @@ product meaning in adapters.
 | 02 | Cache execution | done | Added HTTP/file fetch execution with temp-file promotion, SHA-256 ledger entries, optional checksum verification, bandwidth limits, and `fletch fetch`. |
 | 03 | Cache operations | done | Added manifest-led cache list, verify, status, and prune-plan operations with CLI commands. |
 | 04 | Quiver format | done | Added `fletch.quiver.v1` directory export/import, stage-first verification, CLI commands, and mock-client offline bootstrap. |
-| 05 | Consumer adapters scout | done | Documented initial ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and PROOF migration slices. |
+| 05 | Consumer adapters scout | done | Documented initial ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and MDLOOM migration slices. |
 
 ## Success criteria
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Expose quiver-to-member graph edges so CROP and PROOF can index portable bundles
+Expose quiver-to-member graph edges so CROP and MDLOOM can index portable bundles
 without importing or reading cache objects.
 
 ## Outcome
