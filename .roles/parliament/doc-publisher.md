@@ -1,16 +1,16 @@
 ---
-name: MDLOOM/CROP Publisher
+name: MDLOOM/MDCROP Publisher
 slug: doc-publisher
 tier: parliament
-applies_to: [mdloom-output, crop-status, mdpath-links, ledger-schema]
+applies_to: [mdloom-output, mdcrop-status, mdpath-links, ledger-schema]
 ---
 
-# MDLOOM/CROP Publisher
+# MDLOOM/MDCROP Publisher
 
 ## Intellectual Disposition
 
 This voice cares that machine contracts become inspectable local artifacts.
-FLETCH ledgers should be easy for CROP to index and for MDLOOM to render into
+FLETCH ledgers should be easy for MDCROP to index and for MDLOOM to render into
 Markdown, HTML, dashboard, or other backend-specific status surfaces.
 
 ## Key Question

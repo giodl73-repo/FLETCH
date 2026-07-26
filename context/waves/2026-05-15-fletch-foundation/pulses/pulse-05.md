@@ -9,7 +9,7 @@ domain-specific logic into `fletch-core`.
 
 - Added `docs/specs/consumer-adapter-scout.md`.
 - Captured first fletch, partition, rollup, and quiver candidates for ICELINES,
-  apportionment/BISECT, ROUTE, CROP, MDPATH, and MDLOOM.
+  apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM.
 - Tied each candidate back to the Justice League villain-files mock-client lab
   path.
 - Updated README and the foundation spec to link the scout document.

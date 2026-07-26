@@ -28,7 +28,7 @@ pub const FLETCH_ADAPTER_HANDOFF_SCHEMA: &str = "fletch.adapter-handoff.v1";
 pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
-pub const FLETCH_CROP_INDEX_SCHEMA: &str = "fletch.crop-index.v1";
+pub const FLETCH_MDCROP_INDEX_SCHEMA: &str = "fletch.mdcrop-index.v1";
 pub const FLETCH_MDLOOM_DOCS_SCHEMA: &str = "fletch.mdloom-docs.v1";
 pub const FLETCH_LOCAL_URL_MAP_SCHEMA: &str = "fletch.local-url-map.v1";
 pub const FLETCH_PUBLISHER_BUNDLE_SCHEMA: &str = "fletch.publisher-bundle.v1";
@@ -954,7 +954,7 @@ pub struct FletchPublishReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CropIndexRow {
+pub struct MdcropIndexRow {
     pub row_type: String,
     pub id: String,
     pub label: String,
@@ -963,7 +963,7 @@ pub struct CropIndexRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CropIndexReport {
+pub struct MdcropIndexReport {
     pub schema_version: String,
     pub generated_by: String,
     pub cache_root: String,
@@ -972,7 +972,7 @@ pub struct CropIndexReport {
     pub graph_node_row_count: usize,
     pub graph_edge_row_count: usize,
     pub tip_row_count: usize,
-    pub rows: Vec<CropIndexRow>,
+    pub rows: Vec<MdcropIndexRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1013,7 +1013,7 @@ pub struct LocalUrlMap {
 pub struct PublisherBundleReport {
     pub schema_version: String,
     pub generated_by: String,
-    pub crop_row_count: usize,
+    pub mdcrop_row_count: usize,
     pub mdloom_document_count: usize,
     pub local_url_count: usize,
     pub quiver_entry_count: Option<usize>,
@@ -1558,17 +1558,17 @@ pub fn publish_report_from_manifest(
     })
 }
 
-pub fn crop_index_from_manifest(
+pub fn mdcrop_index_from_manifest(
     manifest: &CacheManifest,
     freshness: &FreshnessPolicy,
     max_tip_bytes: usize,
-) -> Result<CropIndexReport, FletchError> {
+) -> Result<MdcropIndexReport, FletchError> {
     let statuses = inspect_cache_manifest(manifest, freshness)?;
     let graph = graph_from_manifest(manifest);
     let tips = tips_from_manifest(manifest, max_tip_bytes)?;
     let mut rows = Vec::new();
     for status in &statuses {
-        rows.push(CropIndexRow {
+        rows.push(MdcropIndexRow {
             row_type: "cache-status".to_string(),
             id: status.dataset_id.clone(),
             label: status.relative_path.clone(),
@@ -1577,7 +1577,7 @@ pub fn crop_index_from_manifest(
         });
     }
     for node in &graph.nodes {
-        rows.push(CropIndexRow {
+        rows.push(MdcropIndexRow {
             row_type: "graph-node".to_string(),
             id: node.id.clone(),
             label: node.label.clone(),
@@ -1586,7 +1586,7 @@ pub fn crop_index_from_manifest(
         });
     }
     for edge in &graph.edges {
-        rows.push(CropIndexRow {
+        rows.push(MdcropIndexRow {
             row_type: "graph-edge".to_string(),
             id: format!("{}->{}", edge.from, edge.to),
             label: edge.label.clone().unwrap_or_default(),
@@ -1595,7 +1595,7 @@ pub fn crop_index_from_manifest(
         });
     }
     for tip in &tips.tips {
-        rows.push(CropIndexRow {
+        rows.push(MdcropIndexRow {
             row_type: "tip".to_string(),
             id: tip.fletch_id.clone(),
             label: tip.summary.clone(),
@@ -1603,8 +1603,8 @@ pub fn crop_index_from_manifest(
             source_schema: FLETCH_TIP_SCHEMA.to_string(),
         });
     }
-    Ok(CropIndexReport {
-        schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+    Ok(MdcropIndexReport {
+        schema_version: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         cache_root: manifest.cache_root.clone(),
         row_count: rows.len(),
@@ -1616,7 +1616,7 @@ pub fn crop_index_from_manifest(
     })
 }
 
-pub fn mdloom_document_manifest(index: &CropIndexReport) -> MdloomDocumentManifest {
+pub fn mdloom_document_manifest(index: &MdcropIndexReport) -> MdloomDocumentManifest {
     let documents = index
         .rows
         .iter()
@@ -1640,12 +1640,12 @@ pub fn mdloom_document_manifest(index: &CropIndexReport) -> MdloomDocumentManife
     }
 }
 
-pub fn slice_crop_index_report(
-    index: &CropIndexReport,
+pub fn slice_mdcrop_index_report(
+    index: &MdcropIndexReport,
     row_type: Option<&str>,
     offset: usize,
     limit: Option<usize>,
-) -> CropIndexReport {
+) -> MdcropIndexReport {
     let take = limit.unwrap_or(usize::MAX);
     let rows = index
         .rows
@@ -1671,7 +1671,7 @@ pub fn slice_crop_index_report(
         .filter(|row| row.row_type == "graph-edge")
         .count();
     let tip_row_count = rows.iter().filter(|row| row.row_type == "tip").count();
-    CropIndexReport {
+    MdcropIndexReport {
         schema_version: index.schema_version.clone(),
         generated_by: index.generated_by.clone(),
         cache_root: index.cache_root.clone(),
@@ -1752,7 +1752,7 @@ pub fn slice_local_url_map(urls: &LocalUrlMap, offset: usize, limit: Option<usiz
 }
 
 pub fn publisher_bundle_report(
-    crop_index: &CropIndexReport,
+    mdcrop_index: &MdcropIndexReport,
     mdloom_docs: &MdloomDocumentManifest,
     local_urls: &LocalUrlMap,
     quiver_summary: Option<&QuiverSummary>,
@@ -1761,7 +1761,7 @@ pub fn publisher_bundle_report(
     PublisherBundleReport {
         schema_version: FLETCH_PUBLISHER_BUNDLE_SCHEMA.to_string(),
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
-        crop_row_count: crop_index.row_count,
+        mdcrop_row_count: mdcrop_index.row_count,
         mdloom_document_count: mdloom_docs.document_count,
         local_url_count: local_urls.url_count,
         quiver_entry_count: quiver_summary.map(|summary| summary.entry_count),
@@ -7237,21 +7237,25 @@ mod tests {
     }
 
     #[test]
-    fn crop_index_from_manifest_emits_status_graph_and_tip_rows() {
-        let root = unique_temp_dir("crop-index");
+    fn mdcrop_index_from_manifest_emits_status_graph_and_tip_rows() {
+        let root = unique_temp_dir("mdcrop-index");
         let source = root.join("source.json");
         let cache_root = root.join("cache");
         std::fs::write(&source, br#"{"alpha":1}"#).unwrap();
-        let plan =
-            fetch_plan_with_kind("test:crop", source.display().to_string(), SourceKind::File)
-                .unwrap();
+        let plan = fetch_plan_with_kind(
+            "test:mdcrop",
+            source.display().to_string(),
+            SourceKind::File,
+        )
+        .unwrap();
         let outcome = fetch_to_cache(&plan, FetchOptions::new(&cache_root)).unwrap();
         let manifest =
             cache_manifest(cache_root.display().to_string(), vec![outcome.entry]).unwrap();
 
-        let index = crop_index_from_manifest(&manifest, &FreshnessPolicy::Immutable, 4096).unwrap();
+        let index =
+            mdcrop_index_from_manifest(&manifest, &FreshnessPolicy::Immutable, 4096).unwrap();
 
-        assert_eq!(index.schema_version, FLETCH_CROP_INDEX_SCHEMA);
+        assert_eq!(index.schema_version, FLETCH_MDCROP_INDEX_SCHEMA);
         assert_eq!(index.status_row_count, 1);
         assert!(index.graph_node_row_count > 0);
         assert!(index.graph_edge_row_count > 0);
@@ -7269,9 +7273,9 @@ mod tests {
     }
 
     #[test]
-    fn mdloom_document_manifest_points_back_to_crop_index_rows() {
-        let index = CropIndexReport {
-            schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+    fn mdloom_document_manifest_points_back_to_mdcrop_index_rows() {
+        let index = MdcropIndexReport {
+            schema_version: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             generated_by: "test".to_string(),
             cache_root: "cache".to_string(),
             row_count: 1,
@@ -7279,7 +7283,7 @@ mod tests {
             graph_node_row_count: 0,
             graph_edge_row_count: 0,
             tip_row_count: 0,
-            rows: vec![CropIndexRow {
+            rows: vec![MdcropIndexRow {
                 row_type: "cache-status".to_string(),
                 id: "test:fletch".to_string(),
                 label: "objects/sha256/test".to_string(),
@@ -7291,7 +7295,7 @@ mod tests {
         let docs = mdloom_document_manifest(&index);
 
         assert_eq!(docs.schema_version, FLETCH_MDLOOM_DOCS_SCHEMA);
-        assert_eq!(docs.source_schema, FLETCH_CROP_INDEX_SCHEMA);
+        assert_eq!(docs.source_schema, FLETCH_MDCROP_INDEX_SCHEMA);
         assert_eq!(docs.document_count, 1);
         assert_eq!(docs.documents[0].source_schema, FLETCH_VERIFY_SCHEMA);
         assert!(docs.documents[0].anchor.starts_with("#cache-status-"));
@@ -7302,7 +7306,7 @@ mod tests {
         let docs = MdloomDocumentManifest {
             schema_version: FLETCH_MDLOOM_DOCS_SCHEMA.to_string(),
             generated_by: "test".to_string(),
-            source_schema: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+            source_schema: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             document_count: 1,
             documents: vec![MdloomDocumentAnchor {
                 document_id: "cache-status:test:fletch".to_string(),
@@ -7324,8 +7328,8 @@ mod tests {
 
     #[test]
     fn publisher_slice_helpers_filter_and_bound_rows() {
-        let index = CropIndexReport {
-            schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+        let index = MdcropIndexReport {
+            schema_version: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             generated_by: "test".to_string(),
             cache_root: "cache".to_string(),
             row_count: 4,
@@ -7334,28 +7338,28 @@ mod tests {
             graph_edge_row_count: 1,
             tip_row_count: 1,
             rows: vec![
-                CropIndexRow {
+                MdcropIndexRow {
                     row_type: "cache-status".to_string(),
                     id: "status".to_string(),
                     label: "status".to_string(),
                     status: Some("verified".to_string()),
                     source_schema: FLETCH_VERIFY_SCHEMA.to_string(),
                 },
-                CropIndexRow {
+                MdcropIndexRow {
                     row_type: "tip".to_string(),
                     id: "tip-1".to_string(),
                     label: "tip 1".to_string(),
                     status: None,
                     source_schema: FLETCH_TIP_SCHEMA.to_string(),
                 },
-                CropIndexRow {
+                MdcropIndexRow {
                     row_type: "tip".to_string(),
                     id: "tip-2".to_string(),
                     label: "tip 2".to_string(),
                     status: None,
                     source_schema: FLETCH_TIP_SCHEMA.to_string(),
                 },
-                CropIndexRow {
+                MdcropIndexRow {
                     row_type: "graph-node".to_string(),
                     id: "node".to_string(),
                     label: "node".to_string(),
@@ -7365,7 +7369,7 @@ mod tests {
             ],
         };
 
-        let tips = slice_crop_index_report(&index, Some("tip"), 1, Some(1));
+        let tips = slice_mdcrop_index_report(&index, Some("tip"), 1, Some(1));
 
         assert_eq!(tips.row_count, 1);
         assert_eq!(tips.tip_row_count, 1);
@@ -7585,8 +7589,8 @@ mod tests {
 
     #[test]
     fn publisher_bundle_report_summarizes_optional_inputs() {
-        let crop = CropIndexReport {
-            schema_version: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+        let mdcrop = MdcropIndexReport {
+            schema_version: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             generated_by: "test".to_string(),
             cache_root: "cache".to_string(),
             row_count: 2,
@@ -7599,7 +7603,7 @@ mod tests {
         let docs = MdloomDocumentManifest {
             schema_version: FLETCH_MDLOOM_DOCS_SCHEMA.to_string(),
             generated_by: "test".to_string(),
-            source_schema: FLETCH_CROP_INDEX_SCHEMA.to_string(),
+            source_schema: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             document_count: 2,
             documents: Vec::new(),
         };
@@ -7620,10 +7624,10 @@ mod tests {
             unverified_count: 0,
         };
 
-        let bundle = publisher_bundle_report(&crop, &docs, &urls, Some(&quiver), None);
+        let bundle = publisher_bundle_report(&mdcrop, &docs, &urls, Some(&quiver), None);
 
         assert_eq!(bundle.schema_version, FLETCH_PUBLISHER_BUNDLE_SCHEMA);
-        assert_eq!(bundle.crop_row_count, 2);
+        assert_eq!(bundle.mdcrop_row_count, 2);
         assert_eq!(bundle.mdloom_document_count, 2);
         assert_eq!(bundle.local_url_count, 2);
         assert_eq!(bundle.quiver_entry_count, Some(3));

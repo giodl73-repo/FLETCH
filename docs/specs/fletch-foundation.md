@@ -39,7 +39,7 @@ Fletches form a graph:
 - **supersedes**: one fletch replaces an older version while preserving lineage.
 - **mirrors**: two shafts or fletches are equivalent source alternatives.
 - **cites**: one fletch uses another as evidence or documentation.
-- **documents**: a generated MDLOOM/CROP/Markdown/backend artifact describes a
+- **documents**: a generated MDLOOM/MDCROP/Markdown/backend artifact describes a
   fletch, shaft, quiver, flight, or ledger view.
 - **points-to**: an alias points to the active fletch, partition, rollup, or
   view.
@@ -51,9 +51,9 @@ Fletches form a graph:
 FLETCH records the graph and state transitions; products keep domain semantics
 in their own adapters.
 
-## CROP graph contract
+## MDCROP graph contract
 
-CROP works best when FLETCH exposes data state as a graph instead of only as a
+MDCROP works best when FLETCH exposes data state as a graph instead of only as a
 flat manifest. FLETCH graph exports should use stable typed nodes and edges:
 
 | Node kind | Meaning |
@@ -135,14 +135,14 @@ Large adapter reports can be bounded without mutating registries:
 adapter-source rows support `--adapter-owned`, validation findings support
 `--severity`, and archive-preview children support `--offset`/`--limit`.
 
-`fletch.crop-index.v1` emits CROP-indexable rows over cache status, graph nodes,
+`fletch.mdcrop-index.v1` emits MDCROP-indexable rows over cache status, graph nodes,
 graph edges, and tips. Each row records its source schema so generated indexes
 can link back to the machine contract that remains authoritative. Publisher
-commands can emit bounded CROP slices with `--row-type`, `--offset`, and
+commands can emit bounded MDCROP slices with `--row-type`, `--offset`, and
 `--limit`; slices remain derived views rather than activation state.
 
 `fletch.mdloom-docs.v1` emits document IDs, titles, anchors, and source schemas
-derived from CROP index rows. MDLOOM backends can render Markdown, HTML, or other
+derived from MDCROP index rows. MDLOOM backends can render Markdown, HTML, or other
 views from this manifest while linking back to authoritative machine contracts.
 CLI output can be bounded with `--offset` and `--limit`.
 
@@ -151,8 +151,8 @@ paths or URL prefixes. It is a navigation layer for generated views; source
 schemas still point back to the authoritative FLETCH contracts. CLI output can
 be bounded with `--offset` and `--limit`.
 
-`fletch.publisher-bundle.v1` summarizes publisher inputs for CROP/MDLOOM backends:
-CROP row counts, MDLOOM document counts, local URL counts, and optional quiver or
+`fletch.publisher-bundle.v1` summarizes publisher inputs for MDCROP/MDLOOM backends:
+MDCROP row counts, MDLOOM document counts, local URL counts, and optional quiver or
 adapter handoff counts. It is a compact index of publishable views, not a
 replacement for the underlying contracts.
 
@@ -194,7 +194,7 @@ structured preview/index metadata, not a replacement for the cached artifact:
 - `generated_from`: fletch or shaft ID used to produce the tip.
 - `truncated`: whether the tip is a partial preview.
 
-Tips give CROP, MDLOOM, CLIs, and adapters a cheap way to decide what data is
+Tips give MDCROP, MDLOOM, CLIs, and adapters a cheap way to decide what data is
 inside a shaft before doing full domain-specific parsing.
 
 `fletch.tip.v1` is the initial tip contract. Manifest-backed tips sample bounded
@@ -290,7 +290,7 @@ activating any content.
 
 Quiver graph export emits `fletch.graph.v1` nodes for the quiver, member
 fletches, and member ledger entries. `contains` edges connect the quiver to its
-members so CROP and MDLOOM can index portable bundles without reading cache
+members so MDCROP and MDLOOM can index portable bundles without reading cache
 objects.
 
 `fletch.quiver-merge-ready.v1` describes quiver members as candidate merge or
@@ -416,7 +416,7 @@ Generic HTTP headers are part of the source identity. They are stored on the
 shaft, sent during HTTP acquisition, and included in deterministic cache keys so
 two requests to the same URL with different generic headers do not collide.
 Saved `fletch.plan.v1` documents are executable by generic fetch tooling so
-adapters, CROP/MDLOOM generated files, or checked-in configs can hand FLETCH a
+adapters, MDCROP/MDLOOM generated files, or checked-in configs can hand FLETCH a
 complete acquisition intent without rebuilding it from flags.
 Fetch execution validates saved or in-memory plans before acquisition: the schema
 must be `fletch.plan.v1`, and required source identity fields must be present.
@@ -517,7 +517,7 @@ reports added, removed, changed, and unchanged counts. It does not read object
 bytes or replace verification; it helps automation decide which ledger rows need
 deeper inspection.
 
-Ledger entries should remain safe to publish through CROP/MDLOOM. They should
+Ledger entries should remain safe to publish through MDCROP/MDLOOM. They should
 include enough provenance for local status pages without requiring generated
 Markdown to become the source of truth.
 
@@ -530,7 +530,7 @@ Initial cache operations are manifest-led:
 - `cache status`: report verified, missing, hash-mismatch, fresh, or stale state
   using a caller-provided freshness policy.
 - `cache summary`: aggregate status rows into cache health counts and expected
-  versus actual byte totals for CI, CROP, and MDLOOM status views.
+  versus actual byte totals for CI, MDCROP, and MDLOOM status views.
 - `cache offline-report`: emit `fletch.cache-offline.v1`, a no-live readiness
   report that counts fresh verified entries, missing entries, stale entries, and
   blocked entries using a caller-provided freshness policy.
@@ -563,7 +563,7 @@ inspection and publishing; they are not authoritative data or product semantics.
 
 ### `fletch.publish.v1`
 
-Machine-readable publish scout for CROP, MDLOOM, dashboards, and local status
+Machine-readable publish scout for MDCROP, MDLOOM, dashboards, and local status
 backends. A publish report bundles the cache graph, cache status rows, and
 bounded tips derived from a manifest. Generated Markdown, HTML, or other backend
 views should render this contract; they should not replace the manifest, graph,
@@ -611,7 +611,7 @@ compressed archive packaging while preserving stage-first import.
 FLETCH ledgers and registry data should be shaped so local tools can publish
 status without owning fetch behavior:
 
-- CROP indexes ledgers, quivers, and cache docs as corpus/status metadata.
+- MDCROP indexes ledgers, quivers, and cache docs as corpus/status metadata.
 - MDPATH provides stable local references to generated specs and status rows.
 - MDLOOM can render registry, flight, quiver, and ledger views as Markdown, HTML,
   dashboard, or other backend output.
@@ -631,7 +631,7 @@ fletch cache status --manifest .fletch/cache/manifest.json
 | BISECT/apportionment | Census/geography/election fletches, large shafts, and verified ledgers. |
 | icelines | NHL season/game/profile/favorite fletches, on-demand expansion, quivers, offline mode. |
 | route | Geodata/routing fletches, archive shafts, bundleable local caches, on-demand fetches. |
-| CROP | Index and status over FLETCH ledgers, quivers, and cache docs. |
+| MDCROP | Index and status over FLETCH ledgers, quivers, and cache docs. |
 
 See [`consumer-adapter-scout.md`](consumer-adapter-scout.md) for the initial
 adapter migration matrix and mock-client proving path.

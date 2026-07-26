@@ -268,7 +268,7 @@ fn run_maxim_source_corpus_scenario(workspace_root: &Path) -> Result<MaximSource
     std::fs::write(
         source_root.join("maxim-computing-frontend-frameworks.view.json"),
         br###"{
-  "schema_version": "crop.view.v1",
+  "schema_version": "mdcrop.view.v1",
   "name": "maxim-computing-frontend-frameworks",
   "root": "../../computing",
   "task": "Backfill MAXIM frontend frameworks as a partial source-custody fact/context pack.",
@@ -502,7 +502,7 @@ fn maxim_source_corpus_registry(source_root: &Path) -> FletchRegistry {
                 GraphNodeKind::Fletch,
                 Some(source_root.join("maxim-computing-frontend-frameworks.view.json")),
                 Vec::new(),
-                Some("crop.view.v1"),
+                Some("mdcrop.view.v1"),
             ),
             fletch_definition(
                 "maxim.computing-frontend-frameworks.mdport",
@@ -687,7 +687,7 @@ struct MdportSection {
 }
 
 #[derive(Debug, Deserialize)]
-struct CropViewRecipe {
+struct MdcropViewRecipe {
     frontmatter_query: Option<String>,
 }
 
@@ -722,7 +722,7 @@ fn query_maxim_source_corpus(manifest: &CacheManifest) -> Result<MaximQuerySumma
             &entry.relative_path,
         ))?;
         if entry.dataset_id.ends_with(".view") {
-            let view: CropViewRecipe = serde_json::from_slice(&bytes)?;
+            let view: MdcropViewRecipe = serde_json::from_slice(&bytes)?;
             summary.view_count += 1;
             if view
                 .frontmatter_query

@@ -3,7 +3,7 @@
 ## Goal
 
 Make FLETCH real as a local Rust workspace with enough contract surface for
-BISECT, icelines, route, and CROP to evaluate onboarding.
+BISECT, icelines, route, and MDCROP to evaluate onboarding.
 
 ## Changes
 

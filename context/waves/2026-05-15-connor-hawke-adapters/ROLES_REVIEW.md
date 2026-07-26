@@ -14,7 +14,7 @@ to Overwatch publishers.
 | Offline Release Operator | Adapter handoff reports can be generated offline from registries before any live fetch or archive extraction. | Pass |
 | Adapter Boundary Keeper | `fletch-core` treats adapter URLs as opaque handles and does not implement NHL, Census, route, or archive semantics. | Pass |
 | Performance Engineer | Reports scan registry rows and edges without network or archive work; large registries may need indexed report slices later. | Follow-up |
-| MDLOOM/CROP Publisher | Adapter source, validation, archive-preview, and handoff schemas are renderable/indexable. | Pass |
+| MDLOOM/MDCROP Publisher | Adapter source, validation, archive-preview, and handoff schemas are renderable/indexable. | Pass |
 
 ## Editorial findings
 
@@ -31,7 +31,7 @@ to Overwatch publishers.
 | ICELINES Maintainer | NHL source construction can live in ICELINES while FLETCH records opaque adapter source handles. | Pass |
 | BISECT/Apportionment Analyst | Census and election registries can be validated and handed off without embedding legal/data semantics. | Pass |
 | ROUTE Researcher | Archive/geodata expansion can be previewed through generic registry edges without route-specific parsing. | Pass |
-| CROP Indexer | Adapter reports are stable corpus inputs for source and registry health indexes. | Pass |
+| MDCROP Indexer | Adapter reports are stable corpus inputs for source and registry health indexes. | Pass |
 | MDLOOM Publisher | MDLOOM can render adapter handoff, source, and validation reports from machine JSON. | Pass |
 | CI/Release Engineer | Read-only validation and handoff commands are automation-friendly. | Pass |
 

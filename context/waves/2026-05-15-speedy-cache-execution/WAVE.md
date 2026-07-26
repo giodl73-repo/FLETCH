@@ -12,7 +12,7 @@ focused on product-neutral fetch/cache execution.
 - `fletch-cli`: generic fetch execution controls.
 - `fletch-mock-client`: Justice League villain-files smoke coverage for generic
   local file shafts.
-- Consumers: ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and MDLOOM.
+- Consumers: ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM.
 
 ## Pulse table
 
@@ -43,7 +43,7 @@ Before this wave can close or hand off to Arsenal, run the `.roles` review:
 - Parliament: cache systems, provenance, offline release, adapter boundary,
   performance, and doc publisher.
 - Editorial: scope keeper, contract checker, validation checker.
-- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, CROP, MDLOOM, CI/release.
+- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, MDCROP, MDLOOM, CI/release.
 - Panel reviewers: F-I1 through F-I6.
 
 Blocking findings become additional Speedy pulses. Non-blocking findings must be
@@ -56,4 +56,4 @@ feed the Arsenal cache-operations wave.
 
 - FLETCH does not interpret NHL, Census, route, or villain-file semantics.
 - FLETCH does not activate aliases or product views during fetch execution.
-- FLETCH does not make generated CROP/MDLOOM views the source of truth.
+- FLETCH does not make generated MDCROP/MDLOOM views the source of truth.

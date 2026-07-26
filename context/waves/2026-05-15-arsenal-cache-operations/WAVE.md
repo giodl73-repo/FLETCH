@@ -12,7 +12,7 @@ and plan cleanup without product-specific semantics or hidden mutation.
 - `fletch-cli`: cache operation commands over `fletch.cache-manifest.v1`.
 - `fletch-mock-client`: Justice League villain-files smoke coverage for generic
   cache health, orphan planning, and offline status.
-- Consumers: ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and MDLOOM.
+- Consumers: ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM.
 
 ## Pulse table
 
@@ -38,7 +38,7 @@ Before this wave can close or hand off to Red Arrow, run the `.roles` review:
 - Parliament: cache systems, provenance, offline release, adapter boundary,
   performance, and doc publisher.
 - Editorial: scope keeper, contract checker, validation checker.
-- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, CROP, MDLOOM, CI/release.
+- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, MDCROP, MDLOOM, CI/release.
 - Panel reviewers: F-I1 through F-I6.
 
 Blocking findings become additional Arsenal pulses. Non-blocking findings must be

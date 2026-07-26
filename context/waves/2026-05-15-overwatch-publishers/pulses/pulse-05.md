@@ -7,11 +7,11 @@ contracts or embedding consumer-specific dashboards in FLETCH.
 
 ## Outcome
 
-- Added read-only slice helpers for `fletch.crop-index.v1`,
+- Added read-only slice helpers for `fletch.mdcrop-index.v1`,
   `fletch.mdloom-docs.v1`, and `fletch.local-url-map.v1`.
-- Added `--offset` and `--limit` to CROP, MDLOOM, and local URL publisher
+- Added `--offset` and `--limit` to MDCROP, MDLOOM, and local URL publisher
   commands.
-- Added `--row-type` filtering to CROP index publisher output for focused
+- Added `--row-type` filtering to MDCROP index publisher output for focused
   cache-status, graph, or tip views.
 - Closed the Overwatch performance follow-up from the `.roles` review while
   keeping generated publisher artifacts derived from source contracts.

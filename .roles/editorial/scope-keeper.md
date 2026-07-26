@@ -15,7 +15,7 @@ treated as ready.
 1. Does the artifact keep FLETCH product-neutral?
 2. Does it avoid embedding consumer-specific semantics in `fletch-core`?
 3. Does it use fletch, shaft, flight, quiver, and ledger terminology consistently?
-4. Does it distinguish machine contracts from generated MDLOOM/CROP views?
+4. Does it distinguish machine contracts from generated MDLOOM/MDCROP views?
 
 ## What NOT to do
 

@@ -45,7 +45,7 @@ This follows the same broad idea as managed analytical partitions: physical
 partitions stay small and verifiable, while queries see a logical model.
 
 FLETCH also records links between data, not only links between fetch actions.
-The registry and ledger should be directly graph-exportable for CROP: fletches,
+The registry and ledger should be directly graph-exportable for MDCROP: fletches,
 shafts, quivers, flights, and generated docs become nodes; relationships become
 typed edges. A cached fletch can be derived from, supersede, contain, cite,
 mirror, normalize, or document another fletch. Those relationships make it
@@ -67,8 +67,8 @@ products interpret the domain meaning.
   count, timestamp, and verification state.
 - **Linked data**: ledgers should capture data relationships such as derived
   from, contains, supersedes, mirrors, cites, and normalized from.
-- **CROP-ready graph**: every fletch/shaft/quiver/flight relationship should be
-  expressible as typed nodes and edges so CROP can crop, index, and explain data
+- **MDCROP-ready graph**: every fletch/shaft/quiver/flight relationship should be
+  expressible as typed nodes and edges so MDCROP can mdcrop, index, and explain data
   provenance without reverse-engineering cache files.
 - **Format clarity**: opaque bytes are the safe default; declared format options
   allow adapters to choose JSON, CSV, ZIP, Parquet, SQLite, MDLOOM output, or
@@ -79,11 +79,11 @@ products interpret the domain meaning.
   and reports; products interpret NHL, Census, route, or corpus meaning.
 - **Fast common path**: verified cache hits, dry-run planning, and ledger status
   should be cheap enough for every consumer to call routinely.
-- **Publishable state**: CROP can index ledgers, MDPATH can address generated
+- **Publishable state**: MDCROP can index ledgers, MDPATH can address generated
   docs, and MDLOOM can render local Markdown/backend views from contracts.
 - **Data tips**: shafts and fletches can expose structured previews such as CSV
   headers, JSON fields, ZIP member indexes, SQLite table lists, or generated
-  MDLOOM/CROP status snippets without forcing product-specific loads.
+  MDLOOM/MDCROP status snippets without forcing product-specific loads.
 - **Partition safety**: fetch adds or verifies candidate partitions; merge
   updates aliases, active views, and rollups through an auditable transaction.
 - **Conflict grouping**: equivalent conflicts can be labeled as choices, e.g.
@@ -138,17 +138,17 @@ keeps a plain technical contract:
    and ESPN transaction window acquisition plus query partition/rollup handoff
    reporting and query quiver handoff reporting. Product semantics remain in
    each consumer.
-9. **Overwatch - Publishers**: make FLETCH ledgers easy for CROP to index and
+9. **Overwatch - Publishers**: make FLETCH ledgers easy for MDCROP to index and
    for MDLOOM to render as local Markdown/status/backend views. Mock client:
    publish villain-file status, threat query summaries, tips, and quiver
    contents as local views.
 
 ## Non-goals
 
-- FLETCH does not own domain semantics for BISECT, icelines, route, or CROP.
+- FLETCH does not own domain semantics for BISECT, icelines, route, or MDCROP.
 - FLETCH does not replace each product's user-facing commands.
 - FLETCH does not depend on BISECT.
-- FLETCH does not make generated MDLOOM/CROP documents the source of truth; they
+- FLETCH does not make generated MDLOOM/MDCROP documents the source of truth; they
   reflect registry, flight, quiver, and ledger contracts.
 - FLETCH does not silently trust unverified remote data, extracted archive paths,
   or generated artifacts.

@@ -14,7 +14,7 @@ Oracle partitions and rollups.
 | Offline Release Operator | Rollback previews and labels are local JSON state, so offline release flows can reason about active targets without live fetches. | Pass |
 | Adapter Boundary Keeper | Red Arrow kept product semantics out of `fletch-core`; aliases and labels use generic IDs and cache metadata only. | Pass |
 | Performance Engineer | Preview operations compare manifest/state rows without touching object bytes; future large active sets may need indexed state lookups. | Follow-up |
-| MDLOOM/CROP Publisher | Named merge, alias, label, and rollback-preview schemas are renderable/indexable as local status artifacts. | Pass |
+| MDLOOM/MDCROP Publisher | Named merge, alias, label, and rollback-preview schemas are renderable/indexable as local status artifacts. | Pass |
 
 ## Editorial findings
 
@@ -31,7 +31,7 @@ Oracle partitions and rollups.
 | ICELINES Maintainer | Current-season aliases, favorite-pack labels, and rollback previews can be modeled without NHL logic in core. | Pass |
 | BISECT/Apportionment Analyst | Release-year or evidence-set labels can pin reproducible cache keys before active dataset changes. | Pass |
 | ROUTE Researcher | Geodata active views can cite generic alias state and labels instead of ad hoc local paths. | Pass |
-| CROP Indexer | Red Arrow state contracts are stable CROP inputs for active-view and rollback-readiness indexes. | Pass |
+| MDCROP Indexer | Red Arrow state contracts are stable MDCROP inputs for active-view and rollback-readiness indexes. | Pass |
 | MDLOOM Publisher | MDLOOM can render merge/alias/label/rollback previews while machine JSON remains the source of truth. | Pass |
 | CI/Release Engineer | Non-destructive previews and JSON outputs are automation-friendly for promotion checks. | Pass |
 

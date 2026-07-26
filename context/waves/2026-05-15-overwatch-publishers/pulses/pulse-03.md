@@ -3,7 +3,7 @@
 ## Goal
 
 Map schemas and generated document rows to stable local URLs and anchors for
-MDLOOM/CROP views without making those views authoritative.
+MDLOOM/MDCROP views without making those views authoritative.
 
 ## Outcome
 

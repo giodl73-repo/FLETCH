@@ -3,7 +3,7 @@
 ## Goal
 
 Create a neutral Rust fetch/cache workspace that BISECT, icelines, route, and
-CROP can adopt without depending on each other.
+MDCROP can adopt without depending on each other.
 
 ## Thesis
 
@@ -32,14 +32,14 @@ product meaning in adapters.
 | 02 | Cache execution | done | Added HTTP/file fetch execution with temp-file promotion, SHA-256 ledger entries, optional checksum verification, bandwidth limits, and `fletch fetch`. |
 | 03 | Cache operations | done | Added manifest-led cache list, verify, status, and prune-plan operations with CLI commands. |
 | 04 | Quiver format | done | Added `fletch.quiver.v1` directory export/import, stage-first verification, CLI commands, and mock-client offline bootstrap. |
-| 05 | Consumer adapters scout | done | Documented initial ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and MDLOOM migration slices. |
+| 05 | Consumer adapters scout | done | Documented initial ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM migration slices. |
 
 ## Success criteria
 
 - FLETCH has its own Rust workspace and git repo.
 - `fletch-core` exposes product-neutral plan, policy, key, and manifest types.
 - `fletch-cli` can emit a plan and deterministic cache key.
-- Docs explain BISECT, icelines, route, and CROP onboarding paths.
+- Docs explain BISECT, icelines, route, and MDCROP onboarding paths.
 - Wave and pulse scaffolding exists for follow-up work.
 - `cargo fmt`, `cargo test --workspace`, CLI smokes, and `git diff --check`
   pass.

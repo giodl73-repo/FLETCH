@@ -14,7 +14,7 @@ Speedy II quivers.
 | Offline Release Operator | Oracle contracts are local JSON reports, so offline query/readiness flows can inspect partitions without live fetches. | Pass |
 | Adapter Boundary Keeper | Partition IDs and group IDs are generic; NHL seasons, Census vintages, geodata tiles, and other semantics remain adapter-owned. | Pass |
 | Performance Engineer | Reports operate over state rows rather than object bytes; future very large partition sets may need indexed summaries. | Follow-up |
-| MDLOOM/CROP Publisher | Named partition, rollup, invalidation, and active-set schemas are directly renderable/indexable. | Pass |
+| MDLOOM/MDCROP Publisher | Named partition, rollup, invalidation, and active-set schemas are directly renderable/indexable. | Pass |
 
 ## Editorial findings
 
@@ -31,7 +31,7 @@ Speedy II quivers.
 | ICELINES Maintainer | Season/game/date partitions can be represented by IDs and groups without NHL logic in core. | Pass |
 | BISECT/Apportionment Analyst | Year/vintage/district evidence sets can be pinned and inspected as partition rows with hashes. | Pass |
 | ROUTE Researcher | Geodata archive members and rollups can be tracked generically without route-specific scoring. | Pass |
-| CROP Indexer | Partition and active-set reports are stable corpus-health and query-state inputs. | Pass |
+| MDCROP Indexer | Partition and active-set reports are stable corpus-health and query-state inputs. | Pass |
 | MDLOOM Publisher | MDLOOM can render partition, rollup, invalidation, and active-set views from machine JSON. | Pass |
 | CI/Release Engineer | Read-only CLI reports are suitable for automation and release promotion checks. | Pass |
 

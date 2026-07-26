@@ -10,7 +10,7 @@ ledgers without reimplementing FLETCH merge rules.
 
 - `fletch-core`: cache manifest merge/upsert helpers.
 - `fletch-cli`: manifest write paths that exercise the shared helpers.
-- Consumers: ICELINES, BISECT/apportionment, ROUTE, CROP, MDLOOM, and CI/release
+- Consumers: ICELINES, BISECT/apportionment, ROUTE, MDCROP, MDLOOM, and CI/release
   tooling that keep long-lived cache manifests as the fetch ledger.
 
 ## Pulse table
@@ -38,7 +38,7 @@ Before closing, run a `.roles` review with:
 - Parliament: cache systems, provenance, offline release, adapter boundary, and
   consumer ergonomics.
 - Editorial: scope keeper, contract checker, validation checker.
-- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, CROP, MDLOOM, CI/release.
+- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, MDCROP, MDLOOM, CI/release.
 - Panel reviewers: F-M1 through F-M5.
 
 Status: complete in `ROLES_REVIEW.md`; no blocking findings. Deferred findings

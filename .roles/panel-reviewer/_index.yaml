@@ -37,5 +37,5 @@ reviewers:
     name: Documentation Pipeline Reviewer
     slug: documentation-pipeline-reviewer
     category: documentation-pipeline
-    expertise: [proof, crop, mdpath, generated-markdown, status-pages]
+    expertise: [proof, mdcrop, mdpath, generated-markdown, status-pages]
 

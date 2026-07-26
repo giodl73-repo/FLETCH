@@ -52,7 +52,7 @@ ledger entries for offline use.
 
 - **One cache contract**: logical dataset IDs, source URLs, versions, hashes,
   byte counts, and verification status live in a shared manifest shape.
-- **Product-neutral core**: BISECT, ICELINES, ROUTE, and CROP can eventually
+- **Product-neutral core**: BISECT, ICELINES, ROUTE, and MDCROP can eventually
   consume the same fetch/cache primitives without depending on each other.
 - **Reproducible data fetches**: plans and cache keys make "what did this run
   fetch?" auditable.
@@ -85,7 +85,7 @@ Downstream migration status:
   gate after mapping dynamic child cachelines back to registered ICELINES
   parent sources. ICELINES keeps NHL parsing, snapshots, sealing, active
   pointers, and hockey-domain validation.
-- CROP: optional indexing of FLETCH manifests and cached corpus metadata.
+- MDCROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
 ## Commands
 
@@ -190,7 +190,7 @@ entry shape, and derived reports. A typical consumer flow is:
    graph, publisher, partition, or quiver handoff reports.
 
 This pattern is now used by ICELINES, BISECT, and ROUTE for cache-index
-evidence and supports CROP/MDLOOM publisher inputs without making FLETCH
+evidence and supports MDCROP/MDLOOM publisher inputs without making FLETCH
 responsible for domain activation.
 
 `fletch cache index-gate` is the product-neutral health gate for that contract:
@@ -202,9 +202,9 @@ directly with repeated `--expected-dataset-id` flags or derived from generic
 HTTP/file fletches in one or more `fletch.registry.v1` files with
 `--expected-registry`.
 
-Publisher commands are read-only derived views. `fletch publish crop-index`,
+Publisher commands are read-only derived views. `fletch publish mdcrop-index`,
 `fletch publish mdloom-docs`, and `fletch publish local-url-map` accept
-`--offset` and `--limit` for bounded output; CROP index output also accepts
+`--offset` and `--limit` for bounded output; MDCROP index output also accepts
 `--row-type` to focus large local publisher surfaces.
 Large read-only report commands also expose bounded output: partition state and
 active-set rows, quiver merge-ready candidates, adapter source rows, validation
@@ -294,7 +294,7 @@ arrays/values, text samples, or opaque byte samples without interpreting product
 semantics.
 
 `fletch publish from-manifest` emits a `fletch.publish.v1` report with cache
-status, graph, and tips bundled for CROP indexing, MDLOOM rendering, dashboards,
+status, graph, and tips bundled for MDCROP indexing, MDLOOM rendering, dashboards,
 or other local status backends. It is a machine-readable source view, not a
 generated document source of truth.
 
@@ -322,11 +322,11 @@ offline bootstrap, writes registry and dry-run flight files, emits graph views
 from both registry and cached state, writes generic tips and a publish-ready
 status report, and emits a prune plan for an orphaned trick-arrow object.
 
-The same mock also includes a MAXIM-style source-corpus slice: a CROP view
+The same mock also includes a MAXIM-style source-corpus slice: a MDCROP view
 recipe selects a frontend-framework guide, the fetched MDPORT pack carries the
 portable article context, and MDLOOM table/block sidecars provide structured data
 for React-focused queries. FLETCH treats all four artifacts as generic cache
-entries while the mock adapter owns the CROP/MDPORT/MDLOOM interpretation.
+entries while the mock adapter owns the MDCROP/MDPORT/MDLOOM interpretation.
 
 ## Design rule
 
@@ -338,7 +338,7 @@ but the core cache contract must work for any source.
 - [`docs/specs/fletch-foundation.md`](docs/specs/fletch-foundation.md) defines
   the initial plan and cache-manifest contracts.
 - [`docs/specs/consumer-adapter-scout.md`](docs/specs/consumer-adapter-scout.md)
-  maps ICELINES, apportionment/BISECT, ROUTE, CROP, MDPATH, and MDLOOM to
+  maps ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM to
   migration slices and records the first completed consumer handoffs.
 - `context/waves/` tracks implementation waves and pulse history.
 

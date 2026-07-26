@@ -8,9 +8,9 @@ or rendered documents the source of truth.
 ## Outcome
 
 - Added `fletch.mdloom-docs.v1`.
-- Emitted document IDs, titles, anchors, and source schema references from CROP
+- Emitted document IDs, titles, anchors, and source schema references from MDCROP
   index rows.
-- Added `fletch publish mdloom-docs --crop-index ...`.
+- Added `fletch publish mdloom-docs --mdcrop-index ...`.
 - Kept MDLOOM backend/rendering choices outside `fletch-core`.
 
 ## Validation

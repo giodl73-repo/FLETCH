@@ -32,7 +32,7 @@ activation boundary.
 | ICELINES Maintainer | ICELINES can keep its FLETCH cache manifest and cache-index evidence while preserving NHL snapshot ownership. | Pass |
 | BISECT/Apportionment Analyst | Evidence ledgers can be persisted and indexed without legal/data-release semantics moving into FLETCH. | Pass |
 | ROUTE Researcher | Geodata fetch ledgers can reuse manifest helpers while route scoring and geometry remain outside core. | Pass |
-| CROP Indexer | Manifest-first ledgers provide stable inputs for CROP status and publisher indexes. | Pass |
+| MDCROP Indexer | Manifest-first ledgers provide stable inputs for MDCROP status and publisher indexes. | Pass |
 | MDLOOM Publisher | Durable manifests and read-only reports can feed generated docs without docs becoming authoritative state. | Pass |
 | CI/Release Engineer | CI can smoke manifest writes, reloads, and cache-index rows from local files. | Pass |
 

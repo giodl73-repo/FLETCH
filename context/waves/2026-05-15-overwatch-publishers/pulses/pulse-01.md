@@ -1,13 +1,13 @@
-# Pulse 01: CROP index report
+# Pulse 01: MDCROP index report
 
 ## Goal
 
-Emit indexable CROP rows over existing FLETCH status, graph, and tip contracts
+Emit indexable MDCROP rows over existing FLETCH status, graph, and tip contracts
 without creating a separate source of truth.
 
 ## Outcome
 
-- Add a named `fletch.crop-index.v1` contract.
+- Add a named `fletch.mdcrop-index.v1` contract.
 - Report row counts and rows for cache statuses, graph nodes, graph edges, and
   tips.
 - Add a read-only CLI command over a manifest.
@@ -18,5 +18,5 @@ without creating a separate source of truth.
 
 - `cargo fmt`
 - `cargo test --workspace`
-- focused CLI smoke for CROP index JSON
+- focused CLI smoke for MDCROP index JSON
 - `git diff --check`

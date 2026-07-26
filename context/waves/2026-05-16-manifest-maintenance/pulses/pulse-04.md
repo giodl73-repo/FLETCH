@@ -4,7 +4,7 @@
 
 Add a product-neutral cache-index gate report so consumers can reuse common
 unexpected, missing, and unverified ledger checks without moving ICELINES,
-BISECT, ROUTE, CROP, or MDLOOM policy into `fletch-core`.
+BISECT, ROUTE, MDCROP, or MDLOOM policy into `fletch-core`.
 
 ## Implementation
 

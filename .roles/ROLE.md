@@ -17,7 +17,7 @@ turn `fletch-core` into domain code.
 | `parliament/offline-release-operator.md` | Offline Release Operator | Bootstrap, quivers, and offline use vs. live-network assumptions |
 | `parliament/adapter-boundary-keeper.md` | Adapter Boundary Keeper | Product-neutral core vs. leaking NHL/Census/route semantics |
 | `parliament/performance-engineer.md` | Performance Engineer | Fast verifies, skips, and bulk pulls vs. slow universal abstractions |
-| `parliament/doc-publisher.md` | MDLOOM/CROP Publisher | Human-readable generated docs/status vs. machine-only manifests |
+| `parliament/doc-publisher.md` | MDLOOM/MDCROP Publisher | Human-readable generated docs/status vs. machine-only manifests |
 
 ---
 
@@ -44,7 +44,7 @@ fetch/cache primitive serves real downstream tools.
 | `stakeholders/icelines-maintainer.md` | ICELINES Maintainer | On-demand NHL data, snapshots, favorites, no-live CI, offline bundles |
 | `stakeholders/bisect-apportionment-analyst.md` | BISECT/Apportionment Analyst | Large Census/election/geography pulls, checksums, reproducibility |
 | `stakeholders/route-researcher.md` | ROUTE Researcher | Geodata archives, source catalogs, cacheable research inputs |
-| `stakeholders/crop-indexer.md` | CROP Indexer | Indexable ledgers, status pages, corpus health, broken/missing data |
+| `stakeholders/mdcrop-indexer.md` | MDCROP Indexer | Indexable ledgers, status pages, corpus health, broken/missing data |
 | `stakeholders/mdloom-publisher.md` | MDLOOM Publisher | Generated Markdown/backend views from FLETCH contracts |
 | `stakeholders/ci-release-engineer.md` | CI/Release Engineer | Deterministic offline tests, bootstrap speed, artifact promotion |
 
@@ -62,5 +62,5 @@ role-based infrastructure reviewers, not product stakeholders.
 | `panel-reviewer/F-I3.md` | Data Integration Reviewer | source registries, adapters, schema boundaries |
 | `panel-reviewer/F-I4.md` | Offline Packaging Reviewer | bundles/quivers, import/export, bootstrap installs |
 | `panel-reviewer/F-I5.md` | Security and Trust Reviewer | checksums, path safety, untrusted archives, transport risk |
-| `panel-reviewer/F-I6.md` | Documentation Pipeline Reviewer | MDLOOM/CROP/MDPATH integration and generated status docs |
+| `panel-reviewer/F-I6.md` | Documentation Pipeline Reviewer | MDLOOM/MDCROP/MDPATH integration and generated status docs |
 

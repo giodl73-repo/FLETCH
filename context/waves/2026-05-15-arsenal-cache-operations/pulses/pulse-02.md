@@ -2,7 +2,7 @@
 
 ## Goal
 
-Give cache verification a named machine contract that CROP, MDLOOM, CI, and
+Give cache verification a named machine contract that MDCROP, MDLOOM, CI, and
 humans can consume without guessing what an anonymous status array means.
 
 ## Outcome

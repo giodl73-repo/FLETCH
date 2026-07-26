@@ -28,7 +28,7 @@ Consumers own:
 | ICELINES | NHL schedule, boxscore, play-by-play, bios, MoneyPuck, contracts, playoff data | Game/date/month/season partitions with season-type rollups and aliases like `nhl:season:current` | Season quivers and CI/offline bundles | Live NHL API should remain a write path that lands snapshots; queries should read verified partitions. |
 | Apportionment/BISECT | Census API rows, TIGER/Line boundaries, NHGIS files, election inputs, generated adjacency graphs | Year/state/tract partitions with nationwide and region rollups | Year/state packs for reproducible runs | FLETCH can verify raw and normalized artifacts; graph/partition algorithms stay in product code. |
 | ROUTE | HPMS, NBI, FARS, NHS/RITIS-derived inputs, generated route evidence tables | Year/state/route partitions with national rollups and route aliases | Evidence quivers for reproducible route scoring | FLETCH can stage official datasets and derived indexes; scoring remains ROUTE-owned. |
-| CROP | FLETCH ledgers, quiver manifests, graph exports, generated docs/status | Corpus/status partitions by repo, view, or run | Corpus health packs | CROP indexes FLETCH state as evidence; it should not infer cache semantics from raw files. |
+| MDCROP | FLETCH ledgers, quiver manifests, graph exports, generated docs/status | Corpus/status partitions by repo, view, or run | Corpus health packs | MDCROP indexes FLETCH state as evidence; it should not infer cache semantics from raw files. |
 | MDPATH | Stable references to generated specs, status rows, tips, and evidence docs | Document/path/section-addressed references | Quivers can include published docs plus `md://` references | FLETCH outputs can carry stable local references without making generated Markdown authoritative. |
 | MDLOOM | Registry, flight, quiver, ledger, and tip views | Generated proof/status views over FLETCH state | Release/status packs | MDLOOM renders FLETCH contracts; FLETCH remains the source of truth. |
 
@@ -52,11 +52,11 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
    partitions, merge safe groups first, and leave unresolved groups visible for a
    later client decision.
 8. **Overwatch / Publishers**: later, the mock should publish local status,
-   threat query summaries, tips, and quiver contents through CROP/MDLOOM-shaped
+   threat query summaries, tips, and quiver contents through MDCROP/MDLOOM-shaped
    views.
-9. **MAXIM / Source corpus**: the mock now fetches a CROP view recipe, a MDPORT
+9. **MAXIM / Source corpus**: the mock now fetches a MDCROP view recipe, a MDPORT
    guide pack, and MDLOOM table/block sidecars for a frontend-framework guide,
-   then leaves CROP/MDPORT/MDLOOM-specific querying in the adapter layer.
+   then leaves MDCROP/MDPORT/MDLOOM-specific querying in the adapter layer.
 
 ## First migration slices
 
@@ -77,7 +77,7 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
    and enrichment quiver handoff candidates. ICELINES keeps dynamic source
    expansion, parsing, snapshots, sealing, active pointers, freshness, locks,
    event-stream writes, and hockey-domain validation.
-4. CROP: index `fletch.cache-manifest.v1`, `fletch.quiver.v1`, `fletch.graph.v1`,
+4. MDCROP: index `fletch.cache-manifest.v1`, `fletch.quiver.v1`, `fletch.graph.v1`,
    tips, and publish reports as evidence.
 5. MDPATH/MDLOOM: attach stable references and rendered views to FLETCH outputs
    without treating generated docs as source data.
@@ -89,4 +89,4 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 | ROUTE | Generic source orchestration and source handoff/gate reporting. | Route scoring, geospatial semantics, user-facing outputs. |
 | BISECT | Generic HTTP source-byte acquisition under `data/.fletch` plus handoff/gate reporting. | Release adjacency, archive extraction, derived CSVs, done markers, local manifest overrides, legal/redistricting claims. |
 | ICELINES | Handoff/gate reporting, roster, MoneyPuck, paged NHL stats, schedule-expanded Gamecenter, player-set-expanded landing, and season-window-expanded ESPN transaction source-byte acquisition, query partition/rollup handoff reporting, and query quiver handoff reporting. | Schedule/player-set/window expansion semantics, snapshots, parsing, sealing, active pointers, event streams, classifiers, and hockey semantics. |
-| MAXIM | Generic cache acquisition and verification for CROP view recipes, MDPORT packs, and MDLOOM sidecars. | Source-corpus authoring, CROP query semantics, MDPORT metadata interpretation, MDLOOM document parsing, and guide-specific search behavior. |
+| MAXIM | Generic cache acquisition and verification for MDCROP view recipes, MDPORT packs, and MDLOOM sidecars. | Source-corpus authoring, MDCROP query semantics, MDPORT metadata interpretation, MDLOOM document parsing, and guide-specific search behavior. |
