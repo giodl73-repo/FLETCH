@@ -8,6 +8,20 @@
 [ROLES](https://github.com/giodl73-repo/ROLES), the `.roles` convention for
 repository-local review panels.
 
+## Show someone (start here)
+
+Hand the repo to a product integrator or systems implementer without a
+maintainer tour:
+
+| Audience | Path | Time |
+|---|---|---|
+| **Product integrator** | [SHOWCASE.md](SHOWCASE.md) → [integrator brief](docs/show/integrator-brief.md) | 10–20 min |
+| **Systems implementer** | [SHOWCASE.md](SHOWCASE.md) → [implementer brief](docs/show/implementer-brief.md) → [foundation spec](docs/specs/fletch-foundation.md) | 15–35 min |
+
+Shared fetch/cache ledger only — not product activation, not selection/closure
+replay (MDCROP / LATTICE / FLETCHER), and not a claim every consumer fully
+migrated.
+
 ## Context & Harness family
 
 FLETCH is the acquisition layer in a four-stage context-control family:
