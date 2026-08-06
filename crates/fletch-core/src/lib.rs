@@ -245,6 +245,7 @@ pub struct CacheIndexEntry {
     pub version: Option<String>,
     pub cache_key: String,
     pub sha256: String,
+    #[serde(alias = "object_path")]
     pub relative_path: String,
     pub bytes: u64,
     pub verified: bool,
@@ -2127,6 +2128,7 @@ fn cache_index_selector_catalog() -> slice_core::FieldCatalog {
         .insert("cache_key", slice_core::ValueType::String)
         .insert("sha256", slice_core::ValueType::String)
         .insert("relative_path", slice_core::ValueType::String)
+        .insert("object_path", slice_core::ValueType::String)
         .insert("bytes", slice_core::ValueType::Number)
         .insert("verified", slice_core::ValueType::Bool);
     catalog
@@ -2139,6 +2141,7 @@ fn cache_index_selector_row(entry: &CacheIndexEntry) -> serde_json::Value {
         "cache_key": entry.cache_key,
         "sha256": entry.sha256,
         "relative_path": entry.relative_path,
+        "object_path": entry.relative_path,
         "bytes": entry.bytes,
         "verified": entry.verified,
     })
@@ -5026,6 +5029,22 @@ mod tests {
         assert_eq!(index.byte_count, 42);
         assert_eq!(index.entries[0].dataset_id, "test:dataset");
         assert_eq!(index.entries[0].version.as_deref(), Some("v1"));
+
+        let json = serde_json::to_value(&index.entries[0]).unwrap();
+        assert_eq!(json["relative_path"], "objects/sha256/aa");
+        assert!(json.get("object_path").is_none());
+        let mut alias_json = json;
+        let relative_path = alias_json
+            .as_object_mut()
+            .unwrap()
+            .remove("relative_path")
+            .unwrap();
+        alias_json
+            .as_object_mut()
+            .unwrap()
+            .insert("object_path".to_string(), relative_path);
+        let alias_entry: CacheIndexEntry = serde_json::from_value(alias_json).unwrap();
+        assert_eq!(alias_entry.relative_path, "objects/sha256/aa");
     }
 
     #[test]
@@ -5248,7 +5267,7 @@ mod tests {
         };
         let selected = select_cache_index_report(
             &index,
-            "dataset_id contains 'icelines' and verified eq true and bytes ge 100",
+            "dataset_id contains 'icelines' and object_path contains 'leaders' and verified eq true and bytes ge 100",
         )
         .unwrap();
         let selected_ids = selected
