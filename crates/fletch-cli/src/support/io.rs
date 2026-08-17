@@ -88,7 +88,33 @@ pub(crate) fn read_registry_inputs(files: &[PathBuf], follow: bool) -> Result<Ve
         let followed = follow_registry_pointers(&registries)?;
         registries.extend(followed);
     }
+    ensure_valid_registry_inputs(&registries)?;
     Ok(registries)
+}
+
+fn ensure_valid_registry_inputs(registries: &[FletchRegistry]) -> Result<()> {
+    let invalid = registries
+        .iter()
+        .filter_map(|registry| {
+            let report = validate_registry(registry);
+            if report.valid {
+                return None;
+            }
+            let codes = report
+                .findings
+                .iter()
+                .map(|finding| finding.code.as_str())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(",");
+            Some(format!("{} [{codes}]", registry.registry_id))
+        })
+        .collect::<Vec<_>>();
+    if !invalid.is_empty() {
+        bail!("registry validation failed: {}", invalid.join("; "));
+    }
+    Ok(())
 }
 
 pub(crate) fn follow_registry_pointers(registries: &[FletchRegistry]) -> Result<Vec<FletchRegistry>> {
@@ -102,6 +128,7 @@ pub(crate) fn follow_registry_pointers(registries: &[FletchRegistry]) -> Result<
             if !definition.tags.iter().any(|tag| tag == "repo-registry") {
                 continue;
             }
+
             for shaft in &definition.shafts {
                 match shaft.kind {
                     SourceKind::Http => {
@@ -288,6 +315,36 @@ pub(crate) fn read_cache_index(path: &PathBuf) -> Result<CacheIndexReport> {
     Ok(serde_json::from_str(&json)?)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_registry_inputs_are_not_indexed() {
+        let registry = serde_json::from_str(
+            r#"{
+                "schema_version": "fletch.registry.v1",
+                "generated_by": "fletch-cli test",
+                "registry_id": "invalid-registry",
+                "fletches": [{
+                    "id": "invalid.missing-shaft",
+                    "node_kind": "fletch",
+                    "shafts": [],
+                    "metadata": {},
+                    "tags": []
+                }]
+            }"#,
+        )
+        .expect("registry fixture should parse");
+
+        let error = ensure_valid_registry_inputs(&[registry])
+            .expect_err("invalid registry should be rejected")
+            .to_string();
+
+        assert!(error.contains("invalid-registry [missing-shaft]"));
+    }
+}
+
 pub(crate) fn read_mdloom_docs(path: &PathBuf) -> Result<MdloomDocumentManifest> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
@@ -369,4 +426,3 @@ pub(crate) fn write_json<T: serde::Serialize + ?Sized>(value: &T, output: Option
     }
     Ok(())
 }
-

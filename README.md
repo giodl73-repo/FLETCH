@@ -120,6 +120,10 @@ Downstream migration status:
   pointers, and hockey-domain validation.
 - MDCROP: optional indexing of FLETCH manifests and cached corpus metadata.
 
+The protected pre-1.0 APIs, machine-readable schemas, cache semantics,
+versioning rules, and mandatory ICELINES downstream rehearsal are defined in
+[`docs/compatibility.md`](docs/compatibility.md).
+
 ## Commands
 
 ```powershell
@@ -135,6 +139,7 @@ cargo run -p fletch-cli -- cache prune --manifest .fletch/cache/manifest.json
 cargo run -p fletch-cli -- quiver export --manifest .fletch/cache/manifest.json --quiver-id demo:pack --output-dir .fletch/quivers/demo
 cargo run -p fletch-cli -- quiver import --quiver-dir .fletch/quivers/demo --cache-root .fletch/cache
 cargo run -p fletch-cli -- graph export --manifest .fletch/cache/manifest.json
+cargo run -p fletch-cli -- registry validate --file fletch.registry.json
 cargo run -p fletch-cli -- registry graph --file fletch.registry.json
 cargo run -p fletch-cli -- registry flight --file fletch.registry.json --fletch-id justice-league:villains:index
 cargo run -p fletch-cli -- registry index --file fletch.registry.json --output .fletch/registry-index.json
@@ -255,6 +260,15 @@ manifest. The core graph includes fletch, shaft, and ledger-entry nodes plus
 `satisfied-by` and `documents` edges. Product adapters can add domain edges and
 registry node-kind hints, such as `partition` plus `rolls-up-to`, outside
 `fletch-core`.
+
+`fletch registry validate` emits `fletch.registry-validation.v1`. Consumers
+must inspect the report's `valid` field rather than treating process success as
+registry validity. Stable error codes include `invalid-schema`,
+`duplicate-fletch-id`, and `missing-shaft`. The core test
+`validate_registry_reports_duplicate_ids_and_missing_shafts` protects the
+duplicate and missing-shaft contract. Registry index and web file ingestion
+validate all direct and followed registries and stop before indexing if any
+report is invalid.
 
 `fletch registry graph` reads `fletch.registry.v1` definitions and emits graph
 JSON for declared fletches, shafts, partitions, rollups, format metadata, and
