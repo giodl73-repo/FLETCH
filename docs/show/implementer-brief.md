@@ -23,7 +23,7 @@ stuff into the substrate.
 ## Family boundary
 
 ```text
-FLETCH (acquire) → MDCROP (select) → LATTICE (close) → FLETCHER (replay)
+FLETCH (acquire) → MDCROP (select) → LATTICE (close) → WITNESS (replay)
 ```
 
 Do not grow FLETCH into selection, semantic closure, or harness replay.

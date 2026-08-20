@@ -34,7 +34,7 @@ Named units:
 Family dependency stays strict:
 
 ```text
-Sources → FLETCH → MDCROP → LATTICE → FLETCHER
+Sources → FLETCH → MDCROP → LATTICE → WITNESS
            fetch     select     close       replay
 ```
 
@@ -99,7 +99,7 @@ Example URLs in docs are shape demos, not live datasets.
 | Evidence | README vocabulary + commands; foundation/slice specs; consumer migration notes for ROUTE/BISECT/ICELINES. |
 | Validation | Documentation + existing CLI/workspace tests; not an external multi-product certification. |
 | Limitations | Not every portfolio product fully migrated; activation/merge (`pull`) is future semantics; offline/quiver path is prepared, not universally production-proven. |
-| Non-claims | Product data correctness, legal archival custody, CDN/CDN-replacement, or selection/closure/replay (those are MDCROP/LATTICE/FLETCHER). |
+| Non-claims | Product data correctness, legal archival custody, CDN/CDN-replacement, or selection/closure/replay (those are MDCROP/LATTICE/WITNESS). |
 | Review lane | Tools-infra / shared substrate; BOUNDARY if a consumer overclaims offline readiness. |
 
 ## Where not to start

@@ -19,7 +19,7 @@ maintainer tour:
 | **Systems implementer** | [SHOWCASE.md](SHOWCASE.md) → [implementer brief](docs/show/implementer-brief.md) → [foundation spec](docs/specs/fletch-foundation.md) | 15–35 min |
 
 Shared fetch/cache ledger only — not product activation, not selection/closure
-replay (MDCROP / LATTICE / FLETCHER), and not a claim every consumer fully
+replay (MDCROP / LATTICE / WITNESS), and not a claim every consumer fully
 migrated.
 
 ## Context & Harness family
@@ -27,7 +27,7 @@ migrated.
 FLETCH is the acquisition layer in a four-stage context-control family:
 
 ```text
-Sources → FLETCH → MDCROP → LATTICE → FLETCHER
+Sources → FLETCH → MDCROP → LATTICE → WITNESS
            fetch     select     close       replay
 ```
 
@@ -36,7 +36,7 @@ Sources → FLETCH → MDCROP → LATTICE → FLETCHER
 | **FLETCH** | Acquire, verify, cache, partition, and bundle source material. |
 | [MDCROP](https://github.com/giodl73-repo/MDCROP) | Index and select bounded, provenance-aware candidate context. |
 | [LATTICE](https://github.com/giodl73-repo/LATTICE) | Apply closure, meet/join, budgets, frontiers, packs, and receipts. |
-| [FLETCHER](https://github.com/giodl73-repo/FLETCHER) | Capture harness events, checkpoints, context deltas, and deterministic replay. |
+| [WITNESS](https://github.com/giodl73-repo/WITNESS) | Capture harness events, checkpoints, context deltas, and deterministic replay. |
 
 The dependency boundaries remain explicit: fetching is not selection, selection
 is not semantic closure, and closure is not harness execution.
