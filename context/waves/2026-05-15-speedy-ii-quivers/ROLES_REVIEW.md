@@ -14,7 +14,7 @@ Connor Hawke adapters.
 | Offline Release Operator | Quiver reports support offline bootstrap inspection before import or activation. | Pass |
 | Adapter Boundary Keeper | Bundle contents remain generic cache entries; product install or activation choices stay outside `fletch-core`. | Pass |
 | Performance Engineer | Reports inspect manifests/state rather than copying bytes; large bundles may need paged/indexed report views later. | Follow-up |
-| MDLOOM/MDCROP Publisher | Quiver summaries, verification, graphs, and merge-ready rows are renderable/indexable local artifacts. | Pass |
+| PROOF/MDCROP Publisher | Quiver summaries, verification, graphs, and merge-ready rows are renderable/indexable local artifacts. | Pass |
 
 ## Editorial findings
 
@@ -32,7 +32,7 @@ Connor Hawke adapters.
 | BISECT/Apportionment Analyst | Large evidence bundles can be inspected and verified before local import or active dataset changes. | Pass |
 | ROUTE Researcher | Geodata bundle members are represented by generic dataset/cache evidence and graph edges. | Pass |
 | MDCROP Indexer | Quiver graph and status reports are direct corpus inputs for bundle health indexes. | Pass |
-| MDLOOM Publisher | MDLOOM can render bundle summaries, verification reports, and merge readiness from machine JSON. | Pass |
+| PROOF Publisher | PROOF can render bundle summaries, verification reports, and merge readiness from machine JSON. | Pass |
 | CI/Release Engineer | Read-only quiver reports and stage-first import support deterministic release automation. | Pass |
 
 ## Panel reviewer findings

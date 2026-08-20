@@ -522,7 +522,7 @@ fn maxim_source_corpus_registry(source_root: &Path) -> FletchRegistry {
                     "maxim.computing-frontend-frameworks.mdport",
                     GraphEdgeKind::DerivedFrom,
                 )],
-                Some("mdloom.backfill.tables.v1"),
+                Some("proof.backfill.tables.v1"),
             ),
             fletch_definition(
                 "maxim.computing-frontend-frameworks.blocks",
@@ -532,7 +532,7 @@ fn maxim_source_corpus_registry(source_root: &Path) -> FletchRegistry {
                     "maxim.computing-frontend-frameworks.mdport",
                     GraphEdgeKind::DerivedFrom,
                 )],
-                Some("mdloom.backfill.blocks.v1"),
+                Some("proof.backfill.blocks.v1"),
             ),
         ],
     )

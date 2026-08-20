@@ -15,7 +15,7 @@ large-manifest workflows without replacing cache manifests or verification.
 | Offline Release Operator | Index generation, lookup, and index diff can run entirely from local manifest/index files without live network access. | Pass |
 | Adapter Boundary Keeper | Index contracts are cache-ledger level primitives and do not encode NHL, Census, route, or dashboard semantics. | Pass |
 | Performance Engineer | Large ledgers now have compact index rows, exact lookup filters, bounded output, and index-to-index diffs before deeper byte verification. | Pass |
-| MDLOOM/MDCROP Publisher | MDCROP/MDLOOM can render or index compact ledger rows and change summaries while linking back to authoritative manifests. | Pass |
+| PROOF/MDCROP Publisher | MDCROP/PROOF can render or index compact ledger rows and change summaries while linking back to authoritative manifests. | Pass |
 
 ## Editorial findings
 
@@ -33,7 +33,7 @@ large-manifest workflows without replacing cache manifests or verification.
 | BISECT/Apportionment Analyst | Large evidence ledgers can be summarized and compared by cache key/hash while legal and data-release semantics stay outside core. | Pass |
 | ROUTE Researcher | Geodata ledgers can use compact lookup/diff reports without route-specific scoring or geometry logic. | Pass |
 | MDCROP Indexer | `fletch.cache-index.v1` and diff summaries provide compact corpus-health inputs. | Pass |
-| MDLOOM Publisher | Generated status pages can show compact ledger rows and changes without treating generated docs as authoritative state. | Pass |
+| PROOF Publisher | Generated status pages can show compact ledger rows and changes without treating generated docs as authoritative state. | Pass |
 | CI/Release Engineer | CI can compare compact indexes to decide which rows need deeper verify/status checks. | Pass |
 
 ## Panel reviewer findings
@@ -45,7 +45,7 @@ large-manifest workflows without replacing cache manifests or verification.
 | F-I3 Data Integration | The contracts are product-neutral cache-ledger reports that adapters and consumers can reuse. | Pass |
 | F-I4 Offline Packaging | Compact indexes and diffs support offline bundle/bootstrap inspection before import or activation. | Pass |
 | F-I5 Security and Trust | Index diffs do not bypass hash verification; they identify rows that may require deeper inspection. | Pass |
-| F-I6 Documentation Pipeline | The index and diff schemas are suitable for generated MDCROP/MDLOOM/MDPATH status views. | Pass |
+| F-I6 Documentation Pipeline | The index and diff schemas are suitable for generated MDCROP/PROOF/MDPATH status views. | Pass |
 
 ## Blocking findings
 

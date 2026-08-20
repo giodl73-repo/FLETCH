@@ -9,20 +9,20 @@ use fletch_core::{
     cache_index_gate_report, cache_key, cache_list, cache_manifest, dry_run_flight, export_quiver,
     fetch_plan, fetch_plan_with_kind, fetch_to_cache, graph_from_manifest, graph_from_quiver,
     graph_from_registry, import_quiver, inspect_cache_manifest, label_state_from_aliases,
-    local_url_map, mdcrop_index_from_manifest, mdloom_document_manifest, offline_cache_report,
-    partition_invalidation_report, partition_state_from_manifest, plan_cache_prune,
-    preview_archive_expansion, preview_manifest_merge, preview_rollback, preview_rollup_edges,
+    local_url_map, mdcrop_index_from_manifest, offline_cache_report, partition_invalidation_report,
+    partition_state_from_manifest, plan_cache_prune, preview_archive_expansion,
+    preview_manifest_merge, preview_rollback, preview_rollup_edges, proof_document_manifest,
     publish_report_from_manifest, publisher_bundle_report, quiver_merge_ready_report,
     read_cache_manifest_json, registry_index_from_registries, search_registry_index,
     slice_active_partition_set, slice_adapter_source_report, slice_archive_expansion_preview,
     slice_cache_index_report, slice_local_url_map, slice_mdcrop_index_report,
-    slice_mdloom_document_manifest, slice_partition_state, slice_quiver_merge_ready_report,
+    slice_partition_state, slice_proof_document_manifest, slice_quiver_merge_ready_report,
     slice_registry_validation_report, summarize_cache_manifest, summarize_quiver,
     tips_from_manifest, upsert_cache_manifest_entries, validate_registry, verify_cache_manifest,
     verify_quiver_bundle, write_cache_manifest_json, AdapterHandoffReport, AliasState, CacheEntry,
     CacheIndexGatePolicy, CacheIndexReport, CacheManifest, FetchOptions, FetchPlan, FletchRegistry,
-    FreshnessPolicy, LabelState, LocalUrlMap, MdcropIndexReport, MdloomDocumentManifest,
-    PartitionState, QuiverManifest, QuiverSummary, RegistryIndexReport, RegistryIndexRow,
+    FreshnessPolicy, LabelState, LocalUrlMap, MdcropIndexReport, PartitionState,
+    ProofDocumentManifest, QuiverManifest, QuiverSummary, RegistryIndexReport, RegistryIndexRow,
     RollupPreview, SourceKind,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -31,7 +31,10 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 
-pub(crate) fn freshness_policy(freshness: CliFreshness, max_age_days: Option<u32>) -> Result<FreshnessPolicy> {
+pub(crate) fn freshness_policy(
+    freshness: CliFreshness,
+    max_age_days: Option<u32>,
+) -> Result<FreshnessPolicy> {
     match freshness {
         CliFreshness::Immutable => Ok(FreshnessPolicy::Immutable),
         CliFreshness::AlwaysCheck => Ok(FreshnessPolicy::AlwaysCheck),
@@ -148,7 +151,10 @@ pub(crate) fn github_url_to_contents_api(url: &str, marker: &str) -> Option<Stri
     ))
 }
 
-pub(crate) fn github_url_parts(url: &str, marker: &str) -> Option<(String, String, String, String)> {
+pub(crate) fn github_url_parts(
+    url: &str,
+    marker: &str,
+) -> Option<(String, String, String, String)> {
     let path = url.strip_prefix("https://github.com/")?;
     let parts = path.split('/').collect::<Vec<_>>();
     if parts.len() < 5 || parts[2] != marker {
@@ -215,7 +221,10 @@ pub(crate) fn open_browser(url: &str) -> Result<()> {
     bail!("--open is not supported on this platform; open {url} manually");
 }
 
-pub(crate) fn handle_registry_web_request(mut stream: TcpStream, index: &RegistryIndexReport) -> Result<()> {
+pub(crate) fn handle_registry_web_request(
+    mut stream: TcpStream,
+    index: &RegistryIndexReport,
+) -> Result<()> {
     let mut buffer = [0; 8192];
     let bytes_read = stream.read(&mut buffer)?;
     let request = String::from_utf8_lossy(&buffer[..bytes_read]);
@@ -712,7 +721,10 @@ pub(crate) fn csv_escape(value: &str) -> String {
     }
 }
 
-pub(crate) fn registry_web_row_snippet(row: &RegistryIndexRow, text: Option<&str>) -> serde_json::Value {
+pub(crate) fn registry_web_row_snippet(
+    row: &RegistryIndexRow,
+    text: Option<&str>,
+) -> serde_json::Value {
     let terms = registry_web_search_terms(text);
     let fields = registry_web_snippet_fields(row);
     let selected = fields
@@ -889,4 +901,3 @@ pub(crate) fn expected_dataset_ids_from_inputs(
     }
     Ok(expected.into_iter().collect())
 }
-

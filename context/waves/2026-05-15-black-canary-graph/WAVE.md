@@ -3,7 +3,7 @@
 ## Goal
 
 Add product-neutral graph exports so FLETCH state can be inspected by MDCROP,
-rendered by MDLOOM, and extended by consumer adapters without moving domain logic
+rendered by PROOF, and extended by consumer adapters without moving domain logic
 into `fletch-core`.
 
 ## Affected crates and consumers
@@ -11,7 +11,7 @@ into `fletch-core`.
 - `fletch-core`: graph node/edge contracts and manifest/quiver graph helpers.
 - `fletch-cli`: graph export command.
 - `fletch-mock-client`: Justice League villain-files graph proof.
-- Consumers: ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM.
+- Consumers: ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and PROOF.
 
 ## Pulse table
 
@@ -22,7 +22,7 @@ into `fletch-core`.
 | 03 | Role-review hardening | done | Hardened cache-hit trust metadata, temp promotion, quiver staging verification, and registry/manifest graph identity. |
 | 04 | Dry-run flights | done | Added `fletch.flight.v1` dry-run registry resolution, CLI output, and mock-client flight preview. |
 | 05 | Tips | done | Added `fletch.tip.v1` bounded cache previews, CLI output, and mock-client tip export. |
-| 06 | MDCROP/MDLOOM publish scout | done | Added `fletch.publish.v1` status/graph/tip reports, CLI output, and mock-client publish export. |
+| 06 | MDCROP/PROOF publish scout | done | Added `fletch.publish.v1` status/graph/tip reports, CLI output, and mock-client publish export. |
 | 07 | Registry web browser | done | Added local `fletch registry web` search/detail/source-preview UI over registry indexes with direct launch, presets, optional browser opening, relevance-ranked/paged results, shareable query/row/source-preview URLs, match-centered highlighted source previews with matched-only views and line match counts/metadata, and page/all-match CSV/JSON export. |
 
 ## Validation expectations

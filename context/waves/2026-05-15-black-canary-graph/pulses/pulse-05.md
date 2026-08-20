@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add a product-neutral preview surface so CLIs, MDCROP, MDLOOM, and adapters can
+Add a product-neutral preview surface so CLIs, MDCROP, PROOF, and adapters can
 inspect cached artifacts without loading full product semantics.
 
 ## Changes

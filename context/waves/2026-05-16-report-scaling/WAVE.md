@@ -10,7 +10,7 @@ artifacts as the authoritative contracts.
 
 - `fletch-core`: product-neutral slice helpers for existing report schemas.
 - `fletch-cli`: read-only slice/filter flags on report commands.
-- Consumers: ICELINES, BISECT/apportionment, ROUTE, MDCROP, MDLOOM, and CI/release
+- Consumers: ICELINES, BISECT/apportionment, ROUTE, MDCROP, PROOF, and CI/release
   tooling that need smaller local report artifacts.
 
 ## Pulse table
@@ -35,7 +35,7 @@ Before closing, run a `.roles` review with:
 - Parliament: cache systems, provenance, offline release, adapter boundary,
   performance, and doc publisher.
 - Editorial: scope keeper, contract checker, validation checker.
-- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, MDCROP, MDLOOM, CI/release.
+- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, MDCROP, PROOF, CI/release.
 - Panel reviewers: F-I1 through F-I6.
 
 ## Non-goals

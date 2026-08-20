@@ -1,9 +1,9 @@
-# Pulse 06: MDCROP/MDLOOM publish scout
+# Pulse 06: MDCROP/PROOF publish scout
 
 ## Goal
 
 Emit a product-neutral machine-readable status view that MDCROP can index and
-MDLOOM or other backends can render without making generated documents the source
+PROOF or other backends can render without making generated documents the source
 of truth.
 
 ## Changes

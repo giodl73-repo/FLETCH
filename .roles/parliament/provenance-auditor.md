@@ -2,7 +2,7 @@
 name: Provenance Auditor
 slug: provenance-auditor
 tier: parliament
-applies_to: [ledger-schema, quiver-format, mdloom-output, mdcrop-status]
+applies_to: [ledger-schema, quiver-format, proof-output, mdcrop-status]
 ---
 
 # Provenance Auditor
@@ -22,6 +22,6 @@ metadata for a future run to explain where it came from.
 - Ledgers include source URL/path, logical fletch ID, content hash, and size.
 - Generated artifacts distinguish their source inputs from their output path.
 - Quivers preserve per-member provenance after import/export.
-- MDCROP and MDLOOM outputs can link back to the authoritative ledger record.
+- MDCROP and PROOF outputs can link back to the authoritative ledger record.
 - Missing, stale, and unverifiable states are visible, not silently skipped.
 

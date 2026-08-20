@@ -72,7 +72,7 @@ custom cache code across every consumer.
 
 Tips make data easy to inspect without fully loading product logic, for example:
 first rows of a CSV, schema fields from JSON, a ZIP member index, an SQLite table
-list, or a MDLOOM-generated local status preview. Human hints can be generated
+list, or a PROOF-generated local status preview. Human hints can be generated
 from tips, but the tip itself is structured preview/index metadata.
 
 Partitions keep rich data manageable. For ICELINES, game boxscores can be
@@ -236,7 +236,7 @@ entry shape, and derived reports. A typical consumer flow is:
    graph, publisher, partition, or quiver handoff reports.
 
 This pattern is now used by ICELINES, BISECT, and ROUTE for cache-index
-evidence and supports MDCROP/MDLOOM publisher inputs without making FLETCH
+evidence and supports MDCROP/PROOF publisher inputs without making FLETCH
 responsible for domain activation.
 
 `fletch cache index-gate` is the product-neutral health gate for that contract:
@@ -249,7 +249,7 @@ HTTP/file fletches in one or more `fletch.registry.v1` files with
 `--expected-registry`.
 
 Publisher commands are read-only derived views. `fletch publish mdcrop-index`,
-`fletch publish mdloom-docs`, and `fletch publish local-url-map` accept
+`fletch publish proof-docs`, and `fletch publish local-url-map` accept
 `--offset` and `--limit` for bounded output; MDCROP index output also accepts
 `--row-type` to focus large local publisher surfaces.
 Large read-only report commands also expose bounded output: partition state and
@@ -349,7 +349,7 @@ arrays/values, text samples, or opaque byte samples without interpreting product
 semantics.
 
 `fletch publish from-manifest` emits a `fletch.publish.v1` report with cache
-status, graph, and tips bundled for MDCROP indexing, MDLOOM rendering, dashboards,
+status, graph, and tips bundled for MDCROP indexing, PROOF rendering, dashboards,
 or other local status backends. It is a machine-readable source view, not a
 generated document source of truth.
 
@@ -379,9 +379,9 @@ status report, and emits a prune plan for an orphaned trick-arrow object.
 
 The same mock also includes a MAXIM-style source-corpus slice: a MDCROP view
 recipe selects a frontend-framework guide, the fetched MDPORT pack carries the
-portable article context, and MDLOOM table/block sidecars provide structured data
+portable article context, and PROOF table/block sidecars provide structured data
 for React-focused queries. FLETCH treats all four artifacts as generic cache
-entries while the mock adapter owns the MDCROP/MDPORT/MDLOOM interpretation.
+entries while the mock adapter owns the MDCROP/MDPORT/PROOF interpretation.
 
 ## Design rule
 
@@ -393,7 +393,7 @@ but the core cache contract must work for any source.
 - [`docs/specs/fletch-foundation.md`](docs/specs/fletch-foundation.md) defines
   the initial plan and cache-manifest contracts.
 - [`docs/specs/consumer-adapter-scout.md`](docs/specs/consumer-adapter-scout.md)
-  maps ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM to
+  maps ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and PROOF to
   migration slices and records the first completed consumer handoffs.
 - `context/waves/` tracks implementation waves and pulse history.
 

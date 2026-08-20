@@ -13,7 +13,7 @@ publisher views without product-specific install logic.
 - `fletch-cli`: read-only quiver report commands plus existing export/import
   flows.
 - `fletch-mock-client`: Justice League villain-files quiver bootstrap examples.
-- Consumers: ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and MDLOOM.
+- Consumers: ICELINES, apportionment/BISECT, ROUTE, MDCROP, MDPATH, and PROOF.
 
 ## Pulse table
 
@@ -21,7 +21,7 @@ publisher views without product-specific install logic.
 |------:|-------|--------|---------|
 | 01 | Quiver summary report | done | Added `fletch.quiver-summary.v1` bundle identity, byte, and verification totals. |
 | 02 | Quiver verify report | done | Added `fletch.quiver-verify.v1` per-member verification before import or merge. |
-| 03 | Quiver graph edges | done | Added quiver-to-member `fletch.graph.v1` edges for MDCROP/MDLOOM indexing. |
+| 03 | Quiver graph edges | done | Added quiver-to-member `fletch.graph.v1` edges for MDCROP/PROOF indexing. |
 | 04 | Merge-ready bundle report | done | Added `fletch.quiver-merge-ready.v1` candidate merge/alias rows for bundle members. |
 
 ## Validation expectations
@@ -38,7 +38,7 @@ Before this wave can close or hand off to Connor Hawke, run the `.roles` review:
 - Parliament: cache systems, provenance, offline release, adapter boundary,
   performance, and doc publisher.
 - Editorial: scope keeper, contract checker, validation checker.
-- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, MDCROP, MDLOOM, CI/release.
+- Stakeholders: ICELINES, BISECT/apportionment, ROUTE, MDCROP, PROOF, CI/release.
 - Panel reviewers: F-I1 through F-I6.
 
 Blocking findings become additional Speedy II pulses. Non-blocking findings must

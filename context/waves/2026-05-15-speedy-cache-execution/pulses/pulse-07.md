@@ -3,7 +3,7 @@
 ## Goal
 
 Let generic fetch execution consume saved `fletch.plan.v1` files directly, so
-adapters, MDCROP/MDLOOM generated views, and checked-in configs can hand FLETCH a
+adapters, MDCROP/PROOF generated views, and checked-in configs can hand FLETCH a
 complete shaft acquisition intent.
 
 ## Outcome

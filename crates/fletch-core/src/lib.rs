@@ -29,7 +29,7 @@ pub const FLETCH_FLIGHT_SCHEMA: &str = "fletch.flight.v1";
 pub const FLETCH_TIP_SCHEMA: &str = "fletch.tip.v1";
 pub const FLETCH_PUBLISH_SCHEMA: &str = "fletch.publish.v1";
 pub const FLETCH_MDCROP_INDEX_SCHEMA: &str = "fletch.mdcrop-index.v1";
-pub const FLETCH_MDLOOM_DOCS_SCHEMA: &str = "fletch.mdloom-docs.v1";
+pub const FLETCH_PROOF_DOCS_SCHEMA: &str = "fletch.proof-docs.v1";
 pub const FLETCH_LOCAL_URL_MAP_SCHEMA: &str = "fletch.local-url-map.v1";
 pub const FLETCH_PUBLISHER_BUNDLE_SCHEMA: &str = "fletch.publisher-bundle.v1";
 pub const FLETCH_VERIFY_SCHEMA: &str = "fletch.cache-verify.v1";
@@ -976,7 +976,7 @@ pub struct MdcropIndexReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MdloomDocumentAnchor {
+pub struct ProofDocumentAnchor {
     pub document_id: String,
     pub title: String,
     pub source_schema: String,
@@ -984,12 +984,12 @@ pub struct MdloomDocumentAnchor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MdloomDocumentManifest {
+pub struct ProofDocumentManifest {
     pub schema_version: String,
     pub generated_by: String,
     pub source_schema: String,
     pub document_count: usize,
-    pub documents: Vec<MdloomDocumentAnchor>,
+    pub documents: Vec<ProofDocumentAnchor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1014,7 +1014,7 @@ pub struct PublisherBundleReport {
     pub schema_version: String,
     pub generated_by: String,
     pub mdcrop_row_count: usize,
-    pub mdloom_document_count: usize,
+    pub proof_document_count: usize,
     pub local_url_count: usize,
     pub quiver_entry_count: Option<usize>,
     pub adapter_source_count: Option<usize>,
@@ -1616,11 +1616,11 @@ pub fn mdcrop_index_from_manifest(
     })
 }
 
-pub fn mdloom_document_manifest(index: &MdcropIndexReport) -> MdloomDocumentManifest {
+pub fn proof_document_manifest(index: &MdcropIndexReport) -> ProofDocumentManifest {
     let documents = index
         .rows
         .iter()
-        .map(|row| MdloomDocumentAnchor {
+        .map(|row| ProofDocumentAnchor {
             document_id: format!("{}:{}", row.row_type, row.id),
             title: row.label.clone(),
             source_schema: row.source_schema.clone(),
@@ -1631,8 +1631,8 @@ pub fn mdloom_document_manifest(index: &MdcropIndexReport) -> MdloomDocumentMani
             ),
         })
         .collect::<Vec<_>>();
-    MdloomDocumentManifest {
-        schema_version: FLETCH_MDLOOM_DOCS_SCHEMA.to_string(),
+    ProofDocumentManifest {
+        schema_version: FLETCH_PROOF_DOCS_SCHEMA.to_string(),
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         source_schema: index.schema_version.clone(),
         document_count: documents.len(),
@@ -1684,11 +1684,11 @@ pub fn slice_mdcrop_index_report(
     }
 }
 
-pub fn slice_mdloom_document_manifest(
-    docs: &MdloomDocumentManifest,
+pub fn slice_proof_document_manifest(
+    docs: &ProofDocumentManifest,
     offset: usize,
     limit: Option<usize>,
-) -> MdloomDocumentManifest {
+) -> ProofDocumentManifest {
     let documents = docs
         .documents
         .iter()
@@ -1696,7 +1696,7 @@ pub fn slice_mdloom_document_manifest(
         .take(limit.unwrap_or(usize::MAX))
         .cloned()
         .collect::<Vec<_>>();
-    MdloomDocumentManifest {
+    ProofDocumentManifest {
         schema_version: docs.schema_version.clone(),
         generated_by: docs.generated_by.clone(),
         source_schema: docs.source_schema.clone(),
@@ -1705,7 +1705,7 @@ pub fn slice_mdloom_document_manifest(
     }
 }
 
-pub fn local_url_map(docs: &MdloomDocumentManifest, base_path: impl Into<String>) -> LocalUrlMap {
+pub fn local_url_map(docs: &ProofDocumentManifest, base_path: impl Into<String>) -> LocalUrlMap {
     let base_path = base_path.into();
     let base = base_path.trim_end_matches('/').to_string();
     let urls = docs
@@ -1753,7 +1753,7 @@ pub fn slice_local_url_map(urls: &LocalUrlMap, offset: usize, limit: Option<usiz
 
 pub fn publisher_bundle_report(
     mdcrop_index: &MdcropIndexReport,
-    mdloom_docs: &MdloomDocumentManifest,
+    proof_docs: &ProofDocumentManifest,
     local_urls: &LocalUrlMap,
     quiver_summary: Option<&QuiverSummary>,
     adapter_handoff: Option<&AdapterHandoffReport>,
@@ -1762,7 +1762,7 @@ pub fn publisher_bundle_report(
         schema_version: FLETCH_PUBLISHER_BUNDLE_SCHEMA.to_string(),
         generated_by: format!("fletch-core/{}", env!("CARGO_PKG_VERSION")),
         mdcrop_row_count: mdcrop_index.row_count,
-        mdloom_document_count: mdloom_docs.document_count,
+        proof_document_count: proof_docs.document_count,
         local_url_count: local_urls.url_count,
         quiver_entry_count: quiver_summary.map(|summary| summary.entry_count),
         adapter_source_count: adapter_handoff.map(|handoff| handoff.adapter_source_count),
@@ -7273,7 +7273,7 @@ mod tests {
     }
 
     #[test]
-    fn mdloom_document_manifest_points_back_to_mdcrop_index_rows() {
+    fn proof_document_manifest_points_back_to_mdcrop_index_rows() {
         let index = MdcropIndexReport {
             schema_version: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             generated_by: "test".to_string(),
@@ -7292,9 +7292,9 @@ mod tests {
             }],
         };
 
-        let docs = mdloom_document_manifest(&index);
+        let docs = proof_document_manifest(&index);
 
-        assert_eq!(docs.schema_version, FLETCH_MDLOOM_DOCS_SCHEMA);
+        assert_eq!(docs.schema_version, FLETCH_PROOF_DOCS_SCHEMA);
         assert_eq!(docs.source_schema, FLETCH_MDCROP_INDEX_SCHEMA);
         assert_eq!(docs.document_count, 1);
         assert_eq!(docs.documents[0].source_schema, FLETCH_VERIFY_SCHEMA);
@@ -7302,13 +7302,13 @@ mod tests {
     }
 
     #[test]
-    fn local_url_map_links_mdloom_docs_to_stable_paths() {
-        let docs = MdloomDocumentManifest {
-            schema_version: FLETCH_MDLOOM_DOCS_SCHEMA.to_string(),
+    fn local_url_map_links_proof_docs_to_stable_paths() {
+        let docs = ProofDocumentManifest {
+            schema_version: FLETCH_PROOF_DOCS_SCHEMA.to_string(),
             generated_by: "test".to_string(),
             source_schema: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             document_count: 1,
-            documents: vec![MdloomDocumentAnchor {
+            documents: vec![ProofDocumentAnchor {
                 document_id: "cache-status:test:fletch".to_string(),
                 title: "test".to_string(),
                 source_schema: FLETCH_VERIFY_SCHEMA.to_string(),
@@ -7375,8 +7375,8 @@ mod tests {
         assert_eq!(tips.tip_row_count, 1);
         assert_eq!(tips.rows[0].id, "tip-2");
 
-        let docs = mdloom_document_manifest(&index);
-        let doc_slice = slice_mdloom_document_manifest(&docs, 1, Some(2));
+        let docs = proof_document_manifest(&index);
+        let doc_slice = slice_proof_document_manifest(&docs, 1, Some(2));
         assert_eq!(doc_slice.document_count, 2);
         assert_eq!(doc_slice.documents[0].document_id, "tip:tip-1");
 
@@ -7600,8 +7600,8 @@ mod tests {
             tip_row_count: 0,
             rows: Vec::new(),
         };
-        let docs = MdloomDocumentManifest {
-            schema_version: FLETCH_MDLOOM_DOCS_SCHEMA.to_string(),
+        let docs = ProofDocumentManifest {
+            schema_version: FLETCH_PROOF_DOCS_SCHEMA.to_string(),
             generated_by: "test".to_string(),
             source_schema: FLETCH_MDCROP_INDEX_SCHEMA.to_string(),
             document_count: 2,
@@ -7628,7 +7628,7 @@ mod tests {
 
         assert_eq!(bundle.schema_version, FLETCH_PUBLISHER_BUNDLE_SCHEMA);
         assert_eq!(bundle.mdcrop_row_count, 2);
-        assert_eq!(bundle.mdloom_document_count, 2);
+        assert_eq!(bundle.proof_document_count, 2);
         assert_eq!(bundle.local_url_count, 2);
         assert_eq!(bundle.quiver_entry_count, Some(3));
         assert_eq!(bundle.adapter_source_count, None);

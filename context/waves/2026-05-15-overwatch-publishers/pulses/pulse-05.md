@@ -8,8 +8,8 @@ contracts or embedding consumer-specific dashboards in FLETCH.
 ## Outcome
 
 - Added read-only slice helpers for `fletch.mdcrop-index.v1`,
-  `fletch.mdloom-docs.v1`, and `fletch.local-url-map.v1`.
-- Added `--offset` and `--limit` to MDCROP, MDLOOM, and local URL publisher
+  `fletch.proof-docs.v1`, and `fletch.local-url-map.v1`.
+- Added `--offset` and `--limit` to MDCROP, PROOF, and local URL publisher
   commands.
 - Added `--row-type` filtering to MDCROP index publisher output for focused
   cache-status, graph, or tip views.

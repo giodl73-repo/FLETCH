@@ -30,7 +30,7 @@ Consumers own:
 | ROUTE | HPMS, NBI, FARS, NHS/RITIS-derived inputs, generated route evidence tables | Year/state/route partitions with national rollups and route aliases | Evidence quivers for reproducible route scoring | FLETCH can stage official datasets and derived indexes; scoring remains ROUTE-owned. |
 | MDCROP | FLETCH ledgers, quiver manifests, graph exports, generated docs/status | Corpus/status partitions by repo, view, or run | Corpus health packs | MDCROP indexes FLETCH state as evidence; it should not infer cache semantics from raw files. |
 | MDPATH | Stable references to generated specs, status rows, tips, and evidence docs | Document/path/section-addressed references | Quivers can include published docs plus `md://` references | FLETCH outputs can carry stable local references without making generated Markdown authoritative. |
-| MDLOOM | Registry, flight, quiver, ledger, and tip views | Generated proof/status views over FLETCH state | Release/status packs | MDLOOM renders FLETCH contracts; FLETCH remains the source of truth. |
+| PROOF | Registry, flight, quiver, ledger, and tip views | Generated proof/status views over FLETCH state | Release/status packs | PROOF renders FLETCH contracts; FLETCH remains the source of truth. |
 
 ## Justice League mock-client proving path
 
@@ -52,11 +52,11 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
    partitions, merge safe groups first, and leave unresolved groups visible for a
    later client decision.
 8. **Overwatch / Publishers**: later, the mock should publish local status,
-   threat query summaries, tips, and quiver contents through MDCROP/MDLOOM-shaped
+   threat query summaries, tips, and quiver contents through MDCROP/PROOF-shaped
    views.
 9. **MAXIM / Source corpus**: the mock now fetches a MDCROP view recipe, a MDPORT
-   guide pack, and MDLOOM table/block sidecars for a frontend-framework guide,
-   then leaves MDCROP/MDPORT/MDLOOM-specific querying in the adapter layer.
+   guide pack, and PROOF table/block sidecars for a frontend-framework guide,
+   then leaves MDCROP/MDPORT/PROOF-specific querying in the adapter layer.
 
 ## First migration slices
 
@@ -79,7 +79,7 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
    event-stream writes, and hockey-domain validation.
 4. MDCROP: index `fletch.cache-manifest.v1`, `fletch.quiver.v1`, `fletch.graph.v1`,
    tips, and publish reports as evidence.
-5. MDPATH/MDLOOM: attach stable references and rendered views to FLETCH outputs
+5. MDPATH/PROOF: attach stable references and rendered views to FLETCH outputs
    without treating generated docs as source data.
 
 ## Completed consumer handoffs
@@ -89,4 +89,4 @@ The `fletch-mock-client` crate is the lab harness for these adapter ideas:
 | ROUTE | Generic source orchestration and source handoff/gate reporting. | Route scoring, geospatial semantics, user-facing outputs. |
 | BISECT | Generic HTTP source-byte acquisition under `data/.fletch` plus handoff/gate reporting. | Release adjacency, archive extraction, derived CSVs, done markers, local manifest overrides, legal/redistricting claims. |
 | ICELINES | Handoff/gate reporting, roster, MoneyPuck, paged NHL stats, schedule-expanded Gamecenter, player-set-expanded landing, and season-window-expanded ESPN transaction source-byte acquisition, query partition/rollup handoff reporting, and query quiver handoff reporting. | Schedule/player-set/window expansion semantics, snapshots, parsing, sealing, active pointers, event streams, classifiers, and hockey semantics. |
-| MAXIM | Generic cache acquisition and verification for MDCROP view recipes, MDPORT packs, and MDLOOM sidecars. | Source-corpus authoring, MDCROP query semantics, MDPORT metadata interpretation, MDLOOM document parsing, and guide-specific search behavior. |
+| MAXIM | Generic cache acquisition and verification for MDCROP view recipes, MDPORT packs, and PROOF sidecars. | Source-corpus authoring, MDCROP query semantics, MDPORT metadata interpretation, PROOF document parsing, and guide-specific search behavior. |

@@ -15,7 +15,7 @@ filters.
 | Offline Release Operator | All sliced reports are generated from local manifests, registries, quivers, or prior report JSON without live network access. | Pass |
 | Adapter Boundary Keeper | Filters are product-neutral row selectors such as adapter-owned status, severity, active state, and candidate status; no NHL, Census, route, or dashboard semantics entered core. | Pass |
 | Performance Engineer | Large registry, partition, active-set, archive-preview, validation, and quiver merge-ready reports can now emit bounded rows with `--offset` and `--limit`. | Pass |
-| MDLOOM/MDCROP Publisher | Smaller derived report slices are easier for MDCROP/MDLOOM backends to index or render while retaining links to machine contracts. | Pass |
+| PROOF/MDCROP Publisher | Smaller derived report slices are easier for MDCROP/PROOF backends to index or render while retaining links to machine contracts. | Pass |
 
 ## Editorial findings
 
@@ -33,7 +33,7 @@ filters.
 | BISECT/Apportionment Analyst | Large evidence and district/source report rows can be bounded for automation and review while keeping legal/data semantics outside core. | Pass |
 | ROUTE Researcher | Route/geodata source health and partition rows can be sliced without route scoring or geospatial logic in FLETCH. | Pass |
 | MDCROP Indexer | MDCROP can consume smaller report chunks for local corpus/status indexing. | Pass |
-| MDLOOM Publisher | MDLOOM backends can render focused sections without treating generated views as source truth. | Pass |
+| PROOF Publisher | PROOF backends can render focused sections without treating generated views as source truth. | Pass |
 | CI/Release Engineer | Bounded report output reduces automation noise for release checks while preserving deterministic local inputs. | Pass |
 
 ## Panel reviewer findings

@@ -14,7 +14,7 @@ Arsenal cache-operations phase.
 | Offline Release Operator | Offline execution distinguishes fresh hits, stale/bypassed existing objects, and missing objects; saved plans and quivers remain usable for bootstrap flows. | Pass |
 | Adapter Boundary Keeper | `fletch-core` stayed product-neutral; examples mention ICELINES/ROUTE/BISECT as consumers but no product semantics entered core. | Pass |
 | Performance Engineer | Fetch streams bytes while hashing; cache hits avoid live fetch; ledger upsert avoids rewriting unrelated entries semantically, though future Arsenal work should optimize large-ledger operations. | Follow-up |
-| MDLOOM/MDCROP Publisher | Flights, tips, publish reports, ledgers, and stable pulse docs are renderable/indexable; generated docs remain views over contracts. | Pass |
+| PROOF/MDCROP Publisher | Flights, tips, publish reports, ledgers, and stable pulse docs are renderable/indexable; generated docs remain views over contracts. | Pass |
 
 ## Editorial findings
 
@@ -32,7 +32,7 @@ Arsenal cache-operations phase.
 | BISECT/Apportionment Analyst | Large verified downloads can be ledgered and reused; missing/stale offline failures are explicit. | Pass |
 | ROUTE Researcher | HTTP/file shafts, headers, local file handling, and saved plans support source catalogs without route semantics. | Pass |
 | MDCROP Indexer | Ledgers can now accumulate entries through output upsert and publish status/tips for indexing. | Pass |
-| MDLOOM Publisher | Saved plans, flights, tips, publish reports, and stable specs provide renderable source material. | Pass |
+| PROOF Publisher | Saved plans, flights, tips, publish reports, and stable specs provide renderable source material. | Pass |
 | CI/Release Engineer | Temp promotion, invalid plan rejection before live source access, offline diagnostics, and focused CLI smokes support deterministic automation. | Pass |
 
 ## Panel reviewer findings
@@ -44,7 +44,7 @@ Arsenal cache-operations phase.
 | F-I3 Data Integration | Headers, saved plans, registries, and adapter-owned shafts remain schema-boundary friendly. | Pass |
 | F-I4 Offline Packaging | Quiver staging plus offline stale/missing distinctions are sufficient for this phase; Arsenal should deepen status operations. | Follow-up |
 | F-I5 Security and Trust | File path hardening, checksum failures, trusted manifest validation, and invalid plan rejection surface failures explicitly. | Pass |
-| F-I6 Documentation Pipeline | MDCROP/MDLOOM-facing publish reports and docs are contract-derived, not source-of-truth replacements. | Pass |
+| F-I6 Documentation Pipeline | MDCROP/PROOF-facing publish reports and docs are contract-derived, not source-of-truth replacements. | Pass |
 
 ## Blocking findings
 

@@ -11,7 +11,7 @@ review_style: human-interface-focused, contract-respecting
 
 ## Key Questions
 
-- Can MDLOOM render the contract into useful local docs or backend views?
+- Can PROOF render the contract into useful local docs or backend views?
 - Can MDCROP index ledgers and report cache health?
 - Are MDPATH-style references stable enough for generated pages?
 - Is documentation derived from source contracts rather than duplicated state?

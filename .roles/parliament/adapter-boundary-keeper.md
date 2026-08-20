@@ -23,5 +23,5 @@ should not understand NHL scoring, Census district semantics, or route scoring.
 - Domain-specific source construction lives in adapters or consumer repos.
 - Metadata fields support product classification without hard-coding products.
 - CLI examples are illustrative, not special cases.
-- MDCROP, MDPATH, and MDLOOM integrations remain optional surfaces.
+- MDCROP, MDPATH, and PROOF integrations remain optional surfaces.
 
