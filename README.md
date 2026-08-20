@@ -124,6 +124,14 @@ The protected pre-1.0 APIs, machine-readable schemas, cache semantics,
 versioning rules, and mandatory ICELINES downstream rehearsal are defined in
 [`docs/compatibility.md`](docs/compatibility.md).
 
+## Reproducible repository builds
+
+FLETCH commits its workspace `Cargo.lock` because this repository includes the
+`fletch-cli` executable and validates the workspace as one release unit. Use
+`cargo check --workspace --locked` for a reproducible repository check.
+Library consumers still resolve `fletch-core` under their own manifests and
+lockfiles; this repository lock does not override downstream Cargo authority.
+
 ## Commands
 
 ```powershell
