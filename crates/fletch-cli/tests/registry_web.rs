@@ -18,6 +18,8 @@ impl Drop for WebServer {
 
 #[test]
 fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Error>> {
+    // FLETCH-PF-02/FLETCH-PF-06: registry web exposes derived source views
+    // and selected rows without making them ledger or activation authority.
     let (index_path, source_path) = write_test_index()?;
     let port = available_port()?;
     let address = SocketAddr::from(([127, 0, 0, 1], port));
@@ -166,6 +168,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
 
 #[test]
 fn registry_web_can_build_index_from_registry_files() -> Result<(), Box<dyn Error>> {
+    // FLETCH-PF-02: direct registry ingestion remains a derived web index,
+    // not a replacement for the source registry contract.
     let registry_path = write_test_registry()?;
     let port = available_port()?;
     let address = SocketAddr::from(([127, 0, 0, 1], port));
