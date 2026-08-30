@@ -258,6 +258,7 @@ pub(crate) fn handle_registry_web_request(
         "/api/summary" => write_json_response(
             &mut stream,
             &serde_json::json!({
+                "boundary_notice": REGISTRY_WEB_BOUNDARY_NOTICE,
                 "schema_version": index.schema_version,
                 "registry_count": index.registry_count,
                 "fletch_count": index.fletch_count,
@@ -670,6 +671,10 @@ pub(crate) fn registry_web_search_response(
     if let serde_json::Value::Object(object) = &mut value {
         let terms = registry_web_search_terms(text);
         object.insert(
+            "boundary_notice".to_string(),
+            serde_json::json!(REGISTRY_WEB_BOUNDARY_NOTICE),
+        );
+        object.insert(
             "snippets".to_string(),
             serde_json::Value::Array(
                 report
@@ -698,8 +703,9 @@ pub(crate) fn registry_web_search_csv(
     text: Option<&str>,
 ) -> Result<String> {
     let terms = registry_web_search_terms(text);
-    let mut csv =
-        String::from("registry_id,fletch_id,node_kind,score,snippet,tags,source_urls,metadata\n");
+    let mut csv = String::from(
+        "registry_id,fletch_id,node_kind,score,snippet,tags,source_urls,metadata,boundary_notice\n",
+    );
     for row in &report.rows {
         let snippet = registry_web_row_snippet(row, text);
         let snippet_text = snippet
@@ -715,6 +721,7 @@ pub(crate) fn registry_web_search_csv(
             row.tags.join("|"),
             row.source_urls.join("|"),
             serde_json::to_string(&row.metadata)?,
+            REGISTRY_WEB_BOUNDARY_NOTICE.to_string(),
         ];
         csv.push_str(
             &values

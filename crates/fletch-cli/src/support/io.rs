@@ -267,6 +267,7 @@ pub(crate) fn load_registry_source_preview(
         });
     }
     Ok(serde_json::json!({
+        "boundary_notice": REGISTRY_WEB_BOUNDARY_NOTICE,
         "registry_id": row.registry_id,
         "fletch_id": row.fletch_id,
         "source_index": source_index,

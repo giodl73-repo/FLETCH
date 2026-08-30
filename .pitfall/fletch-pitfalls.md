@@ -44,7 +44,7 @@ separates acquisition from product activation.
 
 ## FLETCH-PF-02: Derived Publisher Output Becomes Ledger Authority
 
-**Status:** OPEN
+**Status:** MITIGATED
 
 **Actor:** Publisher, researcher, reviewer, or local registry-web user.
 
@@ -74,14 +74,18 @@ MDCROP indexing, and research-paper evidence packets.
 **Detection difficulty:** Derived views are easier to inspect than raw manifests
 and often contain enough detail to look authoritative.
 
-**Structural solution:** Preserve report-derived wording and keep manifests or
-registries as the only mutable input state.
+**Structural solution:** Preserve report-derived wording, keep manifests or
+registries as the only mutable input state, and label registry-web HTML, JSON,
+source-preview, and CSV export payloads as read-only derived views.
 
 **Test:** `crates/fletch-cli/tests/registry_web.rs` cites `FLETCH-PF-02` while
-checking registry-web summary, search, detail, source, CSV, JSON, and direct
-registry index paths as derived views.
+checking registry-web summary, search, detail, source, CSV, JSON, direct
+registry index paths, and boundary notices that keep derived views from
+becoming ledger authority.
 
 **Evidence:** `README.md`, `docs/show/integrator-brief.md`,
+`crates/fletch-cli/src/constants.rs`,
+`crates/fletch-cli/src/support/io.rs`,
 `crates/fletch-cli/src/support/misc.rs`, and
 `cargo test -p fletch-cli --test registry_web`.
 

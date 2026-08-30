@@ -31,6 +31,9 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 
+pub(crate) const REGISTRY_WEB_BOUNDARY_NOTICE: &str =
+    "FLETCH registry web is a read-only derived view; manifests and registries remain the source contracts, and product activation stays downstream-owned.";
+
 pub(crate) const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
 <html lang="en">
 <head>
@@ -62,6 +65,7 @@ pub(crate) const REGISTRY_WEB_HTML: &str = r#"<!doctype html>
 <body>
   <header>
     <h1>FLETCH Registry Search</h1>
+    <div class="card meta">FLETCH registry web is a read-only derived view; manifests and registries remain the source contracts, and product activation stays downstream-owned.</div>
     <div id="summary" class="meta">Loading index summary...</div>
   </header>
   <main>
