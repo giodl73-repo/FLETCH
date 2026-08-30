@@ -29,7 +29,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn parse_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
     let mut parsed = BTreeMap::new();
@@ -320,36 +320,6 @@ pub(crate) fn read_cache_index(path: &PathBuf) -> Result<CacheIndexReport> {
     Ok(serde_json::from_str(&json)?)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn invalid_registry_inputs_are_not_indexed() {
-        let registry = serde_json::from_str(
-            r#"{
-                "schema_version": "fletch.registry.v1",
-                "generated_by": "fletch-cli test",
-                "registry_id": "invalid-registry",
-                "fletches": [{
-                    "id": "invalid.missing-shaft",
-                    "node_kind": "fletch",
-                    "shafts": [],
-                    "metadata": {},
-                    "tags": []
-                }]
-            }"#,
-        )
-        .expect("registry fixture should parse");
-
-        let error = ensure_valid_registry_inputs(&[registry])
-            .expect_err("invalid registry should be rejected")
-            .to_string();
-
-        assert!(error.contains("invalid-registry [missing-shaft]"));
-    }
-}
-
 pub(crate) fn read_proof_docs(path: &PathBuf) -> Result<ProofDocumentManifest> {
     let json = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
@@ -396,7 +366,7 @@ pub(crate) fn read_rollup_preview(path: &PathBuf) -> Result<RollupPreview> {
 }
 
 pub(crate) fn write_fetch_manifest(
-    cache_root: &PathBuf,
+    cache_root: &Path,
     entry: CacheEntry,
     output: Option<PathBuf>,
 ) -> Result<()> {
@@ -433,4 +403,34 @@ pub(crate) fn write_json<T: serde::Serialize + ?Sized>(
         println!("{json}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_registry_inputs_are_not_indexed() {
+        let registry = serde_json::from_str(
+            r#"{
+                "schema_version": "fletch.registry.v1",
+                "generated_by": "fletch-cli test",
+                "registry_id": "invalid-registry",
+                "fletches": [{
+                    "id": "invalid.missing-shaft",
+                    "node_kind": "fletch",
+                    "shafts": [],
+                    "metadata": {},
+                    "tags": []
+                }]
+            }"#,
+        )
+        .expect("registry fixture should parse");
+
+        let error = ensure_valid_registry_inputs(&[registry])
+            .expect_err("invalid registry should be rejected")
+            .to_string();
+
+        assert!(error.contains("invalid-registry [missing-shaft]"));
+    }
 }

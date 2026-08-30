@@ -179,39 +179,39 @@ pub fn run_mock_client(workspace_root: impl AsRef<Path>) -> Result<MockClientRep
     std::fs::write(&publish_path, serde_json::to_string_pretty(&publish)?)?;
     let maxim_source_corpus = run_maxim_source_corpus_scenario(workspace_root)?;
 
-    Ok(report(
+    Ok(report(MockReportParts {
         manifest_path,
         registry_path,
         flight_path,
-        flight.steps.len(),
+        flight_step_count: flight.steps.len(),
         fetched_fletches,
-        &statuses,
-        &cache_index_gate,
-        &prune,
-        exported.path,
-        imported.stage_root,
-        staged_statuses.len(),
+        statuses: &statuses,
+        cache_index_gate: &cache_index_gate,
+        prune: &prune,
+        quiver_path: exported.path,
+        staged_quiver_root: imported.stage_root,
+        staged_import_count: staged_statuses.len(),
         graph_path,
-        graph.nodes.len(),
-        graph.edges.len(),
+        graph_node_count: graph.nodes.len(),
+        graph_edge_count: graph.edges.len(),
         tips_path,
-        tips.tips.len(),
+        tip_count: tips.tips.len(),
         publish_path,
-        publish.statuses.len(),
+        publish_status_count: publish.statuses.len(),
         threat_query,
         maxim_source_corpus,
-    ))
+    }))
 }
 
-fn report(
+struct MockReportParts<'a> {
     manifest_path: PathBuf,
     registry_path: PathBuf,
     flight_path: PathBuf,
     flight_step_count: usize,
     fetched_fletches: Vec<String>,
-    statuses: &[fletch_core::CacheStatus],
-    cache_index_gate: &fletch_core::CacheIndexGateReport,
-    prune: &PrunePlan,
+    statuses: &'a [fletch_core::CacheStatus],
+    cache_index_gate: &'a fletch_core::CacheIndexGateReport,
+    prune: &'a PrunePlan,
     quiver_path: PathBuf,
     staged_quiver_root: PathBuf,
     staged_import_count: usize,
@@ -224,37 +224,41 @@ fn report(
     publish_status_count: usize,
     threat_query: ThreatQueryReport,
     maxim_source_corpus: MaximSourceCorpusReport,
-) -> MockClientReport {
+}
+
+fn report(parts: MockReportParts<'_>) -> MockClientReport {
     MockClientReport {
         client: "justice-league-villain-files-mock".to_string(),
-        registry_path: registry_path.display().to_string(),
-        flight_path: flight_path.display().to_string(),
-        flight_step_count,
-        manifest_path: manifest_path.display().to_string(),
-        fetched_fletches,
-        verified_count: statuses
+        registry_path: parts.registry_path.display().to_string(),
+        flight_path: parts.flight_path.display().to_string(),
+        flight_step_count: parts.flight_step_count,
+        manifest_path: parts.manifest_path.display().to_string(),
+        fetched_fletches: parts.fetched_fletches,
+        verified_count: parts
+            .statuses
             .iter()
             .filter(|status| status.object_status == CacheObjectStatus::Verified)
             .count(),
-        fresh_count: statuses
+        fresh_count: parts
+            .statuses
             .iter()
             .filter(|status| status.freshness_status == CacheFreshnessStatus::Fresh)
             .count(),
-        cache_index_gate_passed: cache_index_gate.passed,
-        cache_index_expected_count: cache_index_gate.expected_count,
-        prune_count: prune.prune_count,
-        quiver_path: quiver_path.display().to_string(),
-        staged_quiver_root: staged_quiver_root.display().to_string(),
-        staged_import_count,
-        graph_path: graph_path.display().to_string(),
-        graph_node_count,
-        graph_edge_count,
-        tips_path: tips_path.display().to_string(),
-        tip_count,
-        publish_path: publish_path.display().to_string(),
-        publish_status_count,
-        threat_query,
-        maxim_source_corpus,
+        cache_index_gate_passed: parts.cache_index_gate.passed,
+        cache_index_expected_count: parts.cache_index_gate.expected_count,
+        prune_count: parts.prune.prune_count,
+        quiver_path: parts.quiver_path.display().to_string(),
+        staged_quiver_root: parts.staged_quiver_root.display().to_string(),
+        staged_import_count: parts.staged_import_count,
+        graph_path: parts.graph_path.display().to_string(),
+        graph_node_count: parts.graph_node_count,
+        graph_edge_count: parts.graph_edge_count,
+        tips_path: parts.tips_path.display().to_string(),
+        tip_count: parts.tip_count,
+        publish_path: parts.publish_path.display().to_string(),
+        publish_status_count: parts.publish_status_count,
+        threat_query: parts.threat_query,
+        maxim_source_corpus: parts.maxim_source_corpus,
     }
 }
 

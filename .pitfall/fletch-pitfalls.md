@@ -4,6 +4,23 @@
 
 **Status:** OPEN
 
+**Actor:** Consumer repo implementer, release engineer, or portfolio integrator.
+
+**Task:** Fetch, cache, inspect, or hand off source material for a downstream
+product.
+
+**Surface:** README examples, manifest-first workflows, compatibility policy,
+adapter-boundary role review, cache/registry/quiver commands, and handoff docs.
+
+**Likely mistake:** Treating a successful FLETCH acquisition, registry lookup,
+quiver import, or report as the downstream product's active data view.
+
+**Consequence:** A product can present stale, unparsed, unreviewed, or
+domain-invalid data while the shared acquisition layer looks healthy.
+
+**Owner:** FLETCH keeps the shared boundary visible; consumer repos own
+activation, parsing, snapshots, joins, and product policy.
+
 **Pattern:** FLETCH fetch, cache, manifest, registry, partition, quiver, or
 publish output is treated as activating a consumer product view or validating
 domain meaning.
@@ -18,12 +35,34 @@ downstream tools can accidentally skip the product-owned activation step.
 **Structural solution:** Keep acquisition/activation boundaries in README,
 compatibility policy, role reviews, and consumer handoff docs.
 
+**Test:** `crates/fletch-cli/tests/pitfall_policy.rs` cites `FLETCH-PF-01`
+while checking README, product plan, compatibility policy, and role wording that
+separates acquisition from product activation.
+
 **Evidence:** `README.md`, `PRODUCT_PLAN.md`, `docs/compatibility.md`, and
 `.roles/parliament/adapter-boundary-keeper.md`.
 
 ## FLETCH-PF-02: Derived Publisher Output Becomes Ledger Authority
 
 **Status:** OPEN
+
+**Actor:** Publisher, researcher, reviewer, or local registry-web user.
+
+**Task:** Search, export, cite, or package FLETCH-derived views for another
+tool or evidence packet.
+
+**Surface:** `registry web`, registry indexes, publisher reports, MDCROP/PROOF
+outputs, local URL maps, tips, and generated evidence bundles.
+
+**Likely mistake:** Copying a convenient derived row or report back into the
+authority path as though it were the mutable manifest or registry input.
+
+**Consequence:** Follow-up work can drift from the ledger contract while still
+looking reproducible because the derived view is complete and searchable.
+
+**Owner:** FLETCH keeps derived outputs read-only and labels the source
+contracts; downstream publishers must cite the authoritative manifest or
+registry when they need source state.
 
 **Pattern:** Cache indexes, registry web exports, MDCROP rows, PROOF docs,
 local URL maps, tips, or publish bundles are used as source-of-truth manifests
@@ -50,6 +89,24 @@ registry index paths as derived views.
 
 **Status:** OPEN
 
+**Actor:** FLETCH maintainer, dependency updater, release engineer, or consumer
+repo maintainer.
+
+**Task:** Change a public schema, CLI output, registry contract, cache key,
+manifest shape, report contract, or adapter handoff.
+
+**Surface:** Compatibility policy, release notes, dependency update waves,
+consumer rehearsals, and portfolio snapshots.
+
+**Likely mistake:** Treating `cargo test --workspace` in FLETCH as enough proof
+that all dependent products still accept the changed contract.
+
+**Consequence:** A portfolio snapshot can advance with a broken consumer
+activation path, even though the foundation repo is locally green.
+
+**Owner:** FLETCH owns contract-level compatibility evidence; affected consumer
+repos own their rehearsal commands and adoption proof.
+
 **Pattern:** FLETCH-local tests passing is treated as proof that ICELINES,
 BISECT, ROUTE, MDCROP, MDPATH, or PROOF consumers can accept a changed public
 API, schema, cache key, manifest, registry, or report contract.
@@ -62,6 +119,10 @@ rehearsal can feel redundant until a consumer-owned integration breaks.
 
 **Structural solution:** Keep ICELINES rehearsal and affected-consumer review
 as explicit compatibility gates for foundation changes.
+
+**Test:** `crates/fletch-cli/tests/pitfall_policy.rs` cites `FLETCH-PF-03`
+while checking compatibility-policy and role-review wording that requires
+affected-consumer rehearsal beyond local FLETCH tests.
 
 **Evidence:** `docs/compatibility.md`, `.roles/stakeholders/icelines-maintainer.md`,
 and `.roles/stakeholders/ci-release-engineer.md`.
@@ -114,6 +175,25 @@ and group growing command/report parameters behind small value objects.
 ## FLETCH-PF-06: Cache Choice Looks Like Activation Choice
 
 **Status:** OPEN
+
+**Actor:** Consumer maintainer, offline release operator, demo author, or
+registry-web user.
+
+**Task:** Select a cached object, trusted manifest, registry row, quiver import,
+partition, alias, or publish report before a product consumes it.
+
+**Surface:** Fetch/cache commands, registry search/web, quiver import/export,
+partition and alias reports, publisher bundles, PROOF manifests, and MDCROP
+indexes.
+
+**Likely mistake:** Assuming the selected or staged object is now trusted,
+merged, interpreted, or active inside the product.
+
+**Consequence:** Correctly fetched bytes can bypass the product-owned merge,
+trust, activation, or domain interpretation step.
+
+**Owner:** FLETCH keeps selection, verification, staging, and read-only reports
+separate; product repos own activation commands and trust policy.
 
 **Pattern:** A consumer selects a manifest, trusted manifest, offline cache,
 quiver import, registry web row, partition state, alias, or publish report and

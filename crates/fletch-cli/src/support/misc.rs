@@ -200,7 +200,7 @@ pub(crate) fn open_browser(url: &str) -> Result<()> {
     {
         let mut command = std::process::Command::new("cmd");
         command.args(["/C", "start", "", url]);
-        return run_browser_launcher(command);
+        run_browser_launcher(command)
     }
 
     #[cfg(target_os = "macos")]
@@ -529,13 +529,15 @@ pub(crate) fn registry_web_search_from_query(
         .map(String::as_str);
     let report = search_registry_web_index(
         index,
-        &tags,
-        &metadata,
-        text.as_deref(),
-        offset,
-        limit,
-        sort,
-        direction,
+        RegistryWebSearchOptions {
+            tags: &tags,
+            metadata_filters: &metadata,
+            text: text.as_deref(),
+            offset,
+            limit,
+            sort,
+            direction,
+        },
     );
     Ok((report, text))
 }
@@ -548,20 +550,33 @@ pub(crate) fn query_flag(query: &BTreeMap<String, Vec<String>>, key: &str) -> bo
     })
 }
 
+pub(crate) struct RegistryWebSearchOptions<'a> {
+    pub(crate) tags: &'a [String],
+    pub(crate) metadata_filters: &'a [(String, String)],
+    pub(crate) text: Option<&'a str>,
+    pub(crate) offset: usize,
+    pub(crate) limit: Option<usize>,
+    pub(crate) sort: Option<&'a str>,
+    pub(crate) direction: Option<&'a str>,
+}
+
 pub(crate) fn search_registry_web_index(
     index: &RegistryIndexReport,
-    tags: &[String],
-    metadata_filters: &[(String, String)],
-    text: Option<&str>,
-    offset: usize,
-    limit: Option<usize>,
-    sort: Option<&str>,
-    direction: Option<&str>,
+    options: RegistryWebSearchOptions<'_>,
 ) -> fletch_core::RegistrySearchReport {
-    let mut report = search_registry_index(index, tags, metadata_filters, text, 0, None);
-    let sort = sort.unwrap_or("relevance");
-    let descending = direction.map_or(sort == "relevance", |direction| direction == "desc");
-    sort_registry_web_rows(&mut report.rows, sort, descending, text);
+    let mut report = search_registry_index(
+        index,
+        options.tags,
+        options.metadata_filters,
+        options.text,
+        0,
+        None,
+    );
+    let sort = options.sort.unwrap_or("relevance");
+    let descending = options
+        .direction
+        .map_or(sort == "relevance", |direction| direction == "desc");
+    sort_registry_web_rows(&mut report.rows, sort, descending, options.text);
     if sort != "index" {
         report.query.insert("sort".to_string(), sort.to_string());
     }
@@ -573,8 +588,8 @@ pub(crate) fn search_registry_web_index(
     report.rows = report
         .rows
         .iter()
-        .skip(offset)
-        .take(limit.unwrap_or(usize::MAX))
+        .skip(options.offset)
+        .take(options.limit.unwrap_or(usize::MAX))
         .cloned()
         .collect();
     report
@@ -870,11 +885,7 @@ pub(crate) fn resolve_registry_source_url(row: &RegistryIndexRow, source_url: &s
         return source_url.to_string();
     }
     if let Some(base_url) = row.metadata.get("registry_source_base_url") {
-        return format!(
-            "{}{}",
-            base_url.trim_end_matches('/'),
-            format!("/{source_url}")
-        );
+        return format!("{}/{source_url}", base_url.trim_end_matches('/'));
     }
     source_url.to_string()
 }

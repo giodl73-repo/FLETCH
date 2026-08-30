@@ -6128,7 +6128,7 @@ mod tests {
         let prune = plan_cache_prune(&manifest).unwrap();
 
         assert_eq!(prune.schema_version, FLETCH_PRUNE_SCHEMA);
-        assert_eq!(prune.destructive, false);
+        assert!(!prune.destructive);
         assert_eq!(prune.keep_count, 1);
         assert_eq!(prune.keep_bytes, 5);
         assert_eq!(prune.prune_count, 1);

@@ -19,6 +19,7 @@ use fletch_core::{
     CacheIndexGatePolicy, FetchOptions,
 };
 use std::fs;
+use std::thread;
 
 mod cli;
 mod commands;
@@ -32,7 +33,26 @@ pub(crate) use constants::*;
 pub(crate) use support::*;
 pub(crate) use types::*;
 
+const CLI_STACK_SIZE: usize = 8 * 1024 * 1024;
+
 fn main() -> Result<()> {
+    thread::Builder::new()
+        .name("fletch-cli".to_string())
+        .stack_size(CLI_STACK_SIZE)
+        .spawn(run_cli)?
+        .join()
+        .map_err(|panic| {
+            if let Some(message) = panic.downcast_ref::<&str>() {
+                anyhow::anyhow!("fletch-cli panicked: {message}")
+            } else if let Some(message) = panic.downcast_ref::<String>() {
+                anyhow::anyhow!("fletch-cli panicked: {message}")
+            } else {
+                anyhow::anyhow!("fletch-cli panicked")
+            }
+        })?
+}
+
+fn run_cli() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Plan {
