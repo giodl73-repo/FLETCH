@@ -6,6 +6,79 @@ fn assert_contains(source_name: &str, source: &str, needle: &str) {
 }
 
 #[test]
+fn consumer_boundaries_are_machine_readable() {
+    let manifest = serde_json::from_str::<serde_json::Value>(include_str!(
+        "../../../docs/consumer-boundaries.v1.json"
+    ))
+    .unwrap();
+    assert_eq!(manifest["schema"], "fletch.consumer-boundaries.v1");
+    assert_eq!(manifest["owner_repo"], "FLETCH");
+    assert_eq!(manifest["authority"]["acquisition"], "FLETCH");
+    assert_eq!(
+        manifest["authority"]["product_activation"],
+        "owning consumer repositories"
+    );
+    assert_eq!(
+        manifest["authority"]["compatibility_acceptance"],
+        "affected consumer repositories"
+    );
+
+    let boundaries = manifest["boundaries"].as_array().unwrap();
+    assert_eq!(boundaries.len(), 3);
+
+    let acquisition = boundaries
+        .iter()
+        .find(|boundary| boundary["pitfall_id"] == "FLETCH-PF-01")
+        .unwrap();
+    assert_eq!(acquisition["boundary"], "acquisition_not_activation");
+    assert!(acquisition["blocked_claims"].as_array().unwrap().contains(
+        &serde_json::Value::String("fetch activates a product view".to_string())
+    ));
+    assert!(acquisition["activation_requires"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::Value::String(
+            "consumer-owned domain validation".to_string()
+        )));
+
+    let compatibility = boundaries
+        .iter()
+        .find(|boundary| boundary["pitfall_id"] == "FLETCH-PF-03")
+        .unwrap();
+    assert_eq!(
+        compatibility["boundary"],
+        "local_green_not_consumer_compatibility"
+    );
+    assert!(compatibility["blocked_claims"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::Value::String(
+            "FLETCH-local tests prove ICELINES compatibility".to_string()
+        )));
+    assert!(compatibility["compatibility_requires"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::Value::String(
+            "required downstream rehearsal commands".to_string()
+        )));
+
+    let selection = boundaries
+        .iter()
+        .find(|boundary| boundary["pitfall_id"] == "FLETCH-PF-06")
+        .unwrap();
+    assert_eq!(selection["boundary"], "selection_not_trust_or_activation");
+    assert!(selection["blocked_claims"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::Value::String(
+            "selected object is trusted by the product".to_string()
+        )));
+    assert!(selection["handoff_requires"].as_array().unwrap().contains(
+        &serde_json::Value::String("product-owned activation command".to_string())
+    ));
+}
+
+#[test]
 fn pitfall_policy_keeps_acquisition_derived_views_and_activation_separate() {
     // FLETCH-PF-01/FLETCH-PF-03/FLETCH-PF-06: consumer-facing docs must keep
     // acquisition, local validation, cache selection, and activation distinct.

@@ -2,7 +2,7 @@
 
 ## FLETCH-PF-01: Fetch Contract Becomes Product Activation
 
-**Status:** OPEN
+**Status:** MITIGATED
 
 **Actor:** Consumer repo implementer, release engineer, or portfolio integrator.
 
@@ -33,13 +33,15 @@ demo copy.
 downstream tools can accidentally skip the product-owned activation step.
 
 **Structural solution:** Keep acquisition/activation boundaries in README,
-compatibility policy, role reviews, and consumer handoff docs.
+compatibility policy, role reviews, consumer handoff docs, and a
+machine-readable consumer-boundary manifest.
 
-**Test:** `crates/fletch-cli/tests/pitfall_policy.rs` cites `FLETCH-PF-01`
-while checking README, product plan, compatibility policy, and role wording that
-separates acquisition from product activation.
+**Test:** `cargo test -p fletch-cli --test pitfall_policy` parses
+`docs/consumer-boundaries.v1.json` and verifies that fetch, registry, quiver,
+and publisher outputs do not activate product views or validate domain meaning.
 
-**Evidence:** `README.md`, `PRODUCT_PLAN.md`, `docs/compatibility.md`, and
+**Evidence:** `docs/consumer-boundaries.v1.json`, `README.md`,
+`PRODUCT_PLAN.md`, `docs/compatibility.md`, and
 `.roles/parliament/adapter-boundary-keeper.md`.
 
 ## FLETCH-PF-02: Derived Publisher Output Becomes Ledger Authority
@@ -91,7 +93,7 @@ becoming ledger authority.
 
 ## FLETCH-PF-03: Local Green Tests Become Consumer Compatibility
 
-**Status:** OPEN
+**Status:** MITIGATED
 
 **Actor:** FLETCH maintainer, dependency updater, release engineer, or consumer
 repo maintainer.
@@ -121,15 +123,16 @@ release notes, and child-repo adoption waves.
 **Detection difficulty:** FLETCH has a broad local test suite, so downstream
 rehearsal can feel redundant until a consumer-owned integration breaks.
 
-**Structural solution:** Keep ICELINES rehearsal and affected-consumer review
-as explicit compatibility gates for foundation changes.
+**Structural solution:** Keep affected-consumer rehearsal and review as explicit
+compatibility gates for foundation changes.
 
-**Test:** `crates/fletch-cli/tests/pitfall_policy.rs` cites `FLETCH-PF-03`
-while checking compatibility-policy and role-review wording that requires
-affected-consumer rehearsal beyond local FLETCH tests.
+**Test:** `cargo test -p fletch-cli --test pitfall_policy` parses
+`docs/consumer-boundaries.v1.json` and verifies that local FLETCH tests do not
+prove ICELINES, BISECT, ROUTE, MDCROP, or portfolio snapshot compatibility.
 
-**Evidence:** `docs/compatibility.md`, `.roles/stakeholders/icelines-maintainer.md`,
-and `.roles/stakeholders/ci-release-engineer.md`.
+**Evidence:** `docs/consumer-boundaries.v1.json`, `docs/compatibility.md`,
+`.roles/stakeholders/icelines-maintainer.md`, and
+`.roles/stakeholders/ci-release-engineer.md`.
 
 ## FLETCH-PF-04: Compiled CLI Command Surface Overflows Before Validation
 
@@ -178,7 +181,7 @@ and group growing command/report parameters behind small value objects.
 
 ## FLETCH-PF-06: Cache Choice Looks Like Activation Choice
 
-**Status:** OPEN
+**Status:** MITIGATED
 
 **Actor:** Consumer maintainer, offline release operator, demo author, or
 registry-web user.
@@ -215,13 +218,14 @@ step.
 **Structural solution:** Consumer-facing examples should keep the active source
 of truth, selected derived view, stage/import state, verification status, trust
 source, and product-owned activation command visibly separate, and tests should
-cover at least one consumer flow where selecting a row does not activate data.
+cover the boundary where selecting a row does not activate data.
 
-**Test:** `crates/fletch-cli/tests/registry_web.rs` cites `FLETCH-PF-06` while
-checking URL-selected registry rows and source previews as read-only derived
-views.
+**Test:** `cargo test -p fletch-cli --test pitfall_policy` parses
+`docs/consumer-boundaries.v1.json` and verifies that selected cache, manifest,
+registry, partition, alias, and report states do not establish downstream trust
+or product activation.
 
-**Evidence:** `README.md`, `docs/specs/fletch-foundation.md`,
-`docs/show/integrator-brief.md`,
+**Evidence:** `docs/consumer-boundaries.v1.json`, `README.md`,
+`docs/specs/fletch-foundation.md`, `docs/show/integrator-brief.md`,
 `crates/fletch-cli/tests/registry_web.rs`, and
 `.roles/parliament/offline-release-operator.md`.

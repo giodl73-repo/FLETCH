@@ -80,3 +80,24 @@ integration tests execute the compiled binary.
 **Evidence:** `crates/fletch-cli/src/main.rs`,
 `crates/fletch-cli/tests/registry_web.rs`, and
 `cargo test -p fletch-cli --test registry_web`.
+
+## FLETCH-INV-06: Consumer Handoff Boundaries Stay Machine-Readable
+
+**Status:** VERIFIED
+
+**Claim:** FLETCH records acquisition, verification, cache selection, product
+activation, domain interpretation, and compatibility acceptance ownership in
+`docs/consumer-boundaries.v1.json`.
+
+**Why it matters:** Fetchable, verified, selected, or locally green artifacts
+look complete enough to skip the consumer-owned parse, merge, trust, activation,
+domain validation, and rehearsal steps.
+
+**Enforcement:** The CLI PITFALL policy test parses the boundary manifest and
+checks that acquisition is not activation, local FLETCH tests are not consumer
+compatibility, and cache or registry selection is not downstream trust.
+
+**Evidence:** `docs/consumer-boundaries.v1.json` and
+`crates/fletch-cli/tests/pitfall_policy.rs`.
+
+**Test:** `cargo test -p fletch-cli --test pitfall_policy`.

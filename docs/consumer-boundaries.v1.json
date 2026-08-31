@@ -1,0 +1,80 @@
+{
+  "schema": "fletch.consumer-boundaries.v1",
+  "owner_repo": "FLETCH",
+  "authority": {
+    "acquisition": "FLETCH",
+    "verification": "FLETCH",
+    "cache_selection": "FLETCH",
+    "product_activation": "owning consumer repositories",
+    "domain_interpretation": "owning consumer repositories",
+    "compatibility_acceptance": "affected consumer repositories"
+  },
+  "boundaries": [
+    {
+      "pitfall_id": "FLETCH-PF-01",
+      "boundary": "acquisition_not_activation",
+      "fletch_can_claim": [
+        "bytes were fetched or skipped by a resolved plan",
+        "cache entries match recorded hashes and byte counts",
+        "registry, quiver, partition, or publisher rows are available for handoff"
+      ],
+      "blocked_claims": [
+        "fetch activates a product view",
+        "registry lookup validates domain meaning",
+        "quiver import merges product data",
+        "publisher report proves consumer readiness"
+      ],
+      "activation_requires": [
+        "consumer-owned parse command",
+        "consumer-owned snapshot or merge",
+        "consumer-owned domain validation",
+        "consumer-owned release or handoff note"
+      ]
+    },
+    {
+      "pitfall_id": "FLETCH-PF-03",
+      "boundary": "local_green_not_consumer_compatibility",
+      "fletch_can_claim": [
+        "FLETCH workspace tests passed",
+        "protected local schemas and command output remain internally coherent"
+      ],
+      "blocked_claims": [
+        "FLETCH-local tests prove ICELINES compatibility",
+        "FLETCH-local tests prove BISECT compatibility",
+        "FLETCH-local tests prove ROUTE compatibility",
+        "FLETCH-local tests prove MDCROP compatibility",
+        "FLETCH-local tests authorize portfolio snapshot adoption"
+      ],
+      "compatibility_requires": [
+        "affected consumer list",
+        "schema or API migration note",
+        "required downstream rehearsal commands",
+        "consumer-owned pass or explicit scope-out"
+      ]
+    },
+    {
+      "pitfall_id": "FLETCH-PF-06",
+      "boundary": "selection_not_trust_or_activation",
+      "fletch_can_claim": [
+        "a cache object, manifest row, registry row, partition, alias, or report was selected",
+        "selected bytes can be verified against FLETCH ledger evidence",
+        "staged imports remain staged until a consumer activates them"
+      ],
+      "blocked_claims": [
+        "selected object is trusted by the product",
+        "trusted manifest activates product data",
+        "alias selection merges product state",
+        "read-only report establishes downstream trust",
+        "offline cache choice replaces product policy"
+      ],
+      "handoff_requires": [
+        "active source of truth",
+        "selected derived view",
+        "stage or import state",
+        "verification status",
+        "trust source",
+        "product-owned activation command"
+      ]
+    }
+  ]
+}
