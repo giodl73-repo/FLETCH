@@ -52,7 +52,7 @@ in the next wave plan.
 
 ## Active wave
 
-- `2026-05-16-manifest-maintenance`
+- `2026-11-01-registry-browser` (prior manifest-maintenance wave closed in its ROLES_REVIEW.md)
 
 ## Protocol
 

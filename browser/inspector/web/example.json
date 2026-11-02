@@ -1,0 +1,77 @@
+{
+  "schema_version": "fletch.registry.v1",
+  "generated_by": "Authored public demonstration; no acquired or verified bytes",
+  "registry_id": "example:weather-catalog",
+  "fletches": [
+    {
+      "id": "example:stations",
+      "node_kind": "fletch",
+      "shafts": [
+        {
+          "kind": "http",
+          "url": "https://example.invalid/stations.json",
+          "headers": {}
+        }
+      ],
+      "tags": [
+        "demo",
+        "reference"
+      ],
+      "metadata": {
+        "region": "north",
+        "year": "2026"
+      }
+    },
+    {
+      "id": "example:observations:2026-11-01",
+      "node_kind": "partition",
+      "shafts": [
+        {
+          "kind": "file",
+          "url": "local/observations.json",
+          "headers": {}
+        }
+      ],
+      "edges": [
+        {
+          "to": "example:stations",
+          "kind": "requires"
+        }
+      ],
+      "tags": [
+        "demo",
+        "daily"
+      ],
+      "metadata": {
+        "region": "north",
+        "year": "2026"
+      }
+    },
+    {
+      "id": "example:summary",
+      "node_kind": "fletch",
+      "shafts": [
+        {
+          "kind": "adapter",
+          "url": "adapter://example/summary",
+          "headers": {}
+        }
+      ],
+      "edges": [
+        {
+          "to": "example:observations:2026-11-01",
+          "kind": "derived-from"
+        }
+      ],
+      "tags": [
+        "demo",
+        "derived"
+      ],
+      "metadata": {
+        "region": "south",
+        "year": "2025",
+        "note": "Authored metadata, not trust or activation"
+      }
+    }
+  ]
+}

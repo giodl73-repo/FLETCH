@@ -278,6 +278,7 @@ dependencies = [
 name = "fletch-core"
 version = "0.1.0"
 dependencies = [
+ "fletch-registry",
  "reqwest",
  "serde",
  "serde_json",
@@ -294,6 +295,13 @@ dependencies = [
  "fletch-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fletch-registry"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

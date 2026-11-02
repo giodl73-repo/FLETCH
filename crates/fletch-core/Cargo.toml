@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+fletch-registry = { path = "../fletch-registry" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/fletch-core",
+    "crates/fletch-registry",
     "crates/fletch-cli",
     "crates/fletch-mock-client",
 ]
