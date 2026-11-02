@@ -1,6 +1,6 @@
 # Portable registry search and inspection
 
-Status: active; local qualification only. No Pages deployment or portfolio pointer update yet.
+Status: candidate implementation qualified; promotion requires exact default/live gates. See RELEASE.md and ROLES_REVIEW.md. No portfolio pointer changes are authorized before those gates.
 
 Goal: let a reader open an authored or own fletch.registry.v1 JSON document,
 inspect native validation findings and search valid registry rows by text, exact

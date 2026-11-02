@@ -15,3 +15,9 @@ are authored. Remaining gates: complete packaged13case suite, independent source
 rebuild outside Git with all responses and compiled native CLI scenarios, exact
 hosted PR/default checks and fresh complete live files/browser evidence. No
 TRACKER pointer advance or live qualification yet.
+
+Candidate `94d8d40` now passes 13 packaged cases locally and hosted. Full source replay
+passes 76 native / 4 adapter / 31 CLI / 11 browser checks and all 44 responses, outside Git
+in a path with spaces. See RELEASE.md for dated evidence and exact scope.
+The final review/legal-scope revision must qualify again before promotion;
+default/live proof remains separate. No diagnostic/custody architecture added.
