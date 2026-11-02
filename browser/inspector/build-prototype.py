@@ -33,6 +33,17 @@ for which in ['schema','duplicate','shaft','empty','extension','inert']:
  add(which,json.dumps(r,ensure_ascii=False))
 add('malformed','{');add('BOM','\ufeff'+example);add('oversized',' '*(1048576+1));add('zero page',limit=0)
 r=copy.deepcopy(registry);r['fletches']=[dict(copy.deepcopy(r['fletches'][0]),id='example:'+str(i)) for i in range(501)];add('fletch ceiling',json.dumps(r))
+
+add('text accepted limit',text='x'*1024);add('text refused limit',text='x'*1025)
+add('tags accepted limit',tags=['demo']*30);add('tags refused limit',tags=['demo']*31)
+add('metadata accepted limit',metadata_filters=[['year','2026']]*30);add('metadata refused limit',metadata_filters=[['year','2026']]*31)
+add('page refused ceiling',limit=101);add('offset beyond u32',offset=4294967296)
+r=copy.deepcopy(registry);r['fletches']=[dict(copy.deepcopy(r['fletches'][0]),id='own:'+str(i)) for i in range(500)];add('accepted fletch ceiling',json.dumps(r))
+for count in [4000,4001]:
+ r=copy.deepcopy(registry);r['fletches']=r['fletches'][:1];r['fletches'][0]['shafts']=[{'kind':'file','url':'x'}]*count;add('shaft count '+str(count),json.dumps(r))
+for count in [5000,5001]:
+ r=copy.deepcopy(registry);r['fletches']=r['fletches'][:1];r['fletches'][0]['edges']=[{'kind':'requires','to':'declared'}]*count;add('edge count '+str(count),json.dumps(r))
+add('duplicate known member','{"schema_version":"fletch.registry.v1","schema_version":"fletch.registry.v1","generated_by":"test","registry_id":"test","fletches":[]}')
 (cache/'native-cases.json').write_text(json.dumps(cases,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
 wasm=(site/'pkg/fletch_registry_inspector_bg.wasm').read_bytes();proof={'prototype_only':True,'native_cases':len(cases),'wasm_bytes':len(wasm),'wasm_sha256':hashlib.sha256(wasm).hexdigest(),'publication_qualified':False}
 (cache/'prototype-build.json').write_text(json.dumps(proof,indent=2)+'\n',encoding='utf-8');print(json.dumps(proof))

@@ -1,8 +1,8 @@
-# FLETCH registry explorer — local prototype
+# FLETCH registry explorer
 
-Status: implementation and local native/browser qualification only. Not a live
-Pages release. Complete source/build/legal packaging, read-only PR qualification,
-exact default-branch deployment and fresh live checks remain in Pulse02.
+The companion implements a bounded Rust/WASM registry task. Release status is
+recorded in the wave; implementation and local checks alone are not live
+qualification. PRs qualify read-only; only tested default-master artifacts deploy.
 
 The new serde-only fletch-registry crate contains mechanically moved native
 registry definitions, validation, indexing and search. fletch-core reexports the
@@ -44,17 +44,28 @@ npx playwright install chromium
 npm run test:pages
 ```
 
-The local server tests /FLETCH/. Six browser cases include thirty exact executing
+The local server tests /FLETCH/. Thirteen packaged browser cases include forty-four exact executing
 WASM responses, typed invalid-registry gate, own UTF-8/BOM/CRLF preservation,
 pagination/full current-page report, inert metadata, startup deadline/recovery,
-mobile/keyboard and memory ceiling. Coverage remains scoped: further stale
-file/worker races, computation deadline/crash recovery, input bounds and delivery
-checks belong to Pulse02 before publication. Timing samples are descriptive and
+mobile/keyboard, file/read/revision/generation fencing, actual 5/12/10-second
+deadlines, crash/restart and memory ceiling. Two delivery checks verify exact
+source/complete hashes and independent source/build/legal routes under unavailable
+WASM. Source replay repeats eleven behavior cases outside Git in a path with spaces. Timing samples are descriptive and
 include JS/message/serialization overhead. No comparative performance is claimed.
 
-See context/waves/2026-11-01-registry-browser/portability.json for native76tests,
-adapter4tests,25compiled native CLI scenarios and five required ICELINES checks.
+See context/waves/2026-11-01-registry-browser/portability.json for Windows native76tests,
+adapter4tests, compiled native CLI scenarios and five required ICELINES checks.
 That consumer rehearsal used an isolated unchanged Git archive, actual candidate
 path verified through Cargo metadata. Its initial unrestricted build exhausted
 Windows paging memory compiling unrelated integration binaries; the exact five
 library tests pass with one build job. Other owner sessions/data are untouched.
+
+
+Clean-source release staging and independent replay commands are in BUILD.md.
+The complete first-party Git archive pins every tracked file and retains the MIT
+grant. Dependency/Rust notices are copied verbatim. Separate budgets are2MiB
+runtime,20MiB optional source archive,25MiB site. Source archives do not load at
+startup. Private QA outputs/metadata/screenshots stay outside public staging.
+Request downloads preserve the current registry and exact filters/page; original
+opened bytes stay separate from current text and LF copies. No browser operation
+resolves declared source URLs or certifies source/cache/trust/activation status.
