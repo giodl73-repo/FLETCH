@@ -18,6 +18,8 @@ impl Drop for WebServer {
 
 #[test]
 fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Error>> {
+    // FLETCH-PF-02/FLETCH-PF-06: registry web exposes derived source views
+    // and selected rows without making them ledger or activation authority.
     let (index_path, source_path) = write_test_index()?;
     let port = available_port()?;
     let address = SocketAddr::from(([127, 0, 0, 1], port));
@@ -40,6 +42,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
 
     let html = http_get(address, "/")?;
     assert!(html.contains("FLETCH Registry Search"));
+    assert!(html.contains("read-only derived view"));
+    assert!(html.contains("product activation stays downstream-owned"));
     assert!(html.contains("Next page"));
     assert!(html.contains("Owner repo"));
     assert!(html.contains("Copy link"));
@@ -69,6 +73,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(linked_html.contains("loadSelectedRowDetail"));
 
     let summary = http_get(address, "/api/summary")?;
+    assert!(summary.contains("\"boundary_notice\""));
+    assert!(summary.contains("read-only derived view"));
     assert!(summary.contains("\"row_count\": 2"));
 
     let facets = http_get(address, "/api/facets")?;
@@ -81,6 +87,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(presets.contains("\"repo-registries\""));
 
     let search = http_get(address, "/api/search?text=storm%20seed&limit=10")?;
+    assert!(search.contains("\"boundary_notice\""));
+    assert!(search.contains("product activation stays downstream-owned"));
     assert!(search.contains("\"matched_row_count\": 1"));
     assert!(search.contains("\"storm.foundation.seed-storm\""));
     assert!(search.contains("\"weather\""));
@@ -91,6 +99,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
 
     let export = http_get(address, "/api/export.csv?text=storm%20seed&limit=10")?;
     assert!(export.contains("registry_id,fletch_id,node_kind,score,snippet"));
+    assert!(export.contains("boundary_notice"));
+    assert!(export.contains("manifests and registries remain the source contracts"));
     assert!(export.contains("storm-foundation-assets,storm.foundation.seed-storm"));
 
     let export_page = http_get(address, "/api/export.csv?limit=1")?;
@@ -105,6 +115,7 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
     assert!(json_export_page.contains("\"storm.foundation.seed-storm\""));
     assert!(!json_export_page.contains("\"mundus.registry.porto\""));
     let json_export_all = http_get(address, "/api/export.json?limit=1&all=true")?;
+    assert!(json_export_all.contains("\"boundary_notice\""));
     assert!(json_export_all.contains("\"matched_row_count\": 2"));
     assert!(json_export_all.contains("\"storm.foundation.seed-storm\""));
     assert!(json_export_all.contains("\"mundus.registry.porto\""));
@@ -131,6 +142,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
         address,
         "/api/source?registry_id=storm-foundation-assets&fletch_id=storm.foundation.seed-storm&source=0&line_start=2&line_count=1",
     )?;
+    assert!(source.contains("\"boundary_notice\""));
+    assert!(source.contains("read-only derived view"));
     assert!(source.contains("storm fixture payload"));
     assert!(source.contains("\"truncated\": false"));
     assert!(source.contains("\"total_line_count\""));
@@ -166,6 +179,8 @@ fn registry_web_serves_summary_search_detail_and_html() -> Result<(), Box<dyn Er
 
 #[test]
 fn registry_web_can_build_index_from_registry_files() -> Result<(), Box<dyn Error>> {
+    // FLETCH-PF-02: direct registry ingestion remains a derived web index,
+    // not a replacement for the source registry contract.
     let registry_path = write_test_registry()?;
     let port = available_port()?;
     let address = SocketAddr::from(([127, 0, 0, 1], port));
@@ -191,6 +206,8 @@ fn registry_web_can_build_index_from_registry_files() -> Result<(), Box<dyn Erro
     assert!(summary.contains("\"row_count\": 1"));
 
     let search = http_get(address, "/api/search?text=direct%20registry&limit=10")?;
+    assert!(search.contains("\"boundary_notice\""));
+    assert!(search.contains("read-only derived view"));
     assert!(search.contains("\"matched_row_count\": 1"));
     assert!(search.contains("\"test.direct.registry\""));
 

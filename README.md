@@ -8,6 +8,18 @@
 [ROLES](https://github.com/giodl73-repo/ROLES), the `.roles` convention for
 repository-local review panels.
 
+## Browser registry explorer
+
+[Open the Rust/WASM explorer](https://giodl73-repo.github.io/FLETCH/): inspect the
+authored example or your own registry JSON, search declared IDs/tags/metadata,
+see native validation findings and download original/current/LF-copy/request/
+paged-report data. No installation or source server is required. Registry rows
+are declarations; this does not fetch sources, verify cache bytes, establish
+freshness/trust, or activate consumer data. The complete source ZIP, compiled
+WASM, build provenance and notices are available separately from the engine.
+See [browser build and scope](browser/inspector/README.md) and the
+[release wave](context/waves/2026-11-01-registry-browser/WAVE.md) for qualification.
+
 ## Show someone (start here)
 
 Hand the repo to a product integrator or systems implementer without a

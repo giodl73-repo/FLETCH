@@ -1,0 +1,72 @@
+{
+  "status": "local prototype only, no hosted or live publication",
+  "source_entry": "507d2225fa97f04ddc93f3329006917ea13ed4b2",
+  "public_default_entry": "d7bdef7b327a9361a955a10e85c2c0df35cd3de7",
+  "native_workspace_tests": 76,
+  "baseline_tests": 76,
+  "mechanical_extraction_exact": true,
+  "all_other_core_bytes_unchanged": true,
+  "native_cli_mock_specs_unchanged": true,
+  "adapter_tests": 4,
+  "browser": {
+    "startTime": "2026-11-02T02:08:29.604Z",
+    "duration": 21656.395,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "native_cases": 30,
+  "compiled_native_cli_checks": 25,
+  "wasm": {
+    "prototype_only": true,
+    "native_cases": 30,
+    "wasm_bytes": 289120,
+    "wasm_sha256": "588c42c3aacf6f5f2b1f9ff9f041f9dc8d548e4db023dc083ddac69881044215",
+    "publication_qualified": false
+  },
+  "consumer_rehearsal": {
+    "repository": "giodl73-repo/ICELINES",
+    "source_commit": "73d10e40657ea412621f67eddbf43d99a6a34e81",
+    "isolated_git_archive": true,
+    "actual_fletch_candidate_path_verified_from_metadata": true,
+    "source_unchanged": true,
+    "tests": [
+      {
+        "test": "registry_marks_rosters_and_moneypuck_generic_http",
+        "sha256": "28175d9fdad0d272f24d813ab5a5c28fa225c59b43d513fdd3cf6c3222d6b46b",
+        "bytes": 384,
+        "passed": 1
+      },
+      {
+        "test": "fetch_generic_http_bytes_uses_fletch_cache_object",
+        "sha256": "a8a5b8254653b009dc8f4092e739b23d11a0bad4cac5181cc9a59b69f57f7f40",
+        "bytes": 384,
+        "passed": 1
+      },
+      {
+        "test": "cache_manifest_upsert_atomically_replaces_existing_manifest",
+        "sha256": "7cd12377242150df43c4f349770e1d2c55a85558bbd570bb788e1407b4d05ca0",
+        "bytes": 394,
+        "passed": 1
+      },
+      {
+        "test": "fetch_paged_report_bytes_uses_fletch_paged_cache_object",
+        "sha256": "653b02812d88d198b28756bdba2211dfdc54ea1a01545f4a061ecebec2752d80",
+        "bytes": 390,
+        "passed": 1
+      },
+      {
+        "test": "fetch_gamecenter_batch_bytes_uses_fletch_batch_cache_objects",
+        "sha256": "38097d819c15b0d983b365b1776b6185a4bcfb0ec70e5bdf3509ca2f041983e4",
+        "bytes": 395,
+        "passed": 1
+      }
+    ],
+    "initial_failure": "Unrestricted cargo test built unrelated integration binaries concurrently, exhausting Windows paging memory (os error1455/compiler panic). Retained initial log; correction selects the exact named lib tests with one build job, all five pass. No source or assertions changed."
+  },
+  "source_replay": "pending",
+  "hosted": "pending",
+  "live": "pending",
+  "root_pointer_advanced": false
+}

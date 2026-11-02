@@ -1,0 +1,4 @@
+browser/inspector/** text eol=lf
+crates/fletch-registry/** text eol=lf
+context/waves/2026-11-01-registry-browser/** text eol=lf
+.github/workflows/pages.yml text eol=lf
